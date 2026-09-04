@@ -1,0 +1,1005 @@
+/* =========================================================
+   全局
+========================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body {
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "PingFang SC",
+        "Microsoft YaHei",
+        sans-serif;
+
+    color: #1d1d1f;
+
+    background:
+        radial-gradient(circle at 10% 0%, #fff0f6, transparent 30%),
+        radial-gradient(circle at 90% 15%, #edf4ff, transparent 30%),
+        #f5f5f7;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+
+/* =========================================================
+   顶部导航栏
+========================================================= */
+
+.header {
+    height: 68px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 30px;
+
+    position: sticky;
+    top: 0;
+
+    z-index: 100;
+
+    background: rgba(255,255,255,.78);
+
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+
+    border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.left-header {
+    display: flex;
+    align-items: center;
+
+    gap: 28px;
+}
+
+.logo {
+    font-size: 20px;
+    font-weight: 750;
+
+    white-space: nowrap;
+}
+
+.online-stat {
+    display: flex;
+
+    align-items: baseline;
+
+    gap: 6px;
+
+    padding: 7px 14px;
+
+    border-radius: 13px;
+
+    background: #f0f0f3;
+}
+
+.online-stat-number {
+    font-size: 15px;
+
+    font-weight: 750;
+}
+
+.online-stat-name {
+    color: #86868b;
+
+    font-size: 12px;
+}
+
+.user-area {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+}
+
+.login-button {
+    border: 0;
+
+    padding: 9px 17px;
+
+    border-radius: 12px;
+
+    background: #1d1d1f;
+
+    color: white;
+
+    cursor: pointer;
+}
+
+.login-button:hover {
+    opacity: .85;
+}
+
+.user-avatar {
+    display: none;
+
+    width: 38px;
+    height: 38px;
+
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background:
+        linear-gradient(
+            135deg,
+            #ff9ac8,
+            #ff4f92
+        );
+
+    color: white;
+
+    font-weight: bold;
+}
+
+.user-name {
+    display: none;
+
+    font-size: 14px;
+
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   页面主体
+========================================================= */
+
+.container {
+    width: calc(100% - 48px);
+
+    max-width: 1580px;
+
+    margin: 24px auto;
+}
+
+.live-layout {
+    display: grid;
+
+    grid-template-columns:
+        minmax(0,1fr)
+        380px;
+
+    gap: 18px;
+
+    align-items: stretch;
+}
+
+
+/* =========================================================
+   视频卡片
+========================================================= */
+
+.video-card {
+    border-radius: 22px;
+
+    overflow: hidden;
+
+    background: rgba(255,255,255,.86);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow:
+        0 12px 40px rgba(0,0,0,.07);
+}
+
+
+/* =========================================================
+   播放器
+========================================================= */
+
+.player {
+    width: 100%;
+
+    display: flex;
+    flex-direction: column;
+
+    position: relative;
+
+    overflow: hidden;
+
+    background: black;
+}
+
+.player-stage {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+
+    position: relative;
+    overflow: hidden;
+
+    background: black;
+}
+
+.player-stage video {
+    width: 100%;
+    height: 100%;
+
+    display: block;
+
+    object-fit: contain;
+}
+
+.player-message {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: rgba(255,255,255,.84);
+    font-size: 15px;
+    pointer-events: none;
+}
+
+.player-message[hidden] {
+    display: none;
+}
+
+
+/* =========================================================
+   左上角直播状态
+========================================================= */
+
+.live-overlay {
+    position: absolute;
+
+    top: 18px;
+    left: 18px;
+
+    z-index: 30;
+
+    display: flex;
+
+    gap: 8px;
+
+    pointer-events: none;
+}
+
+.live-badge {
+    padding: 7px 11px;
+
+    border-radius: 9px;
+
+    background: #ff375f;
+
+    color: white;
+
+    font-size: 13px;
+
+    font-weight: 700;
+
+    box-shadow:
+        0 5px 20px rgba(255,55,95,.28);
+}
+
+.viewer-badge {
+    padding: 7px 11px;
+
+    border-radius: 9px;
+
+    background: rgba(20,20,20,.62);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    color: white;
+
+    font-size: 13px;
+}
+
+
+/* =========================================================
+   播放器右上角工具
+========================================================= */
+
+.player-tools {
+    position: absolute;
+
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+
+    z-index: 50;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    pointer-events: none;
+    transition: opacity .25s ease;
+}
+
+.player-tool-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    pointer-events: auto;
+}
+
+.volume-slider {
+    width: 90px;
+
+    accent-color: #ff4687;
+    cursor: pointer;
+}
+
+.player.controls-hidden {
+    cursor: none;
+}
+
+.player.controls-hidden .player-tools {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.player.controls-hidden .player-tool-group {
+    pointer-events: none;
+}
+
+.player-tool {
+    border: 1px solid rgba(255,255,255,.20);
+
+    width: 38px;
+    height: 34px;
+    padding: 0;
+
+    border-radius: 10px;
+
+    background: rgba(20,20,20,.58);
+
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+
+    color: white;
+
+    font-size: 13px;
+
+    cursor: pointer;
+
+    transition:
+        background .2s,
+        transform .2s;
+}
+
+.player-tool:hover {
+    background: rgba(20,20,20,.76);
+
+    transform: translateY(-1px);
+}
+
+.player-tool.active {
+    background: rgba(255,70,135,.86);
+}
+
+
+/* =========================================================
+   弹幕层
+========================================================= */
+
+.danmaku-layer {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 20;
+
+    overflow: hidden;
+
+    pointer-events: none;
+
+    contain: layout paint style;
+}
+
+.danmaku-item {
+    position: absolute;
+
+    left: 100%;
+
+    white-space: nowrap;
+
+    padding: 4px 8px;
+
+    border-radius: 7px;
+
+    background: rgba(0,0,0,.12);
+
+    color: #ffffff;
+
+    font-size: 18px;
+
+    font-weight: 650;
+
+    line-height: 26px;
+
+    text-shadow:
+        0 1px 2px rgba(0,0,0,1),
+        0 0 5px rgba(0,0,0,.85);
+
+    will-change: transform;
+
+    contain: layout paint style;
+}
+
+.danmaku-item.streamer {
+    color: #ff9bc2;
+
+    background:
+        rgba(255,80,150,.14);
+}
+
+.danmaku-item.admin {
+    color: #8dc8ff;
+
+    background:
+        rgba(75,150,255,.14);
+}
+
+
+/* =========================================================
+   塔菲主题区域
+========================================================= */
+
+.character-card {
+    margin-top: 18px;
+
+    min-height: 190px;
+
+    border-radius: 22px;
+
+    padding: 26px;
+
+    overflow: hidden;
+
+    position: relative;
+
+    background:
+        linear-gradient(
+            135deg,
+            #fff0f6,
+            #f2efff
+        );
+
+    box-shadow:
+        0 10px 30px rgba(0,0,0,.04);
+}
+
+.character-title {
+    font-size: 20px;
+
+    font-weight: 700;
+}
+
+.character-text {
+    width: 55%;
+
+    margin-top: 9px;
+
+    color: #737377;
+
+    line-height: 1.65;
+
+    font-size: 14px;
+}
+
+.character-image {
+    position: absolute;
+
+    right: 8px;
+    bottom: 0;
+
+    max-width: 42%;
+
+    height: 185px;
+
+    object-fit: contain;
+}
+
+
+/* =========================================================
+   聊天室
+========================================================= */
+
+.chat-card {
+    min-height: 0;
+
+    align-self: start;
+
+    display: flex;
+
+    flex-direction: column;
+
+    border-radius: 22px;
+
+    overflow: hidden;
+
+    background: rgba(255,255,255,.88);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow:
+        0 12px 40px rgba(0,0,0,.07);
+}
+
+.chat-header {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 18px 19px;
+
+    border-bottom:
+        1px solid rgba(0,0,0,.06);
+}
+
+.chat-title {
+    font-weight: 700;
+}
+
+.chat-status {
+    font-size: 13px;
+
+    color: #34c759;
+}
+
+.notice {
+    margin: 14px;
+
+    padding: 13px;
+
+    border-radius: 14px;
+
+    background: #fff1f6;
+
+    border: 1px solid #ffd6e5;
+
+    font-size: 13px;
+
+    line-height: 1.5;
+}
+
+.notice strong {
+    color: #ff2d78;
+}
+
+.messages {
+    flex: 1;
+
+    min-height: 0;
+
+    overflow-y: auto;
+
+    padding: 5px 17px 15px;
+}
+
+.message {
+    display: flex;
+
+    gap: 10px;
+
+    margin: 15px 0;
+}
+
+.message-avatar {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #eeeef2;
+
+    font-size: 13px;
+}
+
+.message-user {
+    font-size: 13px;
+
+    font-weight: 700;
+}
+
+.message-user.streamer-name-chat {
+    color: #ff3d82;
+}
+
+.message-user.admin-name-chat {
+    color: #368bd6;
+}
+
+.message-time {
+    margin-left: 7px;
+
+    color: #aaa;
+
+    font-size: 11px;
+
+    font-weight: normal;
+}
+
+.message-text {
+    margin-top: 3px;
+
+    color: #424245;
+
+    font-size: 13px;
+
+    line-height: 1.45;
+
+    word-break: break-word;
+}
+
+.danmaku-composer {
+    min-height: 52px;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 8px 10px;
+
+    border-top: 1px solid rgba(0,0,0,.06);
+
+    background: rgba(255,255,255,.94);
+}
+
+.danmaku-composer.at-chat-top {
+    border-top: 0;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.danmaku-composer-label {
+    padding: 0 5px;
+
+    color: #777780;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.chat-input {
+    flex: 1;
+
+    min-width: 0;
+
+    border: 0;
+
+    outline: 0;
+
+    padding: 11px 12px;
+
+    border-radius: 13px;
+
+    background: #f2f2f7;
+}
+
+.danmaku-composer .chat-input {
+    height: 36px;
+
+    padding: 0 13px;
+
+    border: 1px solid transparent;
+    border-radius: 9px;
+
+    background: #f2f2f7;
+    color: #29292e;
+}
+
+.danmaku-composer .chat-input::placeholder {
+    color: #92929c;
+}
+
+.danmaku-composer .chat-input:focus {
+    border-color: rgba(255,91,153,.48);
+    background: #fff;
+}
+
+.send-button {
+    height: 36px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 0 16px;
+
+    background: #ff5b99;
+
+    color: white;
+
+    cursor: pointer;
+}
+
+.send-button:hover {
+    background: #ff438b;
+}
+
+
+/* =========================================================
+   登录 / 注册
+========================================================= */
+
+.modal {
+    display: none;
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 999;
+
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(0,0,0,.25);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.login-card {
+    width: 360px;
+
+    max-width: calc(100% - 30px);
+
+    padding: 28px;
+
+    border-radius: 23px;
+
+    background: rgba(255,255,255,.96);
+
+    box-shadow:
+        0 30px 80px rgba(0,0,0,.2);
+}
+
+.login-card h2 {
+    margin-top: 0;
+
+    margin-bottom: 18px;
+}
+
+.login-input {
+    width: 100%;
+
+    margin-top: 10px;
+
+    padding: 12px;
+
+    border-radius: 12px;
+
+    border: 1px solid #d2d2d7;
+
+    outline: 0;
+
+    background: white;
+}
+
+.login-input:focus {
+    border-color: #0071e3;
+}
+
+.login-submit {
+    width: 100%;
+
+    margin-top: 16px;
+
+    border: 0;
+
+    border-radius: 12px;
+
+    padding: 12px;
+
+    background: #0071e3;
+
+    color: white;
+
+    cursor: pointer;
+}
+
+.auth-switch {
+    text-align: center;
+
+    margin-top: 16px;
+
+    color: #86868b;
+
+    font-size: 13px;
+}
+
+.auth-link {
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    font: inherit;
+
+    color: #0071e3;
+
+    cursor: pointer;
+}
+
+
+/* =========================================================
+   全屏
+========================================================= */
+
+.player:fullscreen {
+    width: 100vw;
+    height: 100vh;
+
+    background: black;
+}
+
+.player:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+
+    background: black;
+}
+
+.player:fullscreen .player-stage,
+.player:-webkit-full-screen .player-stage {
+    flex: 1;
+    min-height: 0;
+    aspect-ratio: auto;
+}
+
+.player-tools .danmaku-composer.in-player-controls {
+    flex: 1;
+    min-width: 120px;
+    max-width: 620px;
+    min-height: 0;
+
+    margin: 0 12px;
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    pointer-events: auto;
+}
+
+.player-tools .danmaku-composer-label {
+    color: rgba(255,255,255,.72);
+}
+
+.player-tools .danmaku-composer .chat-input {
+    height: 34px;
+
+    background: rgba(30,30,34,.78);
+    color: white;
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.player-tools .danmaku-composer .chat-input:focus {
+    background: rgba(42,42,47,.94);
+}
+
+
+/* =========================================================
+   手机
+========================================================= */
+
+@media(max-width:1000px) {
+
+    .live-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-card {
+        width: 100%;
+        height: 540px;
+    }
+
+}
+
+@media(max-width:650px) {
+
+    .header {
+        padding: 0 15px;
+    }
+
+    .container {
+        width: 100%;
+
+        margin-top: 0;
+    }
+
+    .video-card,
+    .chat-card {
+        border-radius: 0;
+    }
+
+    .player-tools {
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+    }
+
+    .player-tool-group {
+        gap: 5px;
+    }
+
+    .player-tool {
+        width: 34px;
+        height: 30px;
+
+        font-size: 12px;
+    }
+
+    .volume-slider {
+        width: 58px;
+    }
+
+    .danmaku-composer {
+        gap: 6px;
+        padding: 7px 8px;
+    }
+
+    .danmaku-composer-label {
+        display: none;
+    }
+
+    .send-button {
+        padding: 0 13px;
+    }
+
+    .player-tools .danmaku-composer.in-player-controls {
+        min-width: 70px;
+        margin: 0 6px;
+    }
+
+    .player:fullscreen .volume-slider,
+    .player:-webkit-full-screen .volume-slider {
+        display: none;
+    }
+
+    .live-overlay {
+        top: 10px;
+        left: 10px;
+    }
+
+    .viewer-badge {
+        display: none;
+    }
+
+    .danmaku-item {
+        font-size: 15px;
+
+        line-height: 22px;
+    }
+
+    .character-text {
+        width: 62%;
+    }
+
+}

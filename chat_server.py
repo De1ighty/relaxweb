@@ -3,496 +3,297 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
+import secrets
 import sqlite3
 import time
 from collections import deque
+from contextlib import closing
 
 import websockets
 
 
 HOST = "0.0.0.0"
 PORT = 8765
-
 DB_FILE = "/path/to/relaxweb/users.db"
+MAX_CHAT_LENGTH = 200
+AUTH_COOLDOWN = 1.5
+CHAT_COOLDOWN = 1.0
+SESSION_TTL = 30 * 24 * 60 * 60
 
 clients = {}
 history = deque(maxlen=50)
+logger = logging.getLogger("live-chat")
 
 
-# ==============================
-# 数据库
-# ==============================
+def database():
+    return closing(sqlite3.connect(DB_FILE, timeout=10))
+
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
-            created_at INTEGER NOT NULL
+    with database() as conn, conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at INTEGER NOT NULL
+            )
+            """
         )
-    """)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL
+            )
+            """
+        )
 
-    conn.commit()
-    conn.close()
-
-
-# ==============================
-# 密码处理
-# ==============================
 
 def hash_password(password, salt=None):
-
-    if salt is None:
-        salt_bytes = os.urandom(16)
-    else:
-        salt_bytes = base64.b64decode(salt)
-
-    password_hash = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt_bytes,
-        310000
+    salt_bytes = os.urandom(16) if salt is None else base64.b64decode(salt)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt_bytes, 310_000
     )
+    return base64.b64encode(digest).decode(), base64.b64encode(salt_bytes).decode()
 
-    return (
-        base64.b64encode(password_hash).decode(),
-        base64.b64encode(salt_bytes).decode()
-    )
-
-
-def verify_password(password, saved_hash, salt):
-
-    calculated_hash, _ = hash_password(
-        password,
-        salt
-    )
-
-    return hmac.compare_digest(
-        calculated_hash,
-        saved_hash
-    )
-
-
-# ==============================
-# 用户名检查
-# ==============================
 
 def valid_username(username):
+    return bool(re.fullmatch(r"[\u4e00-\u9fa5A-Za-z0-9_-]{2,20}", username))
 
-    if len(username) < 2 or len(username) > 20:
-        return False
-
-    pattern = r"^[\u4e00-\u9fa5A-Za-z0-9_-]+$"
-
-    return re.match(pattern, username) is not None
-
-
-# ==============================
-# 注册
-# ==============================
 
 def register_user(username, password):
-
     username = username.strip()
-
     if not valid_username(username):
         return False, "用户名需为2-20位中文、英文、数字、_ 或 -"
-
     if len(password) < 6:
         return False, "密码至少需要6位"
-
     if len(password) > 128:
         return False, "密码过长"
 
     password_hash, salt = hash_password(password)
-
     try:
-
-        conn = sqlite3.connect(DB_FILE)
-
-        conn.execute(
-            """
-            INSERT INTO users
-            (username, password_hash, salt, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                username,
-                password_hash,
-                salt,
-                "user",
-                int(time.time())
+        with database() as conn, conn:
+            conn.execute(
+                """
+                INSERT INTO users (username, password_hash, salt, role, created_at)
+                VALUES (?, ?, ?, 'user', ?)
+                """,
+                (username, password_hash, salt, int(time.time())),
             )
-        )
-
-        conn.commit()
-        conn.close()
-
-        return True, "注册成功"
-
     except sqlite3.IntegrityError:
-
         return False, "这个用户名已经被注册"
+    return True, "注册成功"
 
-
-# ==============================
-# 登录
-# ==============================
 
 def authenticate_user(username, password):
-
-    conn = sqlite3.connect(DB_FILE)
-
-    cursor = conn.execute(
-        """
-        SELECT username, password_hash, salt, role
-        FROM users
-        WHERE username = ?
-        """,
-        (username.strip(),)
-    )
-
-    row = cursor.fetchone()
-
-    conn.close()
-
+    with database() as conn:
+        row = conn.execute(
+            """
+            SELECT username, password_hash, salt, role
+            FROM users WHERE username = ?
+            """,
+            (username.strip(),),
+        ).fetchone()
     if not row:
         return None
-
     real_username, saved_hash, salt, role = row
-
-    if not verify_password(
-        password,
-        saved_hash,
-        salt
-    ):
+    calculated_hash, _ = hash_password(password, salt)
+    if not hmac.compare_digest(calculated_hash, saved_hash):
         return None
-
-    return {
-        "username": real_username,
-        "role": role
-    }
+    return {"username": real_username, "role": role}
 
 
-# ==============================
-# WebSocket工具
-# ==============================
+def create_session(username):
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = int(time.time()) + SESSION_TTL
+    with database() as conn, conn:
+        user_id = conn.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()[0]
+        conn.execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (int(time.time()),))
+        conn.execute(
+            "INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
+            (token_hash, user_id, expires_at),
+        )
+    return token
+
+
+def resume_user(token):
+    if not token:
+        return None
+    token_hash = hashlib.sha256(str(token).encode()).hexdigest()
+    with database() as conn:
+        row = conn.execute(
+            """
+            SELECT users.username, users.role
+            FROM auth_sessions
+            JOIN users ON users.id = auth_sessions.user_id
+            WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?
+            """,
+            (token_hash, int(time.time())),
+        ).fetchone()
+    return {"username": row[0], "role": row[1]} if row else None
+
 
 async def send_json(websocket, data):
-
-    await websocket.send(
-        json.dumps(
-            data,
-            ensure_ascii=False
-        )
-    )
+    await websocket.send(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
 
 
 async def broadcast(data):
-
     if not clients:
         return
-
-    message = json.dumps(
-        data,
-        ensure_ascii=False
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    sockets = tuple(clients)
+    results = await asyncio.gather(
+        *(socket.send(payload) for socket in sockets), return_exceptions=True
     )
-
-    dead_clients = []
-
-    for websocket in list(clients.keys()):
-
-        try:
-            await websocket.send(message)
-
-        except Exception:
-            dead_clients.append(websocket)
-
-    for websocket in dead_clients:
-        clients.pop(websocket, None)
+    for socket, result in zip(sockets, results):
+        if isinstance(result, Exception):
+            clients.pop(socket, None)
 
 
 async def broadcast_online_count():
-
-    await broadcast({
-        "type": "online",
-        "count": len(clients)
-    })
+    await broadcast({"type": "online", "count": len(clients)})
 
 
-# ==============================
-# 连接处理
-# ==============================
+def rate_limited(state, key, cooldown):
+    now = time.monotonic()
+    if now - state[key] < cooldown:
+        return True
+    state[key] = now
+    return False
 
-async def handler(websocket):
 
-    clients[websocket] = {
-        "user": None,
-        "last_message": 0,
-        "last_auth_attempt": 0
-    }
-
-    print(
-        f"新连接，当前在线：{len(clients)}"
+async def handle_register(websocket, state, data):
+    if rate_limited(state, "last_auth_attempt", AUTH_COOLDOWN):
+        await send_json(websocket, {"type": "auth_error", "message": "操作太频繁，请稍后再试"})
+        return
+    success, message = register_user(
+        str(data.get("username", "")).strip(), str(data.get("password", ""))
+    )
+    await send_json(
+        websocket,
+        {"type": "register_success" if success else "auth_error", "message": message},
     )
 
+
+async def handle_login(websocket, state, data):
+    if rate_limited(state, "last_auth_attempt", AUTH_COOLDOWN):
+        await send_json(websocket, {"type": "auth_error", "message": "操作太频繁，请稍后再试"})
+        return
+    user = authenticate_user(
+        str(data.get("username", "")).strip(), str(data.get("password", ""))
+    )
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "用户名或密码错误"})
+        return
+    state["user"] = user
+    token = create_session(user["username"])
+    logger.info("user login: %s", user["username"])
     await send_json(
         websocket,
         {
-            "type": "history",
-            "messages": list(history)
-        }
+            "type": "login_success",
+            "username": user["username"],
+            "role": user["role"],
+            "token": token,
+        },
     )
 
+
+async def handle_resume(websocket, state, data):
+    user = resume_user(data.get("token"))
+    if not user:
+        await send_json(websocket, {"type": "auth_expired"})
+        return
+    state["user"] = user
+    await send_json(
+        websocket,
+        {"type": "resume_success", "username": user["username"], "role": user["role"]},
+    )
+
+
+async def handle_chat(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    text = str(data.get("text", "")).strip()[:MAX_CHAT_LENGTH]
+    if not text:
+        return
+    if rate_limited(state, "last_message", CHAT_COOLDOWN):
+        await send_json(websocket, {"type": "error", "message": "发送太快了"})
+        return
+    message = {
+        "type": "chat",
+        "username": user["username"],
+        "role": user["role"],
+        "text": text,
+        "time": time.strftime("%H:%M"),
+    }
+    history.append(message)
+    logger.info("chat message from %s (%d chars)", user["username"], len(text))
+    await broadcast(message)
+
+
+handlers = {
+    "register": handle_register,
+    "login": handle_login,
+    "resume": handle_resume,
+    "chat": handle_chat,
+}
+
+
+async def handler(websocket):
+    state = {"user": None, "last_message": 0.0, "last_auth_attempt": 0.0}
+    clients[websocket] = state
+    logger.info("connection opened; online=%d", len(clients))
+    await send_json(websocket, {"type": "history", "messages": list(history)})
     await broadcast_online_count()
-
     try:
-
         async for raw_message in websocket:
-
             try:
                 data = json.loads(raw_message)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 continue
-
-            message_type = data.get("type")
-
-
-            # ======================
-            # 注册
-            # ======================
-
-            if message_type == "register":
-
-                now = time.time()
-
-                if (
-                    now -
-                    clients[websocket]["last_auth_attempt"]
-                    < 1.5
-                ):
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "auth_error",
-                            "message": "操作太频繁，请稍后再试"
-                        }
-                    )
-
-                    continue
-
-                clients[websocket][
-                    "last_auth_attempt"
-                ] = now
-
-                username = str(
-                    data.get("username", "")
-                ).strip()
-
-                password = str(
-                    data.get("password", "")
-                )
-
-                success, message = register_user(
-                    username,
-                    password
-                )
-
-                if success:
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "register_success",
-                            "message": message
-                        }
-                    )
-
-                else:
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "auth_error",
-                            "message": message
-                        }
-                    )
-
-
-            # ======================
-            # 登录
-            # ======================
-
-            elif message_type == "login":
-
-                username = str(
-                    data.get("username", "")
-                ).strip()
-
-                password = str(
-                    data.get("password", "")
-                )
-
-                user = authenticate_user(
-                    username,
-                    password
-                )
-
-                if not user:
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "auth_error",
-                            "message": "用户名或密码错误"
-                        }
-                    )
-
-                    continue
-
-
-                clients[websocket]["user"] = user
-
-                print(
-                    f"用户登录：{user['username']}"
-                )
-
-                await send_json(
-                    websocket,
-                    {
-                        "type": "login_success",
-                        "username": user["username"],
-                        "role": user["role"]
-                    }
-                )
-
-
-            # ======================
-            # 聊天
-            # ======================
-
-            elif message_type == "chat":
-
-                user = clients[
-                    websocket
-                ].get("user")
-
-                if not user:
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "auth_error",
-                            "message": "请先登录"
-                        }
-                    )
-
-                    continue
-
-
-                text = str(
-                    data.get("text", "")
-                ).strip()
-
-                if not text:
-                    continue
-
-                if len(text) > 200:
-                    text = text[:200]
-
-
-                now = time.time()
-
-                last_message = clients[
-                    websocket
-                ]["last_message"]
-
-                if now - last_message < 1:
-
-                    await send_json(
-                        websocket,
-                        {
-                            "type": "error",
-                            "message": "发送太快了"
-                        }
-                    )
-
-                    continue
-
-
-                clients[
-                    websocket
-                ]["last_message"] = now
-
-
-                message = {
-                    "type": "chat",
-                    "username": user["username"],
-                    "role": user["role"],
-                    "text": text,
-                    "time": time.strftime("%H:%M")
-                }
-
-                history.append(message)
-
-                print(
-                    f"[{user['username']}] {text}"
-                )
-
-                await broadcast(message)
-
-
+            if not isinstance(data, dict):
+                continue
+            action = handlers.get(data.get("type"))
+            if action:
+                await action(websocket, state, data)
     except websockets.ConnectionClosed:
         pass
-
     finally:
-
-        clients.pop(
-            websocket,
-            None
-        )
-
-        print(
-            f"连接断开，当前在线：{len(clients)}"
-        )
-
+        clients.pop(websocket, None)
+        logger.info("connection closed; online=%d", len(clients))
         await broadcast_online_count()
 
 
-# ==============================
-# 主程序
-# ==============================
-
 async def main():
-
     init_db()
-
-    print(
-        f"用户数据库：{DB_FILE}"
-    )
-
-    print(
-        f"聊天室服务器：ws://{HOST}:{PORT}"
-    )
-
+    logger.info("chat server listening on ws://%s:%d", HOST, PORT)
     async with websockets.serve(
         handler,
         HOST,
-        PORT
+        PORT,
+        max_size=4096,
+        max_queue=32,
+        ping_interval=20,
+        ping_timeout=20,
+        close_timeout=5,
     ):
-
         await asyncio.Future()
 
 
 if __name__ == "__main__":
-
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     asyncio.run(main())
-
