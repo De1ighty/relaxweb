@@ -1,0 +1,13 @@
+# Runtime and sensitive data
+users.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+__pycache__/
+*.py[cod]
+
+# Pre-Git manual snapshots
+*.backup
+*.save
+*.before-*
