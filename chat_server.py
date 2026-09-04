@@ -19,6 +19,10 @@ HOST = "0.0.0.0"
 PORT = 8765
 DB_FILE = "/path/to/relaxweb/users.db"
 MAX_CHAT_LENGTH = 200
+MAX_AVATAR_LENGTH = 200_000
+AVATAR_PATTERN = re.compile(
+    r"^data:image/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$"
+)
 AUTH_COOLDOWN = 1.5
 CHAT_COOLDOWN = 1.0
 SESSION_TTL = 30 * 24 * 60 * 60
@@ -55,6 +59,15 @@ def init_db():
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        if "nickname" not in columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN nickname TEXT NOT NULL DEFAULT ''"
+            )
+        if "avatar" not in columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"
+            )
 
 
 def hash_password(password, salt=None):
@@ -97,18 +110,33 @@ def authenticate_user(username, password):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT username, password_hash, salt, role
+            SELECT username, password_hash, salt, role, nickname, avatar
             FROM users WHERE username = ?
             """,
             (username.strip(),),
         ).fetchone()
     if not row:
         return None
-    real_username, saved_hash, salt, role = row
+    real_username, saved_hash, salt, role, nickname, avatar = row
     calculated_hash, _ = hash_password(password, salt)
     if not hmac.compare_digest(calculated_hash, saved_hash):
         return None
-    return {"username": real_username, "role": role}
+    return {
+        "username": real_username,
+        "role": role,
+        "nickname": nickname or "",
+        "avatar": avatar or "",
+    }
+
+
+def get_profile(username):
+    with database() as conn:
+        row = conn.execute(
+            "SELECT nickname, avatar FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    if not row:
+        return {"username": username, "nickname": "", "avatar": ""}
+    return {"username": username, "nickname": row[0] or "", "avatar": row[1] or ""}
 
 
 def create_session(username):
@@ -134,14 +162,19 @@ def resume_user(token):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT users.username, users.role
+            SELECT users.username, users.role, users.nickname, users.avatar
             FROM auth_sessions
             JOIN users ON users.id = auth_sessions.user_id
             WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?
             """,
             (token_hash, int(time.time())),
         ).fetchone()
-    return {"username": row[0], "role": row[1]} if row else None
+    return {
+        "username": row[0],
+        "role": row[1],
+        "nickname": row[2] or "",
+        "avatar": row[3] or "",
+    } if row else None
 
 
 async def send_json(websocket, data):
@@ -199,6 +232,7 @@ async def handle_login(websocket, state, data):
     state["user"] = user
     token = create_session(user["username"])
     logger.info("user login: %s", user["username"])
+    profile = get_profile(user["username"])
     await send_json(
         websocket,
         {
@@ -206,6 +240,8 @@ async def handle_login(websocket, state, data):
             "username": user["username"],
             "role": user["role"],
             "token": token,
+            "nickname": profile["nickname"],
+            "avatar": profile["avatar"],
         },
     )
 
@@ -218,8 +254,120 @@ async def handle_resume(websocket, state, data):
     state["user"] = user
     await send_json(
         websocket,
-        {"type": "resume_success", "username": user["username"], "role": user["role"]},
+        {
+            "type": "resume_success",
+            "username": user["username"],
+            "role": user["role"],
+            "nickname": user.get("nickname", ""),
+            "avatar": user.get("avatar", ""),
+        },
     )
+
+
+async def handle_logout(websocket, state, data):
+    if rate_limited(state, "last_auth_attempt", AUTH_COOLDOWN):
+        await send_json(websocket, {"type": "auth_error", "message": "操作太频繁，请稍后再试"})
+        return
+    token = data.get("token")
+    if token:
+        token_hash = hashlib.sha256(str(token).encode()).hexdigest()
+        with database() as conn, conn:
+            conn.execute(
+                "DELETE FROM auth_sessions WHERE token_hash = ?", (token_hash,)
+            )
+    state["user"] = None
+    logger.info("user logout")
+    await send_json(websocket, {"type": "logout_success"})
+
+
+async def handle_update_profile(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_profile_update", 1.0):
+        await send_json(websocket, {"type": "profile_error", "message": "操作太频繁，请稍后再试"})
+        return
+    updates, params = [], []
+    if "nickname" in data:
+        nickname = str(data.get("nickname") or "").strip()
+        if nickname and not valid_username(nickname):
+            await send_json(
+                websocket,
+                {"type": "profile_error", "message": "昵称需为2-20位中文、英文、数字、_ 或 -"},
+            )
+            return
+        updates.append("nickname = ?")
+        params.append(nickname)
+    if "avatar" in data:
+        avatar = str(data.get("avatar") or "")
+        if avatar and (
+            len(avatar) > MAX_AVATAR_LENGTH or not AVATAR_PATTERN.match(avatar)
+        ):
+            await send_json(
+                websocket,
+                {"type": "profile_error", "message": "头像格式不支持或过大"},
+            )
+            return
+        updates.append("avatar = ?")
+        params.append(avatar)
+    if updates:
+        params.append(user["username"])
+        with database() as conn, conn:
+            conn.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE username = ?", params
+            )
+    profile = get_profile(user["username"])
+    state["user"]["nickname"] = profile["nickname"]
+    state["user"]["avatar"] = profile["avatar"]
+    logger.info("profile updated: %s", user["username"])
+    await send_json(websocket, {"type": "profile_updated", **profile})
+    await broadcast({"type": "profile", **profile})
+
+
+async def handle_get_profile(websocket, state, data):
+    await send_json(
+        websocket,
+        {"type": "profile", **get_profile(str(data.get("username", "")))},
+    )
+
+
+async def handle_delete_account(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_auth_attempt", AUTH_COOLDOWN):
+        await send_json(websocket, {"type": "account_error", "message": "操作太频繁，请稍后再试"})
+        return
+    if not authenticate_user(user["username"], str(data.get("password", ""))):
+        await send_json(websocket, {"type": "account_error", "message": "密码错误"})
+        return
+    with database() as conn, conn:
+        conn.execute(
+            "DELETE FROM auth_sessions WHERE user_id IN "
+            "(SELECT id FROM users WHERE username = ?)",
+            (user["username"],),
+        )
+        conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
+    state["user"] = None
+    logger.info("account deleted: %s", user["username"])
+    await send_json(websocket, {"type": "account_deleted"})
+
+
+async def handle_get_online(websocket, state, data):
+    users = {}
+    for client_state in list(clients.values()):
+        user = client_state.get("user")
+        if not user:
+            continue
+        users[user["username"]] = {
+            "username": user["username"],
+            "nickname": user.get("nickname") or "",
+            "avatar": user.get("avatar") or "",
+            "role": user.get("role") or "user",
+        }
+    await send_json(websocket, {"type": "online_users", "users": list(users.values())})
 
 
 async def handle_chat(websocket, state, data):
@@ -236,6 +384,7 @@ async def handle_chat(websocket, state, data):
     message = {
         "type": "chat",
         "username": user["username"],
+        "nickname": user.get("nickname") or "",
         "role": user["role"],
         "text": text,
         "time": time.strftime("%H:%M"),
@@ -249,12 +398,22 @@ handlers = {
     "register": handle_register,
     "login": handle_login,
     "resume": handle_resume,
+    "logout": handle_logout,
+    "update_profile": handle_update_profile,
+    "get_profile": handle_get_profile,
+    "delete_account": handle_delete_account,
+    "get_online": handle_get_online,
     "chat": handle_chat,
 }
 
 
 async def handler(websocket):
-    state = {"user": None, "last_message": 0.0, "last_auth_attempt": 0.0}
+    state = {
+        "user": None,
+        "last_message": 0.0,
+        "last_auth_attempt": 0.0,
+        "last_profile_update": 0.0,
+    }
     clients[websocket] = state
     logger.info("connection opened; online=%d", len(clients))
     await send_json(websocket, {"type": "history", "messages": list(history)})
@@ -285,7 +444,7 @@ async def main():
         handler,
         HOST,
         PORT,
-        max_size=4096,
+        max_size=300_000,
         max_queue=32,
         ping_interval=20,
         ping_timeout=20,

@@ -3,16 +3,29 @@
 const $ = (id) => document.getElementById(id);
 const elements = {
   authModal: $("loginModal"), authSubmit: $("authSubmit"), authSwitch: $("authSwitch"),
+  avatarButton: $("avatarButton"), avatarFallback: $("avatarFallback"),
+  avatarFile: $("avatarFile"), avatarPreview: $("avatarPreview"), avatarReset: $("avatarReset"),
   authTitle: $("authTitle"), chatCard: $("chatCard"), chatInput: $("chatInput"),
   chatStatus: $("chatStatus"), danmakuComposer: $("danmakuComposer"),
   danmakuLayer: $("danmakuLayer"), danmakuToggle: $("danmakuToggle"),
+  deleteAccountButton: $("deleteAccountButton"), deleteCancel: $("deleteCancel"),
+  deleteModal: $("deleteModal"), deletePassword: $("deletePassword"),
+  deleteSubmit: $("deleteSubmit"), dropdownName: $("dropdownName"),
   fullscreenButton: $("fullscreenButton"),
-  loginButton: $("loginButton"), messages: $("messages"), muteToggle: $("muteToggle"),
-  onlineNumber: $("onlineNumber"), password: $("password"), player: $("player"),
+  leftHeader: $("leftHeader"), loginButton: $("loginButton"),
+  logoutButton: $("logoutButton"), messages: $("messages"),
+  muteToggle: $("muteToggle"),
+  nicknameInput: $("nicknameInput"), onlineNumber: $("onlineNumber"),
+  onlinePopover: $("onlinePopover"), onlinePopoverCount: $("onlinePopoverCount"),
+  onlinePopoverList: $("onlinePopoverList"), onlineStat: $("onlineStat"),
+  password: $("password"), player: $("player"),
   playerMessage: $("playerMessage"), playerTools: $("playerTools"),
-  playToggle: $("playToggle"), sendButton: $("sendButton"),
-  streamVideo: $("streamVideo"), userAvatar: $("userAvatar"), userName: $("userName"),
-  username: $("username"), viewerCount: $("viewerCount"), volumeSlider: $("volumeSlider"),
+  playToggle: $("playToggle"), profileButton: $("profileButton"),
+  profileModal: $("profileModal"), profileSubmit: $("profileSubmit"),
+  sendButton: $("sendButton"),
+  streamVideo: $("streamVideo"), userArea: $("userArea"), userAvatar: $("userAvatar"),
+  userChip: $("userChip"), userDropdown: $("userDropdown"), userName: $("userName"),
+  username: $("username"), volumeSlider: $("volumeSlider"),
 };
 
 const roles = {
@@ -28,6 +41,8 @@ const danmaku = {
 
 const AUTH_TOKEN_KEY = "liveAuthToken";
 const CONTROLS_HIDE_DELAY = 2500;
+const profiles = new Map();
+const pendingProfiles = new Set();
 let authMode = "login";
 let currentUser = null;
 let socket = null;
@@ -35,6 +50,7 @@ let reconnectTimer = 0;
 let streamReader = null;
 let streamReconnectTimer = 0;
 let controlsHideTimer = 0;
+let pendingAvatar;
 let chatHeightObserver = null;
 
 function roleInfo(role) {
@@ -162,11 +178,7 @@ function handleFullscreenChange() {
 }
 
 function syncChatHeight() {
-  if (window.matchMedia("(max-width: 1000px)").matches) {
-    elements.chatCard.style.height = "";
-    return;
-  }
-  elements.chatCard.style.height = `${elements.player.offsetHeight}px`;
+  elements.chatCard.style.height = "";
 }
 
 function setConnectionStatus(text) {
@@ -178,9 +190,65 @@ function setSignedIn(user) {
   elements.loginButton.hidden = Boolean(user);
   elements.userAvatar.style.display = user ? "flex" : "none";
   elements.userName.style.display = user ? "block" : "none";
-  elements.userAvatar.textContent = user ? user.charAt(0).toUpperCase() : "";
-  elements.userName.textContent = user || "";
+  elements.userChip.style.display = user ? "flex" : "none";
+  renderIdentity();
+  setUserMenu(false);
   elements.chatInput.placeholder = user ? "发送弹幕..." : "登录后发送弹幕...";
+}
+
+function renderIdentity() {
+  const user = currentUser;
+  const name = user ? user.nickname || user.username : "";
+  elements.userAvatar.replaceChildren();
+  if (user?.avatar) {
+    const image = document.createElement("img");
+    image.src = user.avatar;
+    image.alt = "";
+    elements.userAvatar.append(image);
+  } else {
+    elements.userAvatar.textContent = user ? user.username.charAt(0).toUpperCase() : "";
+  }
+  elements.userName.textContent = name;
+  elements.dropdownName.textContent = name;
+}
+
+function rememberProfile(data) {
+  if (!data?.username) return;
+  profiles.set(data.username, {
+    nickname: data.nickname || "",
+    avatar: data.avatar || "",
+  });
+  pendingProfiles.delete(data.username);
+}
+
+function requestProfile(username) {
+  if (!username || profiles.has(username) || pendingProfiles.has(username)) return;
+  pendingProfiles.add(username);
+  send({ type: "get_profile", username });
+}
+
+function refreshMessageIdentity(username) {
+  const profile = profiles.get(username);
+  for (const row of elements.messages.children) {
+    if (row.dataset.username !== username) continue;
+    row.querySelector(".display-name").textContent =
+      profile?.nickname || row.dataset.nickname || username;
+    const avatar = row.querySelector(".message-avatar");
+    avatar.replaceChildren();
+    if (profile?.avatar) {
+      const image = document.createElement("img");
+      image.src = profile.avatar;
+      image.alt = "";
+      avatar.append(image);
+    } else {
+      avatar.textContent = username.charAt(0).toUpperCase();
+    }
+  }
+}
+
+function setUserMenu(open) {
+  elements.userDropdown.hidden = !open;
+  elements.userChip.setAttribute("aria-expanded", String(open));
 }
 
 function send(payload) {
@@ -225,8 +293,10 @@ const messageHandlers = {
     addDanmaku(data);
   },
   online(data) {
-    elements.viewerCount.textContent = data.count;
     elements.onlineNumber.textContent = data.count;
+  },
+  online_users(data) {
+    renderOnlineUsers(data.users || []);
   },
   register_success() {
     alert("注册成功，请登录");
@@ -236,11 +306,35 @@ const messageHandlers = {
   login_success(data) {
     localStorage.setItem("liveAuthToken", data.token);
     elements.authModal.style.display = "none";
-    setSignedIn(data.username);
+    setSignedIn({
+      username: data.username, nickname: data.nickname, avatar: data.avatar,
+    });
   },
   resume_success(data) {
-    setSignedIn(data.username);
+    setSignedIn({
+      username: data.username, nickname: data.nickname, avatar: data.avatar,
+    });
   },
+  profile(data) {
+    rememberProfile(data);
+    if (currentUser && data.username === currentUser.username) {
+      currentUser.nickname = data.nickname || "";
+      currentUser.avatar = data.avatar || "";
+      renderIdentity();
+    }
+    refreshMessageIdentity(data.username);
+  },
+  profile_updated() {
+    elements.profileModal.style.display = "none";
+  },
+  profile_error(data) { alert(data.message); },
+  account_deleted() {
+    elements.deleteModal.style.display = "none";
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    setSignedIn(null);
+    alert("账号已注销");
+  },
+  account_error(data) { alert(data.message); },
   auth_expired() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setSignedIn(null);
@@ -253,18 +347,21 @@ function handleServerMessage(data) {
   messageHandlers[data.type]?.(data);
 }
 
-function addMessage({ username, text, time, role }) {
+function addMessage({ username, nickname, text, time, role }) {
   const info = roleInfo(role);
   const row = document.createElement("div");
   row.className = "message";
+  row.dataset.username = username;
+  row.dataset.nickname = nickname || "";
   const avatar = document.createElement("div");
   avatar.className = "message-avatar";
-  avatar.textContent = username.charAt(0).toUpperCase();
   const body = document.createElement("div");
   const user = document.createElement("div");
   user.className = "message-user";
   if (info.className) user.classList.add(`${info.className}-name-chat`);
-  user.append(document.createTextNode(`${info.icon}${username}`));
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "display-name";
+  user.append(document.createTextNode(info.icon), nameSpan);
   if (time) {
     const clock = document.createElement("span");
     clock.className = "message-time";
@@ -277,6 +374,8 @@ function addMessage({ username, text, time, role }) {
   body.append(user, content);
   row.append(avatar, body);
   elements.messages.append(row);
+  refreshMessageIdentity(username);
+  requestProfile(username);
   elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
@@ -309,6 +408,127 @@ function submitAuth() {
     return;
   }
   send({ type: authMode, username, password });
+}
+
+function openProfile() {
+  if (!currentUser) return;
+  elements.nicknameInput.value = currentUser.nickname || "";
+  pendingAvatar = undefined;
+  renderAvatarPreview(currentUser.avatar);
+  setUserMenu(false);
+  elements.profileModal.style.display = "flex";
+}
+
+function renderAvatarPreview(src) {
+  elements.avatarPreview.hidden = !src;
+  elements.avatarFallback.hidden = Boolean(src);
+  if (src) {
+    elements.avatarPreview.src = src;
+  } else {
+    elements.avatarFallback.textContent = currentUser
+      ? currentUser.username.charAt(0).toUpperCase() : "";
+  }
+}
+
+async function pickAvatar(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) {
+    alert("图片读取失败");
+    return;
+  }
+  const edge = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  canvas.getContext("2d").drawImage(
+    bitmap,
+    (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge,
+    0, 0, 128, 128,
+  );
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  if (dataUrl.length > 180000) {
+    alert("图片太大，请换一张试试");
+    return;
+  }
+  pendingAvatar = dataUrl;
+  renderAvatarPreview(dataUrl);
+}
+
+function submitProfile() {
+  if (!currentUser) return;
+  send({
+    type: "update_profile",
+    nickname: elements.nicknameInput.value.trim(),
+    ...(pendingAvatar !== undefined ? { avatar: pendingAvatar } : {}),
+  });
+}
+
+function openDeleteModal() {
+  if (!currentUser) return;
+  elements.deletePassword.value = "";
+  setUserMenu(false);
+  elements.deleteModal.style.display = "flex";
+}
+
+function submitDeleteAccount() {
+  if (!elements.deletePassword.value) {
+    alert("请输入密码");
+    return;
+  }
+  send({ type: "delete_account", password: elements.deletePassword.value });
+}
+
+function toggleOnlinePopover() {
+  const willOpen = elements.onlinePopover.hidden;
+  elements.onlinePopover.hidden = !willOpen;
+  if (!willOpen) return;
+  setUserMenu(false);
+  if (socket?.readyState === WebSocket.OPEN) {
+    send({ type: "get_online" });
+  } else {
+    renderOnlineUsers([]);
+  }
+}
+
+function renderOnlineUsers(users) {
+  elements.onlinePopoverCount.textContent = users.length;
+  const list = elements.onlinePopoverList;
+  list.replaceChildren();
+  if (!users.length) {
+    const empty = document.createElement("div");
+    empty.className = "online-user-empty";
+    empty.textContent = "当前没有登录的用户在线";
+    list.append(empty);
+    return;
+  }
+  for (const info of users) {
+    const item = document.createElement("div");
+    item.className = "online-user";
+    const avatar = document.createElement("div");
+    avatar.className = "online-user-avatar";
+    if (info.avatar) {
+      const image = document.createElement("img");
+      image.src = info.avatar;
+      image.alt = "";
+      avatar.append(image);
+    } else {
+      avatar.textContent = (info.nickname || info.username).charAt(0).toUpperCase();
+    }
+    const body = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "online-user-name";
+    name.textContent = `${roleInfo(info.role).icon}${info.nickname || info.username}`;
+    body.append(name);
+    if (info.nickname && info.nickname !== info.username) {
+      const account = document.createElement("div");
+      account.className = "online-user-account";
+      account.textContent = info.username;
+      body.append(account);
+    }
+    item.append(avatar, body);
+    list.append(item);
+  }
 }
 
 function sendMessage() {
@@ -383,7 +603,8 @@ function launchDanmaku(data, track) {
   const info = roleInfo(data.role);
   const item = document.createElement("div");
   item.className = `danmaku-item${info.className ? ` ${info.className}` : ""}`;
-  item.textContent = `${info.icon}${data.username}：${data.text}`;
+  const name = profiles.get(data.username)?.nickname || data.nickname || data.username;
+  item.textContent = `${info.icon}${name}：${data.text}`;
   item.style.top = `${danmaku.topReserved + track * danmaku.trackHeight}px`;
   elements.danmakuLayer.append(item);
   const itemWidth = item.offsetWidth;
@@ -422,6 +643,40 @@ elements.danmakuToggle.addEventListener("click", toggleDanmaku);
 elements.fullscreenButton.addEventListener("click", toggleFullscreen);
 elements.authSubmit.addEventListener("click", submitAuth);
 elements.authSwitch.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
+elements.userChip.addEventListener("click", () => setUserMenu(elements.userDropdown.hidden));
+elements.onlineStat.addEventListener("click", toggleOnlinePopover);
+elements.profileButton.addEventListener("click", openProfile);
+elements.avatarButton.addEventListener("click", () => elements.avatarFile.click());
+elements.avatarFile.addEventListener("change", () => {
+  pickAvatar(elements.avatarFile.files[0]);
+  elements.avatarFile.value = "";
+});
+elements.avatarReset.addEventListener("click", () => {
+  pendingAvatar = "";
+  renderAvatarPreview("");
+});
+elements.profileSubmit.addEventListener("click", submitProfile);
+elements.nicknameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.isComposing) submitProfile();
+});
+elements.deleteAccountButton.addEventListener("click", openDeleteModal);
+elements.deleteSubmit.addEventListener("click", submitDeleteAccount);
+elements.deletePassword.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.isComposing) submitDeleteAccount();
+});
+elements.deleteCancel.addEventListener("click", () => {
+  elements.deleteModal.style.display = "none";
+});
+elements.logoutButton.addEventListener("click", () => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) send({ type: "logout", token });
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  setSignedIn(null);
+});
+document.addEventListener("click", (event) => {
+  if (!elements.userArea.contains(event.target)) setUserMenu(false);
+  if (!elements.leftHeader.contains(event.target)) elements.onlinePopover.hidden = true;
+});
 elements.chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.isComposing) sendMessage();
 });
@@ -430,6 +685,12 @@ elements.password.addEventListener("keydown", (event) => {
 });
 elements.authModal.addEventListener("click", (event) => {
   if (event.target === elements.authModal) elements.authModal.style.display = "none";
+});
+elements.profileModal.addEventListener("click", (event) => {
+  if (event.target === elements.profileModal) elements.profileModal.style.display = "none";
+});
+elements.deleteModal.addEventListener("click", (event) => {
+  if (event.target === elements.deleteModal) elements.deleteModal.style.display = "none";
 });
 window.addEventListener("resize", resizeDanmakuTracks, { passive: true });
 window.addEventListener("resize", syncChatHeight, { passive: true });
