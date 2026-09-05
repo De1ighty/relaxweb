@@ -95,6 +95,14 @@
         </button>
 
         <button
+            class="user-dropdown-item"
+            id="inviteButton"
+            type="button"
+        >
+            邀请码
+        </button>
+
+        <button
             class="user-dropdown-item danger-item"
             id="deleteAccountButton"
             type="button"
@@ -369,6 +377,15 @@
     placeholder="密码"
 >
 
+<input
+    class="login-input"
+    hidden
+    id="inviteCode"
+    maxlength="32"
+    autocomplete="off"
+    placeholder="邀请码"
+>
+
 
 <button
     class="login-submit"
@@ -470,6 +487,62 @@
     id="avatarFile"
     type="file"
 >
+
+
+</div>
+
+</div>
+
+
+<!-- ======================================================
+     邀请码窗口
+====================================================== -->
+
+<div
+    class="modal"
+    id="inviteModal"
+>
+
+<div class="login-card">
+
+
+<h2>
+    邀请码
+</h2>
+
+
+<p class="delete-warning">
+
+    每个邀请码可邀请一位朋友注册，只能使用一次。
+
+</p>
+
+
+<div
+    class="invite-list"
+    id="inviteList"
+></div>
+
+
+<button
+    class="login-submit"
+    id="inviteCreate"
+    type="button"
+>
+    生成新邀请码
+</button>
+
+
+<div
+    class="auth-switch"
+    id="inviteClose"
+>
+
+    <span class="auth-link">
+        关闭
+    </span>
+
+</div>
 
 
 </div>

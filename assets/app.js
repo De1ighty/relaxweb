@@ -11,7 +11,10 @@ const elements = {
   deleteAccountButton: $("deleteAccountButton"), deleteCancel: $("deleteCancel"),
   deleteModal: $("deleteModal"), deletePassword: $("deletePassword"),
   deleteSubmit: $("deleteSubmit"), dropdownName: $("dropdownName"),
-  fullscreenButton: $("fullscreenButton"),
+  fullscreenButton: $("fullscreenButton"), inviteButton: $("inviteButton"),
+  inviteClose: $("inviteClose"), inviteCreate: $("inviteCreate"),
+  inviteCode: $("inviteCode"), inviteList: $("inviteList"),
+  inviteModal: $("inviteModal"),
   leftHeader: $("leftHeader"), loginButton: $("loginButton"),
   logoutButton: $("logoutButton"), messages: $("messages"),
   muteToggle: $("muteToggle"),
@@ -96,9 +99,17 @@ function setVolume() {
 function connectStream() {
   clearTimeout(streamReconnectTimer);
   streamReader?.close();
+  streamReader = null;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!currentUser || !token) {
+    setPlayerMessage("登录后观看直播");
+    return;
+  }
   const protocol = location.protocol === "https:" ? "https:" : "http:";
   streamReader = new MediaMTXWebRTCReader({
     url: `${protocol}//${location.hostname}:8889/xiaopang/whep`,
+    user: currentUser.username,
+    pass: token,
     onError: () => {
       setPlayerMessage("等待直播信号…");
       streamReconnectTimer = window.setTimeout(connectStream, 3000);
@@ -193,6 +204,15 @@ function setSignedIn(user) {
   elements.userChip.style.display = user ? "flex" : "none";
   renderIdentity();
   setUserMenu(false);
+  if (user) {
+    if (!streamReader) connectStream();
+  } else {
+    clearTimeout(streamReconnectTimer);
+    streamReader?.close();
+    streamReader = null;
+    elements.streamVideo.srcObject = null;
+    setPlayerMessage("登录后观看直播");
+  }
   elements.chatInput.placeholder = user ? "发送弹幕..." : "登录后发送弹幕...";
 }
 
@@ -328,6 +348,13 @@ const messageHandlers = {
     elements.profileModal.style.display = "none";
   },
   profile_error(data) { alert(data.message); },
+  invite_list(data) {
+    renderInviteList(data.codes || []);
+  },
+  invite_created() {
+    send({ type: "list_invites" });
+  },
+  invite_error(data) { alert(data.message); },
   account_deleted() {
     elements.deleteModal.style.display = "none";
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -385,6 +412,7 @@ function setAuthMode(mode) {
   elements.authTitle.textContent = isLogin ? "登录直播间" : "注册账号";
   elements.authSubmit.textContent = isLogin ? "登录" : "注册";
   elements.password.autocomplete = isLogin ? "current-password" : "new-password";
+  elements.inviteCode.hidden = isLogin;
   const toggle = document.createElement("button");
   toggle.className = "auth-link";
   toggle.type = "button";
@@ -407,7 +435,12 @@ function submitAuth() {
     alert("请输入用户名和密码");
     return;
   }
-  send({ type: authMode, username, password });
+  send({
+    type: authMode,
+    username,
+    password,
+    ...(authMode === "register" ? { invite_code: elements.inviteCode.value.trim() } : {}),
+  });
 }
 
 function openProfile() {
@@ -462,6 +495,71 @@ function submitProfile() {
     nickname: elements.nicknameInput.value.trim(),
     ...(pendingAvatar !== undefined ? { avatar: pendingAvatar } : {}),
   });
+}
+
+function openInviteModal() {
+  if (!currentUser) return;
+  setUserMenu(false);
+  elements.inviteList.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "invite-empty";
+  loading.textContent = "加载中…";
+  elements.inviteList.append(loading);
+  elements.inviteModal.style.display = "flex";
+  send({ type: "list_invites" });
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.style.position = "fixed";
+  helper.style.opacity = "0";
+  document.body.append(helper);
+  helper.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {}
+  helper.remove();
+  return copied;
+}
+
+function renderInviteList(codes) {
+  const list = elements.inviteList;
+  list.replaceChildren();
+  if (!codes.length) {
+    const empty = document.createElement("div");
+    empty.className = "invite-empty";
+    empty.textContent = "还没有可用的邀请码，点击下方生成";
+    list.append(empty);
+    return;
+  }
+  for (const item of codes) {
+    const row = document.createElement("div");
+    row.className = "invite-row";
+    const code = document.createElement("span");
+    code.className = "invite-code";
+    code.textContent = item.code;
+    const copy = document.createElement("button");
+    copy.className = "invite-copy";
+    copy.type = "button";
+    copy.textContent = "复制";
+    copy.addEventListener("click", async () => {
+      copy.textContent = (await copyText(item.code)) ? "已复制" : "请手动复制";
+      window.setTimeout(() => { copy.textContent = "复制"; }, 1500);
+    });
+    row.append(code, copy);
+    list.append(row);
+  }
+}
+
+function createInvite() {
+  if (!currentUser) return;
+  send({ type: "create_invite" });
 }
 
 function openDeleteModal() {
@@ -659,6 +757,11 @@ elements.profileSubmit.addEventListener("click", submitProfile);
 elements.nicknameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.isComposing) submitProfile();
 });
+elements.inviteButton.addEventListener("click", openInviteModal);
+elements.inviteCreate.addEventListener("click", createInvite);
+elements.inviteClose.addEventListener("click", () => {
+  elements.inviteModal.style.display = "none";
+});
 elements.deleteAccountButton.addEventListener("click", openDeleteModal);
 elements.deleteSubmit.addEventListener("click", submitDeleteAccount);
 elements.deletePassword.addEventListener("keydown", (event) => {
@@ -692,6 +795,9 @@ elements.profileModal.addEventListener("click", (event) => {
 elements.deleteModal.addEventListener("click", (event) => {
   if (event.target === elements.deleteModal) elements.deleteModal.style.display = "none";
 });
+elements.inviteModal.addEventListener("click", (event) => {
+  if (event.target === elements.inviteModal) elements.inviteModal.style.display = "none";
+});
 window.addEventListener("resize", resizeDanmakuTracks, { passive: true });
 window.addEventListener("resize", syncChatHeight, { passive: true });
 window.addEventListener("resize", syncComposerPosition, { passive: true });
@@ -711,5 +817,5 @@ syncComposerPosition();
 chatHeightObserver = new ResizeObserver(syncChatHeight);
 chatHeightObserver.observe(elements.player);
 syncChatHeight();
-connectStream();
+setPlayerMessage(localStorage.getItem(AUTH_TOKEN_KEY) ? "正在连接直播…" : "登录后观看直播");
 connectChat();

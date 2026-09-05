@@ -1,0 +1,14 @@
+[Unit]
+Description=Xiaopang Live Stream Auth
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/path/to/relaxweb
+ExecStart=/usr/bin/python3 /path/to/relaxweb/auth_server.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

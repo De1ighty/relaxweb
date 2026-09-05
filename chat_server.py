@@ -25,10 +25,14 @@ AVATAR_PATTERN = re.compile(
 )
 AUTH_COOLDOWN = 1.5
 CHAT_COOLDOWN = 1.0
+REGISTER_IP_LIMIT = 10
+REGISTER_IP_WINDOW = 3600
+INVITE_UNUSED_LIMIT = 5
 SESSION_TTL = 30 * 24 * 60 * 60
 
 clients = {}
 history = deque(maxlen=50)
+register_ip_times = {}
 logger = logging.getLogger("live-chat")
 
 
@@ -59,6 +63,24 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                code TEXT PRIMARY KEY,
+                created_at INTEGER NOT NULL,
+                used_by TEXT,
+                used_at INTEGER,
+                created_by TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        invite_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(invite_codes)")
+        }
+        if "created_by" not in invite_columns:
+            conn.execute(
+                "ALTER TABLE invite_codes ADD COLUMN created_by TEXT NOT NULL DEFAULT ''"
+            )
         columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
         if "nickname" not in columns:
             conn.execute(
@@ -82,7 +104,7 @@ def valid_username(username):
     return bool(re.fullmatch(r"[\u4e00-\u9fa5A-Za-z0-9_-]{2,20}", username))
 
 
-def register_user(username, password):
+def register_user(username, password, invite_code=""):
     username = username.strip()
     if not valid_username(username):
         return False, "用户名需为2-20位中文、英文、数字、_ 或 -"
@@ -91,15 +113,29 @@ def register_user(username, password):
     if len(password) > 128:
         return False, "密码过长"
 
+    code = str(invite_code or "").strip()
+    if not code:
+        return False, "注册需要邀请码"
+
     password_hash, salt = hash_password(password)
     try:
         with database() as conn, conn:
+            row = conn.execute(
+                "SELECT code FROM invite_codes WHERE code = ? AND used_by IS NULL",
+                (code,),
+            ).fetchone()
+            if not row:
+                return False, "邀请码无效或已被使用"
             conn.execute(
                 """
                 INSERT INTO users (username, password_hash, salt, role, created_at)
                 VALUES (?, ?, ?, 'user', ?)
                 """,
                 (username, password_hash, salt, int(time.time())),
+            )
+            conn.execute(
+                "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ?",
+                (username, int(time.time()), code),
             )
     except sqlite3.IntegrityError:
         return False, "这个用户名已经被注册"
@@ -207,12 +243,23 @@ def rate_limited(state, key, cooldown):
 
 
 async def handle_register(websocket, state, data):
+    ip = (websocket.remote_address or ("?", 0))[0]
+    now = time.monotonic()
+    recent = [t for t in register_ip_times.get(ip, []) if now - t < REGISTER_IP_WINDOW]
+    register_ip_times[ip] = recent
+    if len(recent) >= REGISTER_IP_LIMIT:
+        await send_json(websocket, {"type": "auth_error", "message": "注册太频繁，请稍后再试"})
+        return
     if rate_limited(state, "last_auth_attempt", AUTH_COOLDOWN):
         await send_json(websocket, {"type": "auth_error", "message": "操作太频繁，请稍后再试"})
         return
     success, message = register_user(
-        str(data.get("username", "")).strip(), str(data.get("password", ""))
+        str(data.get("username", "")).strip(),
+        str(data.get("password", "")),
+        str(data.get("invite_code", "")),
     )
+    if success:
+        recent.append(now)
     await send_json(
         websocket,
         {"type": "register_success" if success else "auth_error", "message": message},
@@ -370,6 +417,57 @@ async def handle_get_online(websocket, state, data):
     await send_json(websocket, {"type": "online_users", "users": list(users.values())})
 
 
+async def handle_list_invites(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    with database() as conn:
+        rows = conn.execute(
+            "SELECT code, created_at FROM invite_codes "
+            "WHERE created_by = ? AND used_by IS NULL ORDER BY created_at DESC",
+            (user["username"],),
+        ).fetchall()
+    await send_json(
+        websocket,
+        {
+            "type": "invite_list",
+            "codes": [
+                {"code": code, "created_at": created_at} for code, created_at in rows
+            ],
+        },
+    )
+
+
+async def handle_create_invite(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_invite_create", 5.0):
+        await send_json(websocket, {"type": "invite_error", "message": "操作太频繁，请稍后再试"})
+        return
+    with database() as conn, conn:
+        unused = conn.execute(
+            "SELECT COUNT(*) FROM invite_codes "
+            "WHERE created_by = ? AND used_by IS NULL",
+            (user["username"],),
+        ).fetchone()[0]
+        if unused >= INVITE_UNUSED_LIMIT:
+            await send_json(
+                websocket,
+                {"type": "invite_error", "message": "未使用的邀请码已达上限（5 个），请先用掉一些"},
+            )
+            return
+        code = secrets.token_urlsafe(8)
+        conn.execute(
+            "INSERT INTO invite_codes (code, created_at, created_by) VALUES (?, ?, ?)",
+            (code, int(time.time()), user["username"]),
+        )
+    logger.info("invite created by %s", user["username"])
+    await send_json(websocket, {"type": "invite_created", "code": code})
+
+
 async def handle_chat(websocket, state, data):
     user = state.get("user")
     if not user:
@@ -403,6 +501,8 @@ handlers = {
     "get_profile": handle_get_profile,
     "delete_account": handle_delete_account,
     "get_online": handle_get_online,
+    "list_invites": handle_list_invites,
+    "create_invite": handle_create_invite,
     "chat": handle_chat,
 }
 
@@ -413,6 +513,7 @@ async def handler(websocket):
         "last_message": 0.0,
         "last_auth_attempt": 0.0,
         "last_profile_update": 0.0,
+        "last_invite_create": 0.0,
     }
     clients[websocket] = state
     logger.info("connection opened; online=%d", len(clients))

@@ -419,6 +419,7 @@ class MediaMTXWebRTCReader {
       if (this.#sessionUrl !== null) {
         fetch(this.#sessionUrl, {
           method: "DELETE",
+          headers: this.#authHeader(),
         });
         this.#sessionUrl = null;
       }
@@ -620,6 +621,7 @@ class MediaMTXWebRTCReader {
     fetch(this.#sessionUrl, {
       method: "PATCH",
       headers: {
+        ...this.#authHeader(),
         "Content-Type": "application/trickle-ice-sdpfrag",
         "If-Match": "*",
       },
