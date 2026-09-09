@@ -490,9 +490,20 @@ class MediaMTXWebRTCReader {
       });
   }
 
+  static #utf8ToBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+
   #authHeader() {
     if (this.#conf.user !== undefined && this.#conf.user !== "") {
-      const credentials = btoa(`${this.#conf.user}:${this.#conf.pass}`);
+      const credentials = MediaMTXWebRTCReader.#utf8ToBase64(
+        `${this.#conf.user}:${this.#conf.pass}`,
+      );
       return { Authorization: `Basic ${credentials}` };
     }
     if (this.#conf.token !== undefined && this.#conf.token !== "") {

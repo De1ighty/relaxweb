@@ -485,7 +485,7 @@ async def handle_chat(websocket, state, data):
         "nickname": user.get("nickname") or "",
         "role": user["role"],
         "text": text,
-        "time": time.strftime("%H:%M"),
+        "time": time.strftime("%m/%d %H:%M"),
     }
     history.append(message)
     logger.info("chat message from %s (%d chars)", user["username"], len(text))

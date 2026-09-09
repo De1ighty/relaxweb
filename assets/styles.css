@@ -928,22 +928,6 @@ input {
     color: #34c759;
 }
 
-.notice {
-    margin: 14px;
-
-    padding: 13px;
-
-    border-radius: 14px;
-
-    background: #fff1f6;
-
-    border: 1px solid #ffd6e5;
-
-    font-size: 13px;
-
-    line-height: 1.5;
-}
-
 .notice strong {
     color: #ff2d78;
 }
@@ -1418,4 +1402,14 @@ input {
     .chat-card {
         align-self: stretch;
     }
+}
+
+.user-dropdown-version {
+    padding: 6px 10px 4px;
+
+    color: #c0c0c7;
+
+    font-size: 11px;
+
+    text-align: center;
 }

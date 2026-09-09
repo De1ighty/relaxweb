@@ -168,7 +168,7 @@ function syncComposerPosition() {
   const targetParent = fullscreen ? elements.playerTools : elements.chatCard;
   const targetBefore = fullscreen
     ? elements.playerTools.querySelector(".player-tools-right")
-    : mobile ? elements.chatCard.querySelector(".notice") : null;
+    : mobile ? elements.messages : null;
   if (composer.parentElement === targetParent
     && composer.nextElementSibling === targetBefore) {
     return;
