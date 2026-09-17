@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -29,10 +30,18 @@ REGISTER_IP_LIMIT = 10
 REGISTER_IP_WINDOW = 3600
 INVITE_UNUSED_LIMIT = 5
 SESSION_TTL = 30 * 24 * 60 * 60
+NEW_USER_COINS = 100.0
+BET_MIN_STAKE = 10.0
+BET_MAX_OPTIONS = 6
+BET_QUESTION_LIMIT = 60
+BET_OPTION_LIMIT = 20
+FINANCE_HISTORY_LIMIT = 60
+TRANSFER_COOLDOWN = 2.0
 
 clients = {}
 history = deque(maxlen=50)
 register_ip_times = {}
+active_bet = None
 logger = logging.getLogger("live-chat")
 
 
@@ -90,6 +99,86 @@ def init_db():
             conn.execute(
                 "ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"
             )
+        if "coins" not in columns:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN coins REAL NOT NULL DEFAULT 100"
+            )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS coin_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance REAL NOT NULL,
+                kind TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_coin_tx_user "
+            "ON coin_transactions(username, id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                options TEXT NOT NULL,
+                creator TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                correct_index INTEGER,
+                created_at INTEGER NOT NULL,
+                settled_at INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bet_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bet_id INTEGER NOT NULL REFERENCES bets(id) ON DELETE CASCADE,
+                username TEXT NOT NULL,
+                option_index INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(bet_id, username)
+            )
+            """
+        )
+
+
+def record_coins(conn, username, amount, balance, kind, detail=""):
+    conn.execute(
+        "INSERT INTO coin_transactions (username, amount, balance, kind, detail, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            username,
+            round(amount, 2),
+            round(balance, 2),
+            kind,
+            str(detail or "")[:120],
+            int(time.time()),
+        ),
+    )
+
+
+def adjust_coins(conn, username, delta, kind, detail=""):
+    """在已打开的事务中调整用户金币并记录明细，返回新余额。"""
+    row = conn.execute(
+        "SELECT coins FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(username)
+    balance = round((row[0] or 0.0) + delta, 2)
+    if balance < 0:
+        raise ValueError("金币不能低于 0")
+    conn.execute(
+        "UPDATE users SET coins = ? WHERE username = ?", (balance, username)
+    )
+    record_coins(conn, username, delta, balance, kind, detail)
+    return balance
 
 
 def hash_password(password, salt=None):
@@ -128,10 +217,13 @@ def register_user(username, password, invite_code=""):
                 return False, "邀请码无效或已被使用"
             conn.execute(
                 """
-                INSERT INTO users (username, password_hash, salt, role, created_at)
-                VALUES (?, ?, ?, 'user', ?)
+                INSERT INTO users (username, password_hash, salt, role, created_at, coins)
+                VALUES (?, ?, ?, 'user', ?, 0)
                 """,
                 (username, password_hash, salt, int(time.time())),
+            )
+            adjust_coins(
+                conn, username, NEW_USER_COINS, "register", "新用户注册奖励"
             )
             conn.execute(
                 "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ?",
@@ -146,14 +238,14 @@ def authenticate_user(username, password):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT username, password_hash, salt, role, nickname, avatar
+            SELECT username, password_hash, salt, role, nickname, avatar, coins
             FROM users WHERE username = ?
             """,
             (username.strip(),),
         ).fetchone()
     if not row:
         return None
-    real_username, saved_hash, salt, role, nickname, avatar = row
+    real_username, saved_hash, salt, role, nickname, avatar, coins = row
     calculated_hash, _ = hash_password(password, salt)
     if not hmac.compare_digest(calculated_hash, saved_hash):
         return None
@@ -162,6 +254,7 @@ def authenticate_user(username, password):
         "role": role,
         "nickname": nickname or "",
         "avatar": avatar or "",
+        "coins": round(coins or 0.0, 2),
     }
 
 
@@ -198,7 +291,7 @@ def resume_user(token):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT users.username, users.role, users.nickname, users.avatar
+            SELECT users.username, users.role, users.nickname, users.avatar, users.coins
             FROM auth_sessions
             JOIN users ON users.id = auth_sessions.user_id
             WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?
@@ -210,6 +303,7 @@ def resume_user(token):
         "role": row[1],
         "nickname": row[2] or "",
         "avatar": row[3] or "",
+        "coins": round(row[4] or 0.0, 2),
     } if row else None
 
 
@@ -289,6 +383,7 @@ async def handle_login(websocket, state, data):
             "token": token,
             "nickname": profile["nickname"],
             "avatar": profile["avatar"],
+            "coins": user["coins"],
         },
     )
 
@@ -307,6 +402,7 @@ async def handle_resume(websocket, state, data):
             "role": user["role"],
             "nickname": user.get("nickname", ""),
             "avatar": user.get("avatar", ""),
+            "coins": user.get("coins", 0),
         },
     )
 
@@ -390,6 +486,8 @@ async def handle_delete_account(websocket, state, data):
     if not authenticate_user(user["username"], str(data.get("password", ""))):
         await send_json(websocket, {"type": "account_error", "message": "密码错误"})
         return
+    if active_bet and active_bet["creator"] == user["username"]:
+        await cancel_active_bet("发起者已注销账号")
     with database() as conn, conn:
         conn.execute(
             "DELETE FROM auth_sessions WHERE user_id IN "
@@ -415,6 +513,510 @@ async def handle_get_online(websocket, state, data):
             "role": user.get("role") or "user",
         }
     await send_json(websocket, {"type": "online_users", "users": list(users.values())})
+
+
+def display_name(username):
+    profile = get_profile(username)
+    return profile["nickname"] or username
+
+
+def parse_amount(value):
+    try:
+        amount = round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(amount) or amount <= 0:
+        return None
+    return amount
+
+
+async def push_balance(username, coins):
+    payload = json.dumps(
+        {"type": "coins", "username": username, "coins": round(coins, 2)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    for socket, client_state in list(clients.items()):
+        user = client_state.get("user")
+        if user and user["username"] == username:
+            try:
+                await socket.send(payload)
+            except Exception:
+                clients.pop(socket, None)
+
+
+async def broadcast_system(text, danmaku=False):
+    message = {"type": "system", "text": text, "time": time.strftime("%m/%d %H:%M")}
+    if danmaku:
+        message["danmaku"] = True
+    history.append(message)
+    logger.info("system message: %s", text)
+    await broadcast(message)
+
+
+async def handle_get_finance(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    with database() as conn:
+        row = conn.execute(
+            "SELECT coins FROM users WHERE username = ?", (user["username"],)
+        ).fetchone()
+        rows = conn.execute(
+            "SELECT amount, balance, kind, detail, created_at FROM coin_transactions "
+            "WHERE username = ? ORDER BY id DESC LIMIT ?",
+            (user["username"], FINANCE_HISTORY_LIMIT),
+        ).fetchall()
+    coins = round(row[0] or 0.0, 2) if row else 0.0
+    await send_json(
+        websocket,
+        {
+            "type": "finance",
+            "coins": coins,
+            "transactions": [
+                {
+                    "amount": round(amount, 2),
+                    "balance": round(balance, 2),
+                    "kind": kind,
+                    "detail": detail,
+                    "created_at": created_at,
+                }
+                for amount, balance, kind, detail, created_at in rows
+            ],
+        },
+    )
+
+
+async def handle_transfer_coins(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_transfer", TRANSFER_COOLDOWN):
+        await send_json(websocket, {"type": "coins_error", "message": "操作太频繁，请稍后再试"})
+        return
+    target = str(data.get("to", "")).strip()
+    amount = parse_amount(data.get("amount"))
+    if not target or target == user["username"]:
+        await send_json(websocket, {"type": "coins_error", "message": "请输入正确的对方用户名"})
+        return
+    if amount is None:
+        await send_json(websocket, {"type": "coins_error", "message": "转账金额无效"})
+        return
+    sender = user["username"]
+    try:
+        with database() as conn, conn:
+            row = conn.execute(
+                "SELECT username FROM users WHERE username = ?", (target,)
+            ).fetchone()
+            if not row:
+                raise ValueError("用户不存在")
+            balance_row = conn.execute(
+                "SELECT coins FROM users WHERE username = ?", (sender,)
+            ).fetchone()
+            if (balance_row[0] or 0.0) < amount:
+                raise ValueError("金币不足")
+            sender_balance = adjust_coins(
+                conn, sender, -amount, "transfer_out", f"转账给 {row[0]}"
+            )
+            target_balance = adjust_coins(
+                conn, row[0], amount, "transfer_in", f"来自 {sender} 的转账"
+            )
+    except ValueError as error:
+        await send_json(websocket, {"type": "coins_error", "message": str(error)})
+        return
+    user["coins"] = sender_balance
+    logger.info("transfer %.2f from %s to %s", amount, sender, row[0])
+    await send_json(websocket, {"type": "transfer_success", "coins": sender_balance})
+    await push_balance(row[0], target_balance)
+    await broadcast_system(
+        f"💰 {display_name(sender)} 转账 {amount:.2f} 金币给 {display_name(row[0])}",
+        danmaku=True,
+    )
+
+
+def load_open_bet():
+    with database() as conn:
+        row = conn.execute(
+            "SELECT id, question, options, creator, created_at FROM bets "
+            "WHERE status = 'open' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        entries = conn.execute(
+            "SELECT username, option_index, amount FROM bet_entries "
+            "WHERE bet_id = ? ORDER BY id",
+            (row[0],),
+        ).fetchall()
+    return {
+        "id": row[0],
+        "question": row[1],
+        "options": json.loads(row[2]),
+        "creator": row[3],
+        "created_at": row[4],
+        "entries": [
+            {"username": name, "option_index": index, "amount": round(amount, 2)}
+            for name, index, amount in entries
+        ],
+    }
+
+
+def bet_public_state(bet):
+    if not bet:
+        return None
+    totals = [0.0] * len(bet["options"])
+    for entry in bet["entries"]:
+        if 0 <= entry["option_index"] < len(totals):
+            totals[entry["option_index"]] = round(
+                totals[entry["option_index"]] + entry["amount"], 2
+            )
+    return {
+        "id": bet["id"],
+        "question": bet["question"],
+        "options": bet["options"],
+        "creator": bet["creator"],
+        "created_at": bet["created_at"],
+        "entries": bet["entries"],
+        "totals": totals,
+        "pot": round(sum(totals), 2),
+    }
+
+
+def find_entry(bet, username):
+    for entry in bet["entries"]:
+        if entry["username"] == username:
+            return entry
+    return None
+
+
+async def handle_get_bet(websocket, state, data):
+    await send_json(
+        websocket, {"type": "bet_state", "bet": bet_public_state(active_bet)}
+    )
+
+
+async def handle_create_bet(websocket, state, data):
+    global active_bet
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_bet_action", 2.0):
+        await send_json(websocket, {"type": "bet_error", "message": "操作太频繁，请稍后再试"})
+        return
+    if active_bet:
+        await send_json(
+            websocket,
+            {"type": "bet_error", "message": "已有进行中的竞猜，请等待它结账"},
+        )
+        return
+    question = str(data.get("question", "")).strip()[:BET_QUESTION_LIMIT]
+    raw_options = data.get("options")
+    options = []
+    if isinstance(raw_options, list):
+        for item in raw_options:
+            text = str(item).strip()[:BET_OPTION_LIMIT]
+            if text and text not in options:
+                options.append(text)
+    if not question:
+        await send_json(websocket, {"type": "bet_error", "message": "请输入竞猜问题"})
+        return
+    if len(options) < 2:
+        await send_json(websocket, {"type": "bet_error", "message": "至少需要两个选项"})
+        return
+    if len(options) > BET_MAX_OPTIONS:
+        await send_json(
+            websocket,
+            {"type": "bet_error", "message": f"选项最多 {BET_MAX_OPTIONS} 个"},
+        )
+        return
+    now = int(time.time())
+    with database() as conn, conn:
+        cursor = conn.execute(
+            "INSERT INTO bets (question, options, creator, status, created_at) "
+            "VALUES (?, ?, ?, 'open', ?)",
+            (question, json.dumps(options, ensure_ascii=False), user["username"], now),
+        )
+        bet_id = cursor.lastrowid
+    active_bet = {
+        "id": bet_id,
+        "question": question,
+        "options": options,
+        "creator": user["username"],
+        "created_at": now,
+        "entries": [],
+    }
+    logger.info("bet created by %s: %s", user["username"], question)
+    await send_json(websocket, {"type": "bet_created"})
+    await broadcast({"type": "bet_update", "bet": bet_public_state(active_bet)})
+    await broadcast_system(
+        f"🎲 {display_name(user['username'])} 发起了竞猜：{question}"
+    )
+
+
+async def handle_place_bet(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_bet_action", 1.0):
+        await send_json(websocket, {"type": "bet_error", "message": "操作太频繁，请稍后再试"})
+        return
+    bet = active_bet
+    if not bet:
+        await send_json(websocket, {"type": "bet_error", "message": "当前没有进行中的竞猜"})
+        return
+    try:
+        option_index = int(data.get("option_index"))
+    except (TypeError, ValueError):
+        option_index = -1
+    if not 0 <= option_index < len(bet["options"]):
+        await send_json(websocket, {"type": "bet_error", "message": "请选择一个选项"})
+        return
+    amount = parse_amount(data.get("amount"))
+    if amount is None:
+        await send_json(websocket, {"type": "bet_error", "message": "投注金额无效"})
+        return
+    username = user["username"]
+    try:
+        with database() as conn, conn:
+            if find_entry(bet, username):
+                raise ValueError("你已经参与过这个竞猜")
+            balance = round(
+                conn.execute(
+                    "SELECT coins FROM users WHERE username = ?", (username,)
+                ).fetchone()[0] or 0.0,
+                2,
+            )
+            if amount > balance:
+                raise ValueError("金币不足")
+            if balance >= BET_MIN_STAKE and amount < BET_MIN_STAKE:
+                raise ValueError(f"最低投注 {BET_MIN_STAKE:.0f} 金币")
+            if balance < BET_MIN_STAKE and amount < balance:
+                raise ValueError("金币不足 10 时只能全部投上")
+            new_balance = adjust_coins(
+                conn, username, -amount, "bet_stake", f"竞猜投注：{bet['question']}"
+            )
+            conn.execute(
+                "INSERT INTO bet_entries (bet_id, username, option_index, amount, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (bet["id"], username, option_index, amount, int(time.time())),
+            )
+    except ValueError as error:
+        await send_json(websocket, {"type": "bet_error", "message": str(error)})
+        return
+    bet["entries"].append(
+        {"username": username, "option_index": option_index, "amount": amount}
+    )
+    user["coins"] = new_balance
+    await send_json(
+        websocket,
+        {
+            "type": "bet_placed",
+            "coins": new_balance,
+            "option_index": option_index,
+            "amount": amount,
+        },
+    )
+    await broadcast({"type": "bet_update", "bet": bet_public_state(bet)})
+
+
+async def cancel_active_bet(reason, message=None, refund_prefix="竞猜取消"):
+    global active_bet
+    bet = active_bet
+    if not bet:
+        return
+    with database() as conn, conn:
+        rows = conn.execute(
+            "SELECT username, amount FROM bet_entries WHERE bet_id = ? ORDER BY id",
+            (bet["id"],),
+        ).fetchall()
+        for name, amount in rows:
+            try:
+                adjust_coins(
+                    conn, name, amount, "bet_refund", f"{refund_prefix}：{bet['question']}"
+                )
+            except KeyError:
+                continue
+        conn.execute(
+            "UPDATE bets SET status = 'cancelled', settled_at = ? WHERE id = ?",
+            (int(time.time()), bet["id"]),
+        )
+    active_bet = None
+    logger.info("bet cancelled: %s (%s)", bet["question"], reason)
+    await broadcast({"type": "bet_update", "bet": None})
+    await broadcast(
+        {"type": "bet_cancelled", "question": bet["question"], "reason": reason}
+    )
+    await broadcast_system(message or f"🎲 竞猜已取消（{reason}），投注已退还")
+
+
+async def handle_settle_bet(websocket, state, data):
+    global active_bet
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    bet = active_bet
+    if not bet:
+        await send_json(websocket, {"type": "bet_error", "message": "当前没有进行中的竞猜"})
+        return
+    if user["username"] != bet["creator"]:
+        await send_json(websocket, {"type": "bet_error", "message": "只有发起者可以结账"})
+        return
+    try:
+        correct_index = int(data.get("correct_index"))
+    except (TypeError, ValueError):
+        correct_index = -1
+    if not 0 <= correct_index < len(bet["options"]):
+        await send_json(websocket, {"type": "bet_error", "message": "请选择正确选项"})
+        return
+    question = bet["question"]
+    answer = bet["options"][correct_index]
+    results = []
+    winner_texts = []
+    loser_texts = []
+    refunded = False
+    with database() as conn, conn:
+        rows = conn.execute(
+            "SELECT username, option_index, amount FROM bet_entries "
+            "WHERE bet_id = ? ORDER BY id",
+            (bet["id"],),
+        ).fetchall()
+        winners = [(name, amount) for name, index, amount in rows if index == correct_index]
+        losers = [(name, amount) for name, index, amount in rows if index != correct_index]
+        pot = round(sum(amount for _, amount in losers), 2)
+        win_stake = round(sum(amount for _, amount in winners), 2)
+        if winners and pot > 0:
+            shares = [round(pot * amount / win_stake, 2) for _, amount in winners]
+            shares[-1] = round(shares[-1] + pot - sum(shares), 2)
+            for (name, amount), share in zip(winners, shares):
+                try:
+                    balance = adjust_coins(
+                        conn, name, amount + share, "bet_win", f"竞猜猜中：{question}"
+                    )
+                except KeyError:
+                    continue
+                results.append(
+                    {"username": name, "change": round(share, 2), "coins": balance}
+                )
+                winner_texts.append(f"{display_name(name)} +{share:.2f}")
+            for name, amount in losers:
+                row = conn.execute(
+                    "SELECT coins FROM users WHERE username = ?", (name,)
+                ).fetchone()
+                results.append(
+                    {
+                        "username": name,
+                        "change": round(-amount, 2),
+                        "coins": round(row[0] or 0.0, 2) if row else 0.0,
+                    }
+                )
+                loser_texts.append(f"{display_name(name)} -{amount:.2f}")
+        else:
+            refunded = True
+            for name, amount in rows:
+                try:
+                    balance = adjust_coins(
+                        conn, name, amount, "bet_refund", f"竞猜退款：{question}"
+                    )
+                except KeyError:
+                    continue
+                results.append(
+                    {"username": name, "change": round(amount, 2), "coins": balance}
+                )
+        conn.execute(
+            "UPDATE bets SET status = 'settled', correct_index = ?, settled_at = ? "
+            "WHERE id = ?",
+            (correct_index, int(time.time()), bet["id"]),
+        )
+    active_bet = None
+    logger.info("bet settled: %s answer=%s", question, answer)
+    await broadcast(
+        {
+            "type": "bet_settled",
+            "question": question,
+            "answer": answer,
+            "refunded": refunded,
+            "results": results,
+        }
+    )
+    if refunded:
+        await broadcast_system(f"🎲 竞猜结账：{question}｜无人猜对，投注已退还")
+    else:
+        await broadcast_system(
+            f"🎲 竞猜结账：{question}｜答案：{answer}｜"
+            f"赢家：{'、'.join(winner_texts) or '无'}｜"
+            f"输家：{'、'.join(loser_texts) or '无'}"
+        )
+
+
+async def handle_cancel_bet(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_bet_action", 2.0):
+        await send_json(websocket, {"type": "bet_error", "message": "操作太频繁，请稍后再试"})
+        return
+    bet = active_bet
+    if not bet:
+        await send_json(websocket, {"type": "bet_error", "message": "当前没有进行中的竞猜"})
+        return
+    if user["username"] != bet["creator"]:
+        await send_json(websocket, {"type": "bet_error", "message": "只有发起者可以流局"})
+        return
+    logger.info("bet drawn by %s: %s", user["username"], bet["question"])
+    await cancel_active_bet(
+        "发起者流局",
+        message=f"🎲 竞猜流局：{bet['question']}｜投注已全部退还",
+        refund_prefix="竞猜流局",
+    )
+
+
+async def handle_admin_set_coins(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if user.get("role") not in ("admin", "streamer"):
+        await send_json(websocket, {"type": "coins_error", "message": "没有权限执行此操作"})
+        return
+    target = str(data.get("username", "")).strip()
+    try:
+        coins = round(float(data.get("coins")), 2)
+    except (TypeError, ValueError):
+        coins = -1.0
+    if not target:
+        await send_json(websocket, {"type": "coins_error", "message": "请输入用户名"})
+        return
+    if not math.isfinite(coins) or coins < 0:
+        await send_json(
+            websocket,
+            {"type": "coins_error", "message": "金币数量无效（不能低于 0）"},
+        )
+        return
+    try:
+        with database() as conn, conn:
+            old = conn.execute(
+                "SELECT coins FROM users WHERE username = ?", (target,)
+            ).fetchone()
+            if old is None:
+                raise ValueError("用户不存在")
+            delta = round(coins - (old[0] or 0.0), 2)
+            conn.execute(
+                "UPDATE users SET coins = ? WHERE username = ?", (coins, target)
+            )
+            record_coins(conn, target, delta, coins, "admin", "管理员调整")
+    except ValueError as error:
+        await send_json(websocket, {"type": "coins_error", "message": str(error)})
+        return
+    logger.info("admin %s set coins of %s to %.2f", user["username"], target, coins)
+    await send_json(
+        websocket, {"type": "admin_coins_done", "username": target, "coins": coins}
+    )
+    await push_balance(target, coins)
 
 
 async def handle_list_invites(websocket, state, data):
@@ -504,6 +1106,14 @@ handlers = {
     "list_invites": handle_list_invites,
     "create_invite": handle_create_invite,
     "chat": handle_chat,
+    "get_finance": handle_get_finance,
+    "transfer_coins": handle_transfer_coins,
+    "get_bet": handle_get_bet,
+    "create_bet": handle_create_bet,
+    "place_bet": handle_place_bet,
+    "settle_bet": handle_settle_bet,
+    "cancel_bet": handle_cancel_bet,
+    "admin_set_coins": handle_admin_set_coins,
 }
 
 
@@ -514,6 +1124,8 @@ async def handler(websocket):
         "last_auth_attempt": 0.0,
         "last_profile_update": 0.0,
         "last_invite_create": 0.0,
+        "last_transfer": 0.0,
+        "last_bet_action": 0.0,
     }
     clients[websocket] = state
     logger.info("connection opened; online=%d", len(clients))
@@ -539,7 +1151,16 @@ async def handler(websocket):
 
 
 async def main():
+    global active_bet
     init_db()
+    active_bet = load_open_bet()
+    if active_bet:
+        logger.info(
+            "resumed open bet #%d from %s: %s",
+            active_bet["id"],
+            active_bet["creator"],
+            active_bet["question"],
+        )
     logger.info("chat server listening on ws://%s:%d", HOST, PORT)
     async with websockets.serve(
         handler,

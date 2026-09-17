@@ -5,12 +5,20 @@ const elements = {
   authModal: $("loginModal"), authSubmit: $("authSubmit"), authSwitch: $("authSwitch"),
   avatarButton: $("avatarButton"), avatarFallback: $("avatarFallback"),
   avatarFile: $("avatarFile"), avatarPreview: $("avatarPreview"), avatarReset: $("avatarReset"),
-  authTitle: $("authTitle"), chatCard: $("chatCard"), chatInput: $("chatInput"),
+  authTitle: $("authTitle"), betClose: $("betClose"), betModal: $("betModal"),
+  betModalBody: $("betModalBody"), betModalTitle: $("betModalTitle"),
+  betStat: $("betStat"), betStatTitle: $("betStatTitle"),
+  chatCard: $("chatCard"), chatInput: $("chatInput"),
   chatStatus: $("chatStatus"), danmakuComposer: $("danmakuComposer"),
   danmakuLayer: $("danmakuLayer"), danmakuToggle: $("danmakuToggle"),
   deleteAccountButton: $("deleteAccountButton"), deleteCancel: $("deleteCancel"),
   deleteModal: $("deleteModal"), deletePassword: $("deletePassword"),
   deleteSubmit: $("deleteSubmit"), dropdownName: $("dropdownName"),
+  financeBalance: $("financeBalance"), financeButton: $("financeButton"),
+  financeClose: $("financeClose"), financeDetailPanel: $("financeDetailPanel"),
+  financeList: $("financeList"), financeModal: $("financeModal"),
+  financeTabDetail: $("financeTabDetail"), financeTabTransfer: $("financeTabTransfer"),
+  financeTransferPanel: $("financeTransferPanel"),
   fullscreenButton: $("fullscreenButton"), inviteButton: $("inviteButton"),
   inviteClose: $("inviteClose"), inviteCreate: $("inviteCreate"),
   inviteCode: $("inviteCode"), inviteList: $("inviteList"),
@@ -26,7 +34,10 @@ const elements = {
   playToggle: $("playToggle"), profileButton: $("profileButton"),
   profileModal: $("profileModal"), profileSubmit: $("profileSubmit"),
   sendButton: $("sendButton"),
-  streamVideo: $("streamVideo"), userArea: $("userArea"), userAvatar: $("userAvatar"),
+  streamVideo: $("streamVideo"), transferAmount: $("transferAmount"),
+  transferFeedback: $("transferFeedback"), transferSubmit: $("transferSubmit"),
+  transferTo: $("transferTo"),
+  userArea: $("userArea"), userAvatar: $("userAvatar"),
   userChip: $("userChip"), userDropdown: $("userDropdown"), userName: $("userName"),
   username: $("username"), volumeSlider: $("volumeSlider"),
 };
@@ -34,6 +45,7 @@ const elements = {
 const roles = {
   streamer: { icon: "👑 ", className: "streamer" },
   admin: { icon: "🛡 ", className: "admin" },
+  system: { icon: "📢 ", className: "system" },
   user: { icon: "", className: "" },
 };
 const danmaku = {
@@ -44,6 +56,17 @@ const danmaku = {
 
 const AUTH_TOKEN_KEY = "liveAuthToken";
 const CONTROLS_HIDE_DELAY = 2500;
+const BET_MIN_STAKE = 10;
+const BET_MAX_OPTIONS = 6;
+const coinKinds = {
+  register: "注册奖励",
+  admin: "管理员调整",
+  transfer_out: "转账转出",
+  transfer_in: "转账转入",
+  bet_stake: "竞猜投注",
+  bet_win: "竞猜奖励",
+  bet_refund: "竞猜退款",
+};
 const profiles = new Map();
 const pendingProfiles = new Set();
 let authMode = "login";
@@ -55,6 +78,24 @@ let streamReconnectTimer = 0;
 let controlsHideTimer = 0;
 let pendingAvatar;
 let chatHeightObserver = null;
+let betCache = null;
+let lastSettled = null;
+let joinDraft = { optionIndex: 0, amount: "" };
+
+function formatCoins(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function formatClock(epochSeconds) {
+  const date = new Date(epochSeconds * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function displayNameOf(username) {
+  const profile = profiles.get(username);
+  return profile?.nickname || username;
+}
 
 function roleInfo(role) {
   return roles[role] || roles.user;
@@ -288,6 +329,7 @@ function connectChat() {
     setConnectionStatus("在线");
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) send({ type: "resume", token });
+    send({ type: "get_bet" });
   });
   socket.addEventListener("error", () => setConnectionStatus("连接异常"));
   socket.addEventListener("close", () => {
@@ -306,11 +348,20 @@ function connectChat() {
 const messageHandlers = {
   history(data) {
     elements.messages.replaceChildren();
-    data.messages.forEach(addMessage);
+    data.messages.forEach((message) => {
+      if (message.type === "system") addSystemMessage(message.text, message.time);
+      else addMessage(message);
+    });
   },
   chat(data) {
     addMessage(data);
     addDanmaku(data);
+  },
+  system(data) {
+    addSystemMessage(data.text, data.time);
+    if (data.danmaku) {
+      addDanmaku({ username: "系统", nickname: "", role: "system", text: data.text });
+    }
   },
   online(data) {
     elements.onlineNumber.textContent = data.count;
@@ -328,11 +379,13 @@ const messageHandlers = {
     elements.authModal.style.display = "none";
     setSignedIn({
       username: data.username, nickname: data.nickname, avatar: data.avatar,
+      coins: data.coins,
     });
   },
   resume_success(data) {
     setSignedIn({
       username: data.username, nickname: data.nickname, avatar: data.avatar,
+      coins: data.coins,
     });
   },
   profile(data) {
@@ -368,6 +421,59 @@ const messageHandlers = {
   },
   auth_error(data) { alert(data.message); },
   error(data) { alert(data.message); },
+  finance(data) { renderFinance(data); },
+  transfer_success(data) {
+    if (currentUser) currentUser.coins = data.coins;
+    elements.transferAmount.value = "";
+    elements.transferFeedback.textContent = "转账成功";
+    send({ type: "get_finance" });
+  },
+  coins_error(data) { alert(data.message); },
+  coins(data) {
+    if (currentUser && data.username === currentUser.username) {
+      currentUser.coins = data.coins;
+    }
+    if (elements.financeModal.style.display === "flex"
+      && currentUser && data.username === currentUser.username) {
+      send({ type: "get_finance" });
+    }
+  },
+  bet_state(data) { setBetState(data.bet); },
+  bet_update(data) { setBetState(data.bet); },
+  bet_created() {},
+  bet_placed(data) {
+    if (currentUser) currentUser.coins = data.coins;
+    joinDraft = { optionIndex: 0, amount: "" };
+    if (elements.betModal.style.display === "flex") renderBetModal();
+  },
+  bet_settled(data) {
+    if (currentUser) {
+      const mine = (data.results || []).find(
+        (item) => item.username === currentUser.username,
+      );
+      if (mine) currentUser.coins = mine.coins;
+    }
+    lastSettled = data;
+    betCache = null;
+    renderBetChip();
+    if (elements.betModal.style.display === "flex") renderBetModal();
+  },
+  bet_cancelled(data) {
+    if (currentUser) send({ type: "get_finance" });
+    lastSettled = {
+      question: data.question,
+      cancelled: true,
+      reason: data.reason || "发起者流局",
+      results: [],
+    };
+    betCache = null;
+    renderBetChip();
+    if (elements.betModal.style.display === "flex") renderBetModal();
+  },
+  bet_error(data) { alert(data.message); },
+  admin_coins_done(data) {
+    alert(`已将 ${data.username} 的金币设为 ${formatCoins(data.coins)}`);
+  },
 };
 
 function handleServerMessage(data) {
@@ -403,6 +509,31 @@ function addMessage({ username, nickname, text, time, role }) {
   elements.messages.append(row);
   refreshMessageIdentity(username);
   requestProfile(username);
+  elements.messages.scrollTop = elements.messages.scrollHeight;
+}
+
+function addSystemMessage(text, time) {
+  const row = document.createElement("div");
+  row.className = "message system-message";
+  const avatar = document.createElement("div");
+  avatar.className = "message-avatar system-avatar";
+  avatar.textContent = "📢";
+  const body = document.createElement("div");
+  const user = document.createElement("div");
+  user.className = "message-user system-name-chat";
+  user.textContent = "系统";
+  if (time) {
+    const clock = document.createElement("span");
+    clock.className = "message-time";
+    clock.textContent = time;
+    user.append(clock);
+  }
+  const content = document.createElement("div");
+  content.className = "message-text system-text";
+  content.textContent = text;
+  body.append(user, content);
+  row.append(avatar, body);
+  elements.messages.append(row);
   elements.messages.scrollTop = elements.messages.scrollHeight;
 }
 
@@ -575,6 +706,439 @@ function submitDeleteAccount() {
     return;
   }
   send({ type: "delete_account", password: elements.deletePassword.value });
+}
+
+
+/* =========================================================
+   财务管理
+========================================================= */
+
+function switchFinanceTab(tab) {
+  const detail = tab === "detail";
+  elements.financeTabDetail.classList.toggle("active", detail);
+  elements.financeTabTransfer.classList.toggle("active", !detail);
+  elements.financeDetailPanel.hidden = !detail;
+  elements.financeTransferPanel.hidden = detail;
+  elements.transferFeedback.textContent = "";
+}
+
+function openFinance() {
+  if (!currentUser) return;
+  setUserMenu(false);
+  switchFinanceTab("detail");
+  elements.financeBalance.textContent = formatCoins(currentUser.coins);
+  elements.financeList.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "invite-empty";
+  loading.textContent = "加载中…";
+  elements.financeList.append(loading);
+  elements.financeModal.style.display = "flex";
+  send({ type: "get_finance" });
+}
+
+function renderFinance(data) {
+  if (!currentUser) return;
+  currentUser.coins = data.coins;
+  elements.financeBalance.textContent = formatCoins(data.coins);
+  const list = elements.financeList;
+  list.replaceChildren();
+  const items = data.transactions || [];
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "invite-empty";
+    empty.textContent = "暂无金币明细";
+    list.append(empty);
+    return;
+  }
+  for (const tx of items) {
+    const row = document.createElement("div");
+    row.className = "finance-row";
+    const info = document.createElement("div");
+    const kind = document.createElement("div");
+    kind.className = "finance-row-kind";
+    kind.textContent = coinKinds[tx.kind] || tx.kind;
+    const detail = document.createElement("div");
+    detail.className = "finance-row-detail";
+    detail.textContent = [tx.detail, formatClock(tx.created_at)].filter(Boolean).join(" · ");
+    info.append(kind, detail);
+    const side = document.createElement("div");
+    const amount = document.createElement("div");
+    amount.className = `finance-row-amount ${tx.amount >= 0 ? "plus" : "minus"}`;
+    amount.textContent = `${tx.amount >= 0 ? "+" : ""}${formatCoins(tx.amount)}`;
+    const balance = document.createElement("div");
+    balance.className = "finance-row-balance";
+    balance.textContent = `余额 ${formatCoins(tx.balance)}`;
+    side.append(amount, balance);
+    row.append(info, side);
+    list.append(row);
+  }
+}
+
+function submitTransfer() {
+  if (!currentUser) return;
+  const to = elements.transferTo.value.trim();
+  const amount = Number(elements.transferAmount.value);
+  if (!to) {
+    alert("请输入对方用户名");
+    return;
+  }
+  if (to === currentUser.username) {
+    alert("不能转账给自己");
+    return;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("请输入正确的转账金额");
+    return;
+  }
+  elements.transferFeedback.textContent = "";
+  send({ type: "transfer_coins", to, amount: Math.round(amount * 100) / 100 });
+}
+
+
+/* =========================================================
+   竞猜
+========================================================= */
+
+function renderBetChip() {
+  elements.betStat.classList.toggle("active", Boolean(betCache));
+  elements.betStatTitle.textContent = betCache ? betCache.question : "竞猜";
+  elements.betStat.title = betCache ? `竞猜：${betCache.question}` : "竞猜";
+}
+
+function setBetState(bet) {
+  betCache = bet;
+  if (betCache) lastSettled = null;
+  renderBetChip();
+  if (elements.betModal.style.display === "flex") renderBetModal();
+}
+
+function openBetModal() {
+  if (!currentUser) {
+    openLogin();
+    return;
+  }
+  elements.betModal.style.display = "flex";
+  renderBetModal();
+  send({ type: "get_bet" });
+}
+
+function betEntryLine(entry) {
+  return `${displayNameOf(entry.username)} ${formatCoins(entry.amount)} → ${betCache.options[entry.option_index] ?? "?"}`;
+}
+
+function buildBetInfo(bet) {
+  const box = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "bet-question";
+  title.textContent = bet.question;
+  const meta = document.createElement("div");
+  meta.className = "bet-meta";
+  meta.textContent = `发起者 ${displayNameOf(bet.creator)} · 奖池 ${formatCoins(bet.pot)} 金币 · ${bet.entries.length} 人参与`;
+  box.append(title, meta);
+  const optionList = document.createElement("div");
+  optionList.className = "bet-option-list";
+  bet.options.forEach((text, index) => {
+    const item = document.createElement("div");
+    item.className = "bet-option";
+    item.style.cursor = "default";
+    const name = document.createElement("span");
+    name.textContent = text;
+    const pot = document.createElement("span");
+    pot.className = "bet-option-pot";
+    pot.textContent = `${formatCoins(bet.totals[index])} 金币`;
+    item.append(name, pot);
+    optionList.append(item);
+  });
+  box.append(optionList);
+  if (bet.entries.length) {
+    const entries = document.createElement("div");
+    entries.className = "bet-entries";
+    for (const entry of bet.entries) {
+      const line = document.createElement("div");
+      line.textContent = betEntryLine(entry);
+      entries.append(line);
+    }
+    box.append(entries);
+  }
+  return box;
+}
+
+function buildJoinForm(bet) {
+  const box = document.createElement("div");
+  const label = document.createElement("div");
+  label.className = "bet-section-title";
+  label.textContent = "参与竞猜";
+  box.append(label);
+
+  const selected = Math.min(joinDraft.optionIndex, bet.options.length - 1);
+  const optionList = document.createElement("div");
+  optionList.className = "bet-option-list";
+  bet.options.forEach((text, index) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `bet-option${index === selected ? " selected" : ""}`;
+    const name = document.createElement("span");
+    name.textContent = text;
+    const pot = document.createElement("span");
+    pot.className = "bet-option-pot";
+    pot.textContent = `${formatCoins(bet.totals[index])} 金币`;
+    item.append(name, pot);
+    item.addEventListener("click", () => {
+      joinDraft.optionIndex = index;
+      optionList.querySelectorAll(".bet-option").forEach((node, i) => {
+        node.classList.toggle("selected", i === index);
+      });
+    });
+    optionList.append(item);
+  });
+  box.append(optionList);
+
+  const balance = Number(currentUser?.coins || 0);
+  const allIn = balance > 0 && balance < BET_MIN_STAKE;
+  const row = document.createElement("div");
+  row.className = "bet-input-row";
+  const amount = document.createElement("input");
+  amount.className = "login-input";
+  amount.type = "number";
+  amount.min = "0.01";
+  amount.step = "0.01";
+  amount.placeholder = "投注金币数量";
+  if (allIn) {
+    amount.value = String(balance);
+    amount.readOnly = true;
+    joinDraft.amount = String(balance);
+  } else {
+    amount.value = joinDraft.amount;
+    amount.addEventListener("input", () => { joinDraft.amount = amount.value; });
+  }
+  row.append(amount);
+  box.append(row);
+
+  const hint = document.createElement("div");
+  hint.className = "bet-hint";
+  hint.textContent = balance <= 0
+    ? "我的金币 0.00：金币不足，无法参与"
+    : allIn
+      ? `我的金币 ${formatCoins(balance)}：不足 ${BET_MIN_STAKE}，只能全部投上`
+      : `我的金币 ${formatCoins(balance)} · 单独投注最低 ${BET_MIN_STAKE} 金币`;
+  box.append(hint);
+
+  const submit = document.createElement("button");
+  submit.className = "login-submit";
+  submit.type = "button";
+  submit.textContent = "投注并参与";
+  if (balance <= 0) submit.disabled = true;
+  submit.addEventListener("click", () => {
+    if (!currentUser) return;
+    const balanceNow = Number(currentUser.coins || 0);
+    let value = Number(joinDraft.amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      alert("请输入投注金币数量");
+      return;
+    }
+    value = Math.round(value * 100) / 100;
+    if (balanceNow < BET_MIN_STAKE) value = balanceNow;
+    if (value < BET_MIN_STAKE) {
+      alert(`最低投注 ${BET_MIN_STAKE} 金币`);
+      return;
+    }
+    if (value > balanceNow) {
+      alert("金币不足");
+      return;
+    }
+    send({ type: "place_bet", option_index: joinDraft.optionIndex, amount: value });
+  });
+  box.append(submit);
+  return box;
+}
+
+function buildMyEntry(mine) {
+  const box = document.createElement("div");
+  const label = document.createElement("div");
+  label.className = "bet-section-title";
+  label.textContent = "我的参与";
+  const row = document.createElement("div");
+  row.className = "bet-settle-row";
+  row.textContent = `你选了「${betCache.options[mine.option_index]}」，投注 ${formatCoins(mine.amount)} 金币，等待发起者结账`;
+  box.append(label, row);
+  return box;
+}
+
+function buildSettlePanel(bet) {
+  const box = document.createElement("div");
+  const label = document.createElement("div");
+  label.className = "bet-section-title";
+  label.textContent = "结账（仅发起者）";
+  const hint = document.createElement("div");
+  hint.className = "bet-hint";
+  hint.textContent = "选择正确选项并结账，猜错者的投注将按投注比例分给猜中者。";
+  box.append(label, hint);
+  bet.options.forEach((text, index) => {
+    const row = document.createElement("div");
+    row.className = "bet-settle-row";
+    const name = document.createElement("span");
+    name.textContent = `${text}（${formatCoins(bet.totals[index])} 金币）`;
+    const button = document.createElement("button");
+    button.className = "bet-settle-button";
+    button.type = "button";
+    button.textContent = "设为答案";
+    button.addEventListener("click", () => {
+      if (confirm(`确定答案是「${text}」并结账？`)) {
+        send({ type: "settle_bet", correct_index: index });
+      }
+    });
+    row.append(name, button);
+    box.append(row);
+  });
+  const draw = document.createElement("button");
+  draw.className = "bet-secondary";
+  draw.type = "button";
+  draw.textContent = "流局（退还全部投注）";
+  draw.addEventListener("click", () => {
+    if (confirm("确定流局？本轮竞猜作废，所有投注将原额退还。")) {
+      send({ type: "cancel_bet" });
+    }
+  });
+  box.append(draw);
+  return box;
+}
+
+function renderCreateView(body) {
+  const intro = document.createElement("p");
+  intro.className = "bet-intro";
+  intro.textContent = "当前没有进行中的竞猜。发起一局：全局同时只有一个竞猜，由你添加问题与选项，并由你结账。";
+  body.append(intro);
+
+  const question = document.createElement("input");
+  question.className = "login-input";
+  question.maxLength = 60;
+  question.placeholder = "竞猜问题（例如：今晚能吃到火锅吗）";
+  body.append(question);
+
+  const optionsBox = document.createElement("div");
+  const addOption = (value) => {
+    if (optionsBox.children.length >= BET_MAX_OPTIONS) return;
+    const row = document.createElement("div");
+    row.className = "bet-option-row";
+    const input = document.createElement("input");
+    input.className = "login-input";
+    input.maxLength = 20;
+    input.value = value || "";
+    input.placeholder = `选项 ${optionsBox.children.length + 1}`;
+    const remove = document.createElement("button");
+    remove.className = "bet-remove-option";
+    remove.type = "button";
+    remove.textContent = "✕";
+    remove.addEventListener("click", () => row.remove());
+    row.append(input, remove);
+    optionsBox.append(row);
+  };
+  addOption("能");
+  addOption("不能");
+  body.append(optionsBox);
+
+  const addButton = document.createElement("button");
+  addButton.className = "bet-secondary";
+  addButton.type = "button";
+  addButton.textContent = "＋ 添加选项";
+  addButton.addEventListener("click", () => addOption(""));
+  body.append(addButton);
+
+  const submit = document.createElement("button");
+  submit.className = "login-submit";
+  submit.type = "button";
+  submit.textContent = "发起竞猜";
+  submit.addEventListener("click", () => {
+    const options = [...optionsBox.querySelectorAll("input")]
+      .map((input) => input.value.trim())
+      .filter(Boolean);
+    const text = question.value.trim();
+    if (!text) {
+      alert("请输入竞猜问题");
+      return;
+    }
+    if (options.length < 2) {
+      alert("至少需要两个选项");
+      return;
+    }
+    send({ type: "create_bet", question: text, options });
+  });
+  body.append(submit);
+
+  const hint = document.createElement("div");
+  hint.className = "bet-hint";
+  hint.textContent = "默认选项为「能 / 不能」，可继续添加更多选项（单选）。";
+  body.append(hint);
+  question.focus();
+}
+
+function renderSettledView(body) {
+  const question = document.createElement("div");
+  question.className = "bet-question";
+  question.textContent = lastSettled.question;
+  const meta = document.createElement("div");
+  meta.className = "bet-meta";
+  meta.textContent = lastSettled.cancelled
+    ? `${lastSettled.reason}，投注已退还`
+    : lastSettled.refunded
+      ? "无人猜对，投注已退还"
+      : `答案：${lastSettled.answer}`;
+  body.append(question, meta);
+  const list = document.createElement("div");
+  list.className = "bet-result-list";
+  const results = lastSettled.results || [];
+  if (!results.length && !lastSettled.cancelled) {
+    const row = document.createElement("div");
+    row.className = "bet-result-row";
+    row.textContent = "本局没有玩家参与";
+    list.append(row);
+  }
+  for (const item of results) {
+    const row = document.createElement("div");
+    row.className = `bet-result-row${currentUser && item.username === currentUser.username ? " mine" : ""}`;
+    const name = document.createElement("span");
+    name.textContent = displayNameOf(item.username);
+    const amount = document.createElement("span");
+    amount.className = `bet-result-amount ${item.change >= 0 ? "plus" : "minus"}`;
+    amount.textContent = `${item.change >= 0 ? "+" : ""}${formatCoins(item.change)}（余额 ${formatCoins(item.coins)}）`;
+    row.append(name, amount);
+    list.append(row);
+  }
+  body.append(list);
+  const again = document.createElement("button");
+  again.className = "login-submit";
+  again.type = "button";
+  again.textContent = "发起新竞猜";
+  again.addEventListener("click", () => {
+    lastSettled = null;
+    elements.betModalTitle.textContent = "竞猜";
+    renderBetModal();
+  });
+  body.append(again);
+}
+
+function renderBetModal() {
+  const body = elements.betModalBody;
+  body.replaceChildren();
+  if (lastSettled) {
+    elements.betModalTitle.textContent = lastSettled.cancelled ? "竞猜流局" : "竞猜结果";
+    renderSettledView(body);
+    return;
+  }
+  if (!betCache) {
+    elements.betModalTitle.textContent = "发起竞猜";
+    renderCreateView(body);
+    return;
+  }
+  elements.betModalTitle.textContent = "竞猜进行中";
+  const mine = betCache.entries.find(
+    (entry) => entry.username === currentUser?.username,
+  );
+  const isCreator = betCache.creator === currentUser?.username;
+  body.append(buildBetInfo(betCache));
+  if (mine) body.append(buildMyEntry(mine));
+  else body.append(buildJoinForm(betCache));
+  if (isCreator) body.append(buildSettlePanel(betCache));
 }
 
 function toggleOnlinePopover() {
@@ -769,6 +1333,26 @@ elements.deletePassword.addEventListener("keydown", (event) => {
 });
 elements.deleteCancel.addEventListener("click", () => {
   elements.deleteModal.style.display = "none";
+});
+elements.betStat.addEventListener("click", openBetModal);
+elements.betClose.addEventListener("click", () => {
+  elements.betModal.style.display = "none";
+});
+elements.betModal.addEventListener("click", (event) => {
+  if (event.target === elements.betModal) elements.betModal.style.display = "none";
+});
+elements.financeButton.addEventListener("click", openFinance);
+elements.financeClose.addEventListener("click", () => {
+  elements.financeModal.style.display = "none";
+});
+elements.financeModal.addEventListener("click", (event) => {
+  if (event.target === elements.financeModal) elements.financeModal.style.display = "none";
+});
+elements.financeTabDetail.addEventListener("click", () => switchFinanceTab("detail"));
+elements.financeTabTransfer.addEventListener("click", () => switchFinanceTab("transfer"));
+elements.transferSubmit.addEventListener("click", submitTransfer);
+elements.transferAmount.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.isComposing) submitTransfer();
 });
 elements.logoutButton.addEventListener("click", () => {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
