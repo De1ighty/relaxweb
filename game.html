@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+
+<title>游戏厅</title>
+
+<link rel="stylesheet" href="assets/styles.css?v=17">
+
+</head>
+
+
+<body>
+
+
+<!-- ======================================================
+     顶部
+====================================================== -->
+
+<header class="header game-header" id="gameHeader">
+
+<div class="left-header" id="leftHeader">
+
+    <div class="logo">
+        游戏厅
+    </div>
+
+    <a
+        class="online-stat hall-stat hall-back"
+        href="index.html"
+        title="返回直播间"
+    >
+        <span class="hall-stat-icon">←</span>
+        <span class="online-stat-name bet-stat-title">直播间</span>
+    </a>
+
+    <div
+        class="online-stat"
+        id="onlineStat"
+        title="在线人数"
+    >
+        <span class="online-stat-number" id="onlineNumber">0</span>
+        <span class="online-stat-name">在线</span>
+    </div>
+
+</div>
+
+
+<div class="user-area" id="userArea">
+
+    <button
+        class="login-button"
+        id="loginButton"
+    >
+        登录
+    </button>
+
+    <button
+        class="online-stat coin-chip"
+        id="coinChip"
+        type="button"
+        title="财务管理"
+    >
+        <span class="online-stat-number" id="coinBalance">--</span>
+        <span class="online-stat-name">金币</span>
+    </button>
+
+    <button
+        class="user-chip"
+        id="userChip"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+    >
+        <div
+            class="user-avatar"
+            id="userAvatar"
+        >
+            U
+        </div>
+
+        <div
+            class="user-name"
+            id="userName"
+        >
+        </div>
+    </button>
+
+    <div
+        class="user-dropdown"
+        id="userDropdown"
+        hidden
+    >
+        <div class="user-dropdown-name" id="dropdownName"></div>
+        <button
+            class="user-dropdown-item"
+            id="financeButton"
+            type="button"
+        >
+            财务管理
+        </button>
+
+        <div class="user-dropdown-divider"></div>
+
+        <button
+            class="user-dropdown-item danger-item"
+            id="logoutButton"
+            type="button"
+        >
+            退出登录
+        </button>
+
+        <div class="user-dropdown-version">游戏厅 v1</div>
+    </div>
+
+</div>
+
+
+<div
+    class="room-topbar"
+    id="roomTopbar"
+    hidden
+>
+    <button
+        class="room-leave"
+        id="leaveRoomButton"
+        type="button"
+    >
+        ← 离开房间
+    </button>
+
+    <div
+        class="room-topbar-name"
+        id="roomTopName"
+    ></div>
+
+    <div
+        class="room-manage"
+        id="roomManage"
+        hidden
+    >
+        <button
+            class="room-manage-toggle"
+            id="manageButton"
+            type="button"
+        >
+            管理 ▾
+        </button>
+
+        <div
+            class="room-manage-menu"
+            id="manageMenu"
+            hidden
+        >
+            <button
+                class="room-manage-item danger-fill"
+                id="manageDrawButton"
+                type="button"
+            >
+                流局
+            </button>
+
+            <button
+                class="room-manage-item"
+                id="managePauseButton"
+                type="button"
+            >
+                暂停
+            </button>
+
+            <button
+                class="room-manage-item"
+                id="manageRestartButton"
+                type="button"
+            >
+                重新开始
+            </button>
+        </div>
+    </div>
+
+</div>
+
+</header>
+
+
+
+<!-- ======================================================
+     主页面
+====================================================== -->
+
+<main
+    class="game-container"
+    id="gameMain"
+>
+    <div class="game-loading">
+        正在连接游戏厅…
+    </div>
+</main>
+
+
+
+<!-- ======================================================
+     登录注册窗口
+====================================================== -->
+
+<div
+    class="modal"
+    id="loginModal"
+>
+
+<div class="login-card">
+
+
+<h2 id="authTitle">
+    登录游戏厅
+</h2>
+
+
+<input
+    class="login-input"
+    id="username"
+    maxlength="20"
+    autocomplete="username"
+    placeholder="用户名"
+>
+
+
+<input
+    class="login-input"
+    id="password"
+    type="password"
+    maxlength="128"
+    autocomplete="current-password"
+    placeholder="密码"
+>
+
+<input
+    class="login-input"
+    hidden
+    id="inviteCode"
+    maxlength="32"
+    autocomplete="off"
+    placeholder="邀请码"
+>
+
+
+<button
+    class="login-submit"
+    id="authSubmit"
+    type="button"
+>
+    登录
+</button>
+
+
+<div
+    class="auth-switch"
+    id="authSwitch"
+>
+
+    还没有账号？
+
+    <span class="auth-link">
+        注册
+    </span>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+
+<!-- ======================================================
+     财务管理窗口
+====================================================== -->
+
+<div
+    class="modal"
+    id="financeModal"
+>
+
+<div class="login-card">
+
+<h2>
+    财务管理
+</h2>
+
+
+<div class="finance-balance">
+
+    <span class="finance-balance-label">我的金币</span>
+
+    <span class="finance-balance-value" id="financeBalance">--</span>
+
+</div>
+
+
+<div class="finance-tabs">
+
+    <button
+        class="finance-tab active"
+        id="financeTabDetail"
+        type="button"
+    >
+        金币明细
+    </button>
+
+    <button
+        class="finance-tab"
+        id="financeTabTransfer"
+        type="button"
+    >
+        转账
+    </button>
+
+</div>
+
+
+<div class="finance-panel" id="financeDetailPanel">
+
+    <div
+        class="finance-list"
+        id="financeList"
+    ></div>
+
+</div>
+
+
+<div
+    class="finance-panel"
+    id="financeTransferPanel"
+    hidden
+>
+
+    <input
+        class="login-input"
+        id="transferTo"
+        maxlength="20"
+        autocomplete="off"
+        placeholder="对方用户名"
+    >
+
+    <input
+        class="login-input"
+        id="transferAmount"
+        type="number"
+        min="0.01"
+        step="0.01"
+        placeholder="转账金币数量"
+    >
+
+    <button
+        class="login-submit"
+        id="transferSubmit"
+        type="button"
+    >
+        确认转账
+    </button>
+
+    <div
+        class="transfer-feedback"
+        id="transferFeedback"
+    ></div>
+
+</div>
+
+
+<div
+    class="auth-switch"
+    id="financeClose"
+>
+
+    <span class="auth-link">
+        关闭
+    </span>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+<script src="assets/game.js?v=18" defer></script>
+
+
+</body>
+
+</html>

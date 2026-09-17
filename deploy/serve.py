@@ -24,6 +24,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         )
         if clean in ("", "/", ".", os.sep, "/index.html"):
             return os.path.join(ROOT, "index.html")
+        if clean in ("/game", "/game.html"):
+            return os.path.join(ROOT, "game.html")
         if clean.startswith("/assets/"):
             return os.path.join(ASSETS, os.path.basename(clean[len("/assets/"):]))
         return DEAD_END

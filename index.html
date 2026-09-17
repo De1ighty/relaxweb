@@ -7,7 +7,7 @@
 
 <title>小胖的直播间</title>
 
-<link rel="stylesheet" href="assets/styles.css?v=10">
+<link rel="stylesheet" href="assets/styles.css?v=14">
 
 </head>
 
@@ -27,6 +27,48 @@
         小胖 Live
     </div>
 
+    <button
+        class="header-menu-toggle"
+        id="headerMenuButton"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-label="功能菜单"
+    >
+        ▾
+    </button>
+
+    <div
+        class="header-menu"
+        id="headerMenu"
+    >
+        <button
+            class="header-menu-item"
+            id="menuOnlineButton"
+            type="button"
+        >
+            <span class="header-menu-icon">👥</span>
+            在线用户 <span class="header-menu-count" id="menuOnlineCount">0</span>
+        </button>
+
+        <button
+            class="header-menu-item"
+            id="menuBetButton"
+            type="button"
+        >
+            <span class="header-menu-icon">🎲</span>
+            <span id="menuBetText">竞猜</span>
+        </button>
+
+        <a
+            class="header-menu-item"
+            href="game.html"
+        >
+            <span class="header-menu-icon">🎮</span>
+            游戏厅
+        </a>
+    </div>
+
     <div class="online-stat" id="onlineStat">
         <span class="online-stat-number" id="onlineNumber">0</span>
         <span class="online-stat-name">在线观众</span>
@@ -40,6 +82,16 @@
         <span class="bet-stat-icon">🎲</span>
         <span class="online-stat-name bet-stat-title" id="betStatTitle">竞猜</span>
     </div>
+
+    <a
+        class="online-stat hall-stat"
+        id="gameHallButton"
+        href="game.html"
+        title="游戏厅"
+    >
+        <span class="hall-stat-icon">🎮</span>
+        <span class="online-stat-name bet-stat-title" id="gameHallTitle">游戏厅</span>
+    </a>
 
     <div
         class="online-popover"
@@ -137,7 +189,7 @@
             退出登录
         </button>
 
-        <div class="user-dropdown-version">前端 v8</div>
+        <div class="user-dropdown-version">前端 v9</div>
     </div>
 
 </div>
@@ -756,8 +808,8 @@
 </div>
 
 
-<script src="assets/reader.js?v=10" defer></script>
-<script src="assets/app.js?v=10" defer></script>
+<script src="assets/reader.js?v=14" defer></script>
+<script src="assets/app.js?v=14" defer></script>
 
 
 </body>

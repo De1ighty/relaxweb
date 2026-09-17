@@ -19,13 +19,17 @@ const elements = {
   financeList: $("financeList"), financeModal: $("financeModal"),
   financeTabDetail: $("financeTabDetail"), financeTabTransfer: $("financeTabTransfer"),
   financeTransferPanel: $("financeTransferPanel"),
-  fullscreenButton: $("fullscreenButton"), inviteButton: $("inviteButton"),
+  fullscreenButton: $("fullscreenButton"),
+  headerMenu: $("headerMenu"), headerMenuButton: $("headerMenuButton"),
+  inviteButton: $("inviteButton"),
   inviteClose: $("inviteClose"), inviteCreate: $("inviteCreate"),
   inviteCode: $("inviteCode"), inviteList: $("inviteList"),
   inviteModal: $("inviteModal"),
   leftHeader: $("leftHeader"), loginButton: $("loginButton"),
   logoutButton: $("logoutButton"), messages: $("messages"),
   muteToggle: $("muteToggle"),
+  menuBetButton: $("menuBetButton"), menuOnlineButton: $("menuOnlineButton"),
+  menuOnlineCount: $("menuOnlineCount"),
   nicknameInput: $("nicknameInput"), onlineNumber: $("onlineNumber"),
   onlinePopover: $("onlinePopover"), onlinePopoverCount: $("onlinePopoverCount"),
   onlinePopoverList: $("onlinePopoverList"), onlineStat: $("onlineStat"),
@@ -66,6 +70,8 @@ const coinKinds = {
   bet_stake: "竞猜投注",
   bet_win: "竞猜奖励",
   bet_refund: "竞猜退款",
+  game_buyin: "游戏厅买入",
+  game_settle: "游戏厅结算",
 };
 const profiles = new Map();
 const pendingProfiles = new Set();
@@ -199,17 +205,14 @@ function showPlayerControls() {
 
 function syncComposerPosition() {
   const fullscreen = document.fullscreenElement === elements.player;
-  const mobile = window.matchMedia("(max-width: 1000px)").matches;
   elements.danmakuComposer.classList.toggle("in-player-controls", fullscreen);
-  elements.danmakuComposer.classList.toggle("at-chat-top", !fullscreen && mobile);
 
-  // 手机软键盘弹出/收起会触发 resize；输入框已在目标位置时绝不能再移动它，
-  // 否则正在聚焦的输入框会失焦，输入法立即收起，导致无法发送弹幕。
+  // 移动端固定视口布局下输入条固定在聊天卡片底部（DOM 默认位置），无需搬动
   const composer = elements.danmakuComposer;
   const targetParent = fullscreen ? elements.playerTools : elements.chatCard;
   const targetBefore = fullscreen
     ? elements.playerTools.querySelector(".player-tools-right")
-    : mobile ? elements.messages : null;
+    : null;
   if (composer.parentElement === targetParent
     && composer.nextElementSibling === targetBefore) {
     return;
@@ -365,6 +368,7 @@ const messageHandlers = {
   },
   online(data) {
     elements.onlineNumber.textContent = data.count;
+    elements.menuOnlineCount.textContent = data.count;
   },
   online_users(data) {
     renderOnlineUsers(data.users || []);
@@ -803,6 +807,12 @@ function renderBetChip() {
   elements.betStat.classList.toggle("active", Boolean(betCache));
   elements.betStatTitle.textContent = betCache ? betCache.question : "竞猜";
   elements.betStat.title = betCache ? `竞猜：${betCache.question}` : "竞猜";
+  elements.menuBetButton.classList.toggle("active-option", Boolean(betCache));
+}
+
+function setHeaderMenu(open) {
+  elements.headerMenu.classList.toggle("open", open);
+  elements.headerMenuButton.setAttribute("aria-expanded", String(open));
 }
 
 function setBetState(bet) {
@@ -1141,6 +1151,7 @@ function renderBetModal() {
   if (isCreator) body.append(buildSettlePanel(betCache));
 }
 
+
 function toggleOnlinePopover() {
   const willOpen = elements.onlinePopover.hidden;
   elements.onlinePopover.hidden = !willOpen;
@@ -1335,6 +1346,17 @@ elements.deleteCancel.addEventListener("click", () => {
   elements.deleteModal.style.display = "none";
 });
 elements.betStat.addEventListener("click", openBetModal);
+elements.headerMenuButton.addEventListener("click", () => {
+  setHeaderMenu(elements.headerMenu.classList.contains("open") === false);
+});
+elements.menuOnlineButton.addEventListener("click", () => {
+  setHeaderMenu(false);
+  toggleOnlinePopover();
+});
+elements.menuBetButton.addEventListener("click", () => {
+  setHeaderMenu(false);
+  openBetModal();
+});
 elements.betClose.addEventListener("click", () => {
   elements.betModal.style.display = "none";
 });
@@ -1362,7 +1384,10 @@ elements.logoutButton.addEventListener("click", () => {
 });
 document.addEventListener("click", (event) => {
   if (!elements.userArea.contains(event.target)) setUserMenu(false);
-  if (!elements.leftHeader.contains(event.target)) elements.onlinePopover.hidden = true;
+  if (!elements.leftHeader.contains(event.target)) {
+    elements.onlinePopover.hidden = true;
+    setHeaderMenu(false);
+  }
 });
 elements.chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.isComposing) sendMessage();
