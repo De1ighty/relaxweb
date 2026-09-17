@@ -1,0 +1,175 @@
+"""游戏房间基础设施：房间基类、计时器与注册表。
+
+并发模型与宿主 chat_server 相同：整个服务跑在单一 asyncio 事件循环里，
+房间的可变状态只在事件循环内的同步代码段中修改；延迟逻辑一律通过
+BaseRoom.schedule（内部为 loop.call_later + ensure_future）回到事件循环，
+因此不需要加锁。
+
+新增游戏的方法：
+    1. 在 games/ 下新建模块，实现 BaseRoom 子类；
+    2. 实现抽象/钩子方法（start/perform_action/view_for/summary 等）；
+    3. 在类上用 @register_room_type("游戏id") 注册；
+    4. 宿主 chat_server 的开房参数校验即自动放行该游戏。
+
+引擎不要直接依赖传输层与数据库：广播、展示名、托管持久化都由宿主
+通过 attach（见 chat_server.attach_host）注入的属性完成，因此玩法
+代码可以脱离网络独立测试。
+"""
+import asyncio
+from collections import deque
+
+ROOM_TYPES = {}
+
+
+def register_room_type(game_type):
+    """类装饰器：把房间实现注册进游戏厅。"""
+    def wrapper(cls):
+        ROOM_TYPES[game_type] = cls
+        cls.game_type = game_type
+        return cls
+    return wrapper
+
+
+def create_room(game_type, **kwargs):
+    """按游戏类型实例化房间；未注册的类型抛 ValueError。"""
+    try:
+        cls = ROOM_TYPES[game_type]
+    except KeyError:
+        raise ValueError(f"未注册的游戏类型：{game_type}") from None
+    return cls(**kwargs)
+
+
+class BaseRoom:
+    """游戏房间基类：与具体玩法无关的成员、聊天、计时器与生命周期。
+
+    由宿主注入的属性（默认值保证引擎可脱离宿主独立实例化测试）：
+        broadcast_payload(payload)   同一消息发给房间所有成员连接
+        broadcast_views()            给每个成员连接发送其私有视图
+        on_rooms_changed()           房间列表发生变化时通知宿主广播
+        display_name(username)       用户名 -> 展示昵称
+        set_escrow(username, amount) 筹码变动后同步托管（宿主写数据库）
+    """
+
+    def __init__(self, room_id, name, owner, buy_in, blind):
+        self.id = room_id
+        self.name = name
+        self.owner = owner
+        self.buy_in = buy_in
+        self.blind = blind
+        self.status = "waiting"          # waiting | playing
+        self.paused = False
+        self.seating = []                # 座位顺序即加入顺序
+        self.members = {}                # username -> {"stack": float}
+        self.chat = deque(maxlen=30)     # 房间聊天，内存态，随房间销毁
+        self.timers = {}                 # key -> asyncio.TimerHandle
+
+        self.broadcast_payload = None
+        self.broadcast_views = None
+        self.on_rooms_changed = None
+        self.display_name = lambda username: username
+        self.set_escrow = lambda username, amount: None
+
+    # ---- 成员与筹码 ----
+    def has_member(self, username):
+        return username in self.members
+
+    def add_member(self, username, buy_in):
+        self.seating.append(username)
+        self.members[username] = {"stack": buy_in}
+
+    def remove_member(self, username):
+        member = self.members.pop(username, None)
+        self.seating = [name for name in self.seating if name != username]
+        return member
+
+    def members_with_chips(self):
+        return [name for name in self.seating if self.members[name]["stack"] > 0]
+
+    def stacks_changed(self):
+        """筹码发生变动后调用；宿主注入的 set_escrow 负责持久化托管。"""
+        for name in self.members:
+            self.set_escrow(name, self.members[name]["stack"])
+
+    # ---- 计时器 ----
+    def schedule(self, key, delay, coro_fn, *args):
+        """安排 key 计时器：delay 秒后在事件循环里执行 coro_fn(*args)。"""
+        self.cancel_timer(key)
+        loop = asyncio.get_running_loop()
+
+        def fire():
+            self.timers.pop(key, None)
+            asyncio.ensure_future(coro_fn(*args))
+
+        self.timers[key] = loop.call_later(max(0.05, delay), fire)
+
+    def cancel_timer(self, key):
+        handle = self.timers.pop(key, None)
+        if handle:
+            handle.cancel()
+
+    def cancel_timers(self):
+        for key in tuple(self.timers):
+            self.cancel_timer(key)
+
+    # ---- 暂停/恢复（模板方法）----
+    def pause(self):
+        if self.paused:
+            return
+        self.paused = True
+        self.cancel_timers()
+        self.on_paused()
+
+    def resume(self):
+        if not self.paused:
+            return
+        self.paused = False
+        self.on_resumed()
+
+    def on_paused(self):
+        """子类钩子：保存进行中的状态（如剩余出牌时间）。"""
+
+    def on_resumed(self):
+        """子类钩子：重新安排被暂停打断的计时器。"""
+
+    def close(self):
+        """房间关闭：清掉所有计时器；聊天随对象一起被回收。"""
+        self.cancel_timers()
+
+    # ---- 视图 ----
+    def summary(self):
+        """房间列表条目（公开信息）。"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "game": self.game_type,
+            "owner": self.owner,
+            "owner_name": self.display_name(self.owner),
+            "buy_in": self.buy_in,
+            "blind": self.blind,
+            "status": self.status,
+            "hand_no": 0,
+            "players": [
+                {
+                    "username": name,
+                    "nickname": self.display_name(name),
+                    "stack": self.members[name]["stack"],
+                }
+                for name in self.seating
+            ],
+        }
+
+    def view_for(self, username):
+        """成员私有视图；子类应叠加玩法状态。"""
+        return {
+            "type": "game_update",
+            "room_id": self.id,
+            "name": self.name,
+            "game_type": self.game_type,
+            "paused": self.paused,
+            "owner": self.owner,
+            "owner_name": self.display_name(self.owner),
+            "buy_in": self.buy_in,
+            "blind": self.blind,
+            "status": self.status,
+            "players": self.summary()["players"],
+        }
