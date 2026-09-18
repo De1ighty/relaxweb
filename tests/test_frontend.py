@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """前端模块静态检查：python3 tests/test_frontend.py
 
-不起服务、不开浏览器，只读 assets/js/ 下的 ES 模块源码和两个页面，
+不起服务、不开浏览器，只读 assets/ 下的前端源码和两个页面，
 检查拆分/搬移代码时最容易犯、又只在浏览器里才炸的几类错误：
   1. import 的名字必须真被来源模块导出 —— 否则整页 SyntaxError 白屏
   2. 用到的项目内名字必须在本模块定义或 import —— 否则运行期 ReferenceError
      共享状态 state 的字段（currentUser/myRoom/roomChat…）必须写成 state.xxx，
      漏写前缀会命中这一条
-  3. 从 main.js 出发要能走到所有模块 —— 漏 import 会让 registerView 不执行
+  3. 页面实际加载的模块入口要能走到所有模块 —— 漏 import 会让 registerView 不执行
   4. 页面里引用的本地脚本/样式都存在，且带 ?v= 版本号（避免浏览器缓存旧代码）
+  5. 前端不许用原生 alert/confirm/prompt —— 它们会阻塞主线程，自动化测试会卡死；
+     请改用 assets/js/dialog.js 的 alertDialog/confirmDialog（直播间用 window.LiveDialog）
 """
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-JS_DIR = ROOT / "assets" / "js"
-ENTRY = "main"  # 模块名（不带扩展名），两个页面的 ES 模块入口
+ASSETS = ROOT / "assets"
+JS_DIR = ASSETS / "js"
 PAGES = ["index.html", "game.html"]
+
+# 原生弹窗调用：alert( / confirm( / prompt(（含 window.alert 写法）
+NATIVE_DIALOG = re.compile(r"(?<![\w.$])(?:window\.)?(alert|confirm|prompt)\s*\(")
 
 # 服务端注入的全局对象由 deploy/serve.py 提供，前端只能读 window.LIVE_CONFIG
 results = []
@@ -112,10 +117,11 @@ def main():
     check("import 的名字都有对应导出", not bad, "; ".join(bad))
 
     # 2. 名字缺失（含 state 字段漏写前缀）
+    #    只有「导出」的名字才可能被别的模块 import；模块私有的同名变量不算问题
     fields = state_fields(raw.get("core", ""))
     owner = {}
     for name in code:
-        for symbol in top_level(code[name]):
+        for symbol in exported[name]:
             owner.setdefault(symbol, name)
     for field in fields:
         owner[field] = "core"
@@ -133,17 +139,24 @@ def main():
             if src == name or symbol in top_level(code[name]) or symbol in imported[name]:
                 continue
             if re.search(r"(?<![\w.$])" + re.escape(symbol) + r"\b", body):
-                hint = " 应写作 state." + symbol if symbol in fields else f"（定义在 {rel[src]}）"
+                hint = " 应写作 state." + symbol if symbol in fields else f"（导出在 {rel[src]}，需 import）"
                 missing.append(symbol + hint)
         if missing:
             missing_report.append(f"{rel[name]}: " + ", ".join(sorted(missing)))
     check("模块内引用的名字都有来源", not missing_report, "; ".join(missing_report))
 
-    # 3. 从入口可达
-    reachable = {ENTRY}
-    queue = [ENTRY]
+    # 3. 从两个页面实际加载的模块入口出发，所有模块都要可达
+    entries = set()
+    for page in PAGES:
+        html = (ROOT / page).read_text(encoding="utf-8")
+        for src in re.findall(r'<script[^>]+type="module"[^>]+src="assets/js/([\w-]+)\.js', html):
+            entries.add(src)
+    reachable = set(entries)
+    queue = list(entries)
     while queue:
         name = queue.pop()
+        if name not in code:
+            continue
         _, sources = imports_of(raw[name])
         for path in sources:
             target = path.split("/")[-1].removesuffix(".js")
@@ -151,7 +164,11 @@ def main():
                 reachable.add(target)
                 queue.append(target)
     unreachable = sorted(set(code) - reachable)
-    check(f"{ENTRY} 可达全部模块", not unreachable, "未加载: " + ", ".join(rel[n] for n in unreachable))
+    check(
+        f"页面入口（{'、'.join(sorted(rel[e] for e in entries))}）可达全部模块",
+        not unreachable,
+        "未加载: " + ", ".join(rel[n] for n in unreachable),
+    )
 
     # 4. 页面引用的本地资源存在且带版本号
     problems = []
@@ -166,6 +183,27 @@ def main():
             if not (ROOT / ref.split("?")[0]).exists():
                 problems.append(f"{page} 引用的 {ref} 不存在")
     check("页面资源存在且带版本号", not problems, "; ".join(problems))
+
+    # 5. 不允许原生 alert/confirm/prompt（含 HTML 内联脚本）
+    sources = {
+        p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8")
+        for p in sorted(ASSETS.rglob("*.js"))
+    }
+    for page in PAGES:
+        html = (ROOT / page).read_text(encoding="utf-8")
+        inline = "\n".join(re.findall(r"(?s)<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html))
+        if inline.strip():
+            sources[page] = inline
+    natives = []
+    for name, text in sources.items():
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for hit in NATIVE_DIALOG.finditer(line):
+                natives.append(f"{name}:{lineno} {hit.group(0).strip()}")
+    check(
+        "没有原生 alert/confirm/prompt",
+        not natives,
+        "改用 alertDialog/confirmDialog（直播间用 window.LiveDialog）: " + "; ".join(natives),
+    )
 
     failed = [name for name, ok in results if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} 通过")

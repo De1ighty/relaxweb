@@ -31,8 +31,9 @@ deploy/
   systemd/            systemd 单元模板
   README.md           部署说明（配置、单元安装、反代、推流）
 assets/
-  css/                样式，按功能/游戏拆分（games/poker.css、games/uno.css …）
-  js/                 游戏厅前端模块（core/registry/hall/room/games/*）
+  css/                样式，按功能/游戏拆分（dialog.css、games/poker.css、games/uno.css …）
+  js/                 游戏厅前端模块（core/registry/hall/room/dialog/games/*）
+  js/dialog-global.js 把弹层挂到 window.LiveDialog，供直播间的经典脚本调用
   app.js reader.js    直播间前端（含 WebRTC 播放器与弹幕）
   transfer-select.js  转账收款人选择组件
 index.html            直播间页面      game.html  游戏厅页面
@@ -88,7 +89,7 @@ python3 deploy/serve.py        # http://localhost:8000
 
 ```bash
 python3 tests/test_games.py            # 引擎纯逻辑（不需要起服务）
-python3 tests/test_frontend.py         # 前端模块静态检查（import/导出、state 前缀、页面资源）
+python3 tests/test_frontend.py         # 前端模块静态检查（import/导出、state 前缀、禁用原生弹窗、页面资源）
 
 git submodule update --init live-test  # 协议级联调脚本
 bash live-test/reset.sh                # 重置测试库、重建测试账号、重启服务
