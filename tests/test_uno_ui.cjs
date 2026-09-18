@@ -31,6 +31,33 @@ const assert = require('node:assert/strict');
  await page.getByRole('button',{name:'万能 +4',exact:true}).click();
  await page.getByRole('button',{name:'改为蓝色',exact:true}).click();
  assert.deepEqual(await page.evaluate(()=>window.sent),{type:'poker_action',action:'play',card:4,color:'b'});
+ // Resident UNO button: always in the dock, inert unless a callout is pending.
+ assert.ok(await page.locator('.uno-fab').count()>0);
+ await page.locator('.uno-fab').click();
+ assert.deepEqual(await page.evaluate(()=>window.sent),{type:'poker_action',action:'play',card:4,color:'b'});
+ await page.evaluate(()=>{
+  core.state.myRoom.players[0].uno=true;core.state.myRoom.players[0].cards=1;
+  core.state.myRoom.your_options={draw:false,pass:false,uno:true,challenge:[]};
+  core.renderGameView();
+ });
+ assert.equal(await page.locator('.uno-seat.me .uno-challenge').count(),0);
+ assert.ok(await page.locator('.uno-fab.pending').count()>0);
+ // 呼吸缩放动画会让 Playwright 的稳定性检查永不通过，真实点击不受影响，这里 force
+ await page.locator('.uno-fab').click({force:true});
+ assert.deepEqual(await page.evaluate(()=>window.sent),{type:'poker_action',action:'uno'});
+ // Active seat signals its turn by pulsing the seat colour, not an outline.
+ const pulseAnimation=await page.locator('.uno-seat.active').evaluate(e=>getComputedStyle(e).animationName);
+ assert.ok(pulseAnimation.includes('unoSeatPulse'),`animationName=${pulseAnimation}`);
+ // Review cards render on light surfaces: reveal names must stay readable.
+ const revealColor=await page.evaluate(async()=>{
+  const {gameView}=await import('/assets/js/registry.js');
+  const host=document.createElement('div');
+  host.className='game-card-page';
+  document.getElementById('gameMain').append(host);
+  host.append(gameView('uno').renderReview({winner:'p1',payouts:{p2:10},penalties:{p2:2},cards:{p1:[],p2:[{c:'r',v:'5'}]}}));
+  return getComputedStyle(host.querySelector('.uno-reveal-name')).color;
+ });
+ assert.equal(revealColor,'rgb(110, 110, 115)',revealColor);
  await page.evaluate(()=>{
   core.state.myRoom.your_options={draw:false,uno:false,challenge:['p1']};
   core.state.myRoom.to_act='p2';

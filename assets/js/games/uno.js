@@ -21,7 +21,12 @@ let unoActionLock = false;    // 出牌/摸牌后到下一帧视图前忽略重�
 function unoAct(payload) {
   if (unoActionLock) return;
   unoActionLock = send({ type: "poker_action", ...payload });
-  if (unoActionLock) document.querySelectorAll(".uno-dock button, .uno-challenge").forEach((button) => { button.disabled = true; });
+  if (unoActionLock) {
+    // 常驻 UNO 按钮保持可点、样式恒定（自身点击逻辑已挡住无效时机），
+    // 其余行动按钮在下一帧视图到来前全部禁用，防止连点重复发送
+    document.querySelectorAll(".uno-dock button:not(.uno-fab), .uno-challenge")
+      .forEach((button) => { button.disabled = true; });
+  }
 }
 
 document.addEventListener("gameactionerror", () => {
@@ -94,16 +99,16 @@ function unoSeatNode(p) {
   uno.textContent = p.uno ? "未喊 UNO" : "UNO!";
   if (p.in_hand && p.cards === 1) uno.classList.add("show");
   seat.append(name, ratingBadge(p.rating), info, uno);
-  if (p.uno) {
+  // 自己的补喊入口固定在dock的UNO常驻按钮上，座位上只保留对他人的质疑
+  if (p.uno && p.username !== state.currentUser?.username) {
     const challenge = document.createElement("button");
     challenge.type = "button";
     challenge.className = "uno-challenge";
-    const self = p.username === state.currentUser?.username;
     const available = state.myRoom.your_options?.challenge?.includes(p.username);
-    challenge.disabled = state.myRoom.paused || (!self && !available);
-    challenge.textContent = self ? "立即喊 UNO!" : available ? "质疑漏喊 +2" : "2 秒保护期";
-    challenge.setAttribute("aria-label", self ? "立即喊 UNO" : `质疑 ${p.nickname} 漏喊 UNO，罚摸两张`);
-    challenge.addEventListener("click", () => unoAct(self ? { action: "uno" } : { action: "challenge_uno", target: p.username }));
+    challenge.disabled = state.myRoom.paused || !available;
+    challenge.textContent = available ? "质疑漏喊 +2" : "2 秒保护期";
+    challenge.setAttribute("aria-label", `质疑 ${p.nickname} 漏喊 UNO，罚摸两张`);
+    challenge.addEventListener("click", () => unoAct({ action: "challenge_uno", target: p.username }));
     seat.append(challenge);
   }
   return seat;
@@ -156,6 +161,25 @@ function unoResultNode(result) {
   return box;
 }
 
+function unoFabNode() {
+  // UNO 常驻按钮：一直显示，避免剩 1 张时突然弹出；非补喊时机点击无反应
+  const fab = document.createElement("button");
+  fab.type = "button";
+  fab.className = "uno-fab";
+  fab.textContent = "UNO";
+  const pending = Boolean(state.myRoom.your_options?.uno);
+  fab.classList.toggle("pending", pending);
+  fab.setAttribute(
+    "aria-label",
+    pending ? "立即喊 UNO" : "UNO（剩 1 张未喊时点击补喊）",
+  );
+  fab.addEventListener("click", () => {
+    if (state.myRoom.paused || !pending) return;
+    unoAct({ action: "uno" });
+  });
+  return fab;
+}
+
 function unoActionBarNode() {
   const bar = document.createElement("div");
   bar.className = "action-bar";
@@ -180,14 +204,6 @@ function unoActionBarNode() {
       act({ action: "pass" });
     });
     bar.append(pass);
-  }
-  if (options.uno) {
-    const uno = document.createElement("button");
-    uno.className = "action-btn primary uno-btn";
-    uno.type = "button";
-    uno.textContent = "UNO!";
-    uno.addEventListener("click", () => act({ action: "uno" }));
-    bar.append(uno);
   }
 
   // 万能牌选色条：点选万能牌后出现
@@ -348,6 +364,8 @@ function renderUnoTable() {
   dockHead.append(label, chatToggle);
   dock.append(dockHead);
 
+  const handRow = document.createElement("div");
+  handRow.className = "uno-hand-row";
   const myCards = document.createElement("div");
   myCards.className = "uno-hand";
   const hand = state.myRoom.your_hand || [];
@@ -387,7 +405,8 @@ function renderUnoTable() {
     }
     myCards.append(node);
   });
-  dock.append(myCards);
+  handRow.append(myCards, unoFabNode());
+  dock.append(handRow);
 
   const countdown = document.createElement("div");
   countdown.className = "countdown";
@@ -397,7 +416,8 @@ function renderUnoTable() {
   dock.append(countdown);
 
   if (!state.myRoom.paused) {
-    if (isMyTurn() || options.uno || pendingWildCard !== null) {
+    // 补喊入口已固定在常驻 UNO 按钮上，行动条只在自己回合（摸/留/选色）出现
+    if (isMyTurn() || pendingWildCard !== null) {
       dock.append(unoActionBarNode());
       if (isMyTurn() && state.myRoom.turn_left > 0) startHallTicker(fill, state.myRoom.turn_left);
     }

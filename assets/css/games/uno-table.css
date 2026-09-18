@@ -65,7 +65,17 @@
     .uno-seat .us-info { gap: 8px; font-size: 11px; }
     .uno-seat .us-count { color: #6b367d; }
     .uno-seat.me { background: #efe8ff; box-shadow: inset 0 0 0 2px #a58ad4; }
-    .uno-seat.active { box-shadow: 0 0 0 3px #ffd66b, 0 0 28px #ffd66b55; }
+    /* 桌面深色台面上的行动座位：底色明暗脉冲代替描边 */
+    @keyframes unoSeatPulseDark {
+        0%, 100% { background-color: #fbf8fc; }
+        50% { background-color: #ffe2a0; }
+    }
+    @keyframes unoSeatPulseDarkMe {
+        0%, 100% { background-color: #efe8ff; }
+        50% { background-color: #ffe2a0; }
+    }
+    .uno-seat.active { animation: unoSeatPulseDark 1.15s ease-in-out infinite; }
+    .uno-seat.active.me { animation: unoSeatPulseDarkMe 1.15s ease-in-out infinite; }
     .uno-table .uno-center { position: absolute; left: 25%; top: 36%; width: 50%; padding: 0; gap: 28px; }
     .uno-center .ucard.big { width: 70px; height: 98px; }
     .uno-color-strip { flex-basis: 100%; max-width: 150px; margin: 0 calc(50% - 75px); text-align: center; }
@@ -77,6 +87,8 @@
     .uno-dock.is-my-turn .my-cards-label { color: #77419a; font-weight: 750; }
     .uno-dock.is-my-turn { border-color: #a273c0; box-shadow: 0 0 0 2px #a273c022; }
     .uno-dock .uno-hand { min-height: 102px; padding: 10px 4px 5px; margin: 0; }
+    .uno-hand-row .uno-hand { padding-right: 108px; }
+    .uno-fab { width: 76px; height: 76px; font-size: 17px; right: 14px; }
     .uno-hand-card { margin-left: -12px; }
     .uno-hand-card .ucard { width: 60px; height: 84px; }
     .uno-hand-card .uc-mid { width: 38px; height: 38px; font-size: 24px; }
@@ -96,4 +108,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .uno-direction-arrow, .uno-effect-banner { animation: none; }
+    .uno-seat.active, .uno-seat.active.me {
+        animation: none;
+        background-color: #ffe2a0;
+    }
+    .uno-fab.pending { animation: none; box-shadow: 0 0 0 3px #ffd60a, 0 6px 16px rgba(224,17,48,.4); }
 }

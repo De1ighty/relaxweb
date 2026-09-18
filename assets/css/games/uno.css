@@ -58,8 +58,19 @@
     transition: box-shadow .25s;
 }
 
+/* 行动座位：座位底色明暗脉冲代替外置描边；只动背景色，文字保持可读 */
+@keyframes unoSeatPulse {
+    0%, 100% { background-color: rgba(255,255,255,.94); }
+    50% { background-color: #ffe9ad; }
+}
+
+@keyframes unoSeatPulseMe {
+    0%, 100% { background-color: #ecf9f0; }
+    50% { background-color: #ffe9ad; }
+}
+
 .uno-seat.active {
-    box-shadow: 0 0 0 2.5px #ffd60a, 0 0 14px rgba(255,214,10,.65);
+    animation: unoSeatPulse 1.15s ease-in-out infinite;
 }
 
 .uno-seat.me {
@@ -67,10 +78,7 @@
 }
 
 .uno-seat.active.me {
-    box-shadow:
-        0 0 0 2px #34c759,
-        0 0 0 4.5px #ffd60a,
-        0 0 14px rgba(255,214,10,.65);
+    animation: unoSeatPulseMe 1.15s ease-in-out infinite;
 }
 
 .us-name {
@@ -387,6 +395,77 @@
     overflow-y: visible;
 }
 
+/* 手牌行：右侧常驻 UNO 按钮 */
+.uno-hand-row {
+    position: relative;
+
+    min-width: 0;
+}
+
+.uno-hand-row .uno-hand {
+    padding-right: 92px;
+}
+
+.uno-fab {
+    position: absolute;
+
+    right: 8px;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    width: 68px;
+
+    height: 68px;
+
+    padding: 0;
+
+    border: 3px solid #fff;
+
+    border-radius: 50%;
+
+    background: radial-gradient(circle at 35% 30%, #ff6b8a, #e01130 72%);
+
+    color: #fff;
+
+    font: inherit;
+
+    font-size: 15px;
+
+    font-weight: 900;
+
+    font-style: italic;
+
+    letter-spacing: 1px;
+
+    box-shadow: 0 6px 16px rgba(224,17,48,.4);
+
+    cursor: pointer;
+
+    z-index: 3;
+}
+
+.uno-fab:hover {
+    filter: brightness(1.06);
+}
+
+.uno-fab.pending {
+    animation: unoFabPulse .9s ease-in-out infinite;
+}
+
+@keyframes unoFabPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255,45,85,.55), 0 6px 16px rgba(224,17,48,.4);
+        transform: translateY(-50%) scale(1);
+    }
+
+    50% {
+        box-shadow: 0 0 0 12px rgba(255,45,85,0), 0 6px 16px rgba(224,17,48,.4);
+        transform: translateY(-50%) scale(1.07);
+    }
+}
+
 .uno-hand .ucard {
     margin-left: -14px;
 
@@ -510,6 +589,12 @@
 
     font-weight: 700;
 
+    /* 结算页把排面渲染在浅色卡片上，白色会与背景融为一体 */
+    color: #6e6e73;
+}
+
+/* 牌桌上的结果区在深色台面上，仍用浅色 */
+.uno-table .uno-reveal-name {
     color: rgba(255,255,255,.92);
 }
 
@@ -820,6 +905,20 @@
         padding-top: 8px;
     }
 
+    .uno-hand-row .uno-hand {
+        padding-right: 72px;
+    }
+
+    .uno-fab {
+        width: 54px;
+
+        height: 54px;
+
+        font-size: 13px;
+
+        right: 6px;
+    }
+
     .uno-hand .ucard {
         width: 37px;
 
@@ -900,5 +999,22 @@
 
     .uno-center {
         gap: 14px;
+    }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    .uno-seat.active,
+    .uno-seat.active.me {
+        animation: none;
+
+        background-color: #ffe9ad;
+    }
+
+    .uno-fab.pending {
+        animation: none;
+
+        box-shadow: 0 0 0 3px #ffd60a, 0 6px 16px rgba(224,17,48,.4);
     }
 }
