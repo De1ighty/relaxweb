@@ -23,6 +23,10 @@ const GAME_TYPES = [
 
 const createDraft = { name: "", buyin: "100", blind: "5" };
 
+/* 未登录介绍语由 GAME_TYPES 生成：登录后的大厅本来就是遍历它渲染的，
+   只有这句是写死的，加了小游戏就会漏掉。游戏名的「家族 · 变体」约定见上面。 */
+const GAME_SHORT_NAMES = GAME_TYPES.map((game) => game.name.split(" · ")[0]).join("、");
+
 function renderEntry() {
   const body = elements.gameMain;
   body.replaceChildren();
@@ -30,13 +34,13 @@ function renderEntry() {
   card.className = "game-entry-card";
   const icon = document.createElement("div");
   icon.className = "hall-game-icon";
-  icon.textContent = "♠";
+  icon.textContent = "🎮";
   const title = document.createElement("div");
   title.className = "game-entry-title";
   title.textContent = "欢迎来到游戏厅";
   const desc = document.createElement("div");
   desc.className = "game-entry-desc";
-  desc.textContent = "登录后与直播间的朋友们来一局德州扑克，金币通用。";
+  desc.textContent = `登录后与直播间的朋友们玩${GAME_SHORT_NAMES}，金币通用。`;
   const button = document.createElement("button");
   button.className = "login-button";
   button.type = "button";
