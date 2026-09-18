@@ -59,12 +59,24 @@ export const state = {
   hallPage: null,
   roomChat: [],
   roomChatDraft: "",
+  ratingEntries: [],
 };
 
 let manageMenuOpen = false;
 
 export function formatCoins(value) {
   return Number(value || 0).toFixed(2);
+}
+
+export function ratingBadge(rating) {
+  const badge = document.createElement("span");
+  badge.className = "rating-badge";
+  badge.hidden = !rating;
+  if (rating) {
+    badge.textContent = `${rating.tier} ${rating.score}`;
+    badge.title = `段位分 ${rating.score} · 已结算 ${rating.games} 局`;
+  }
+  return badge;
 }
 
 export function formatClock(epochSeconds) {
@@ -140,6 +152,7 @@ export function renderIdentity() {
   }
   elements.userName.textContent = name;
   elements.dropdownName.textContent = name;
+  if (user?.rating) elements.dropdownName.append(ratingBadge(user.rating));
 }
 
 export function updateCoinChip() {
@@ -162,6 +175,7 @@ export function setManageMenu(open) {
 
 export function setSignedIn(user) {
   state.currentUser = user;
+  state.ratingEntries = [];
   elements.loginButton.hidden = Boolean(user);
   elements.coinChip.style.display = user ? "flex" : "none";
   elements.userAvatar.style.display = user ? "flex" : "none";
@@ -170,7 +184,10 @@ export function setSignedIn(user) {
   renderIdentity();
   setUserMenu(false);
   updateCoinChip();
-  if (user) renderGameView();
+  if (user) {
+    send({ type: "get_rating_history" });
+    renderGameView();
+  }
   else {
     state.myRoom = null;
     state.currentGameId = null;

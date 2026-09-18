@@ -165,14 +165,14 @@ onMessage("login_success", (data) => {
   elements.authModal.style.display = "none";
   setSignedIn({
     username: data.username, nickname: data.nickname, avatar: data.avatar,
-    coins: data.coins,
+    coins: data.coins, rating: data.rating,
   });
 });
 
 onMessage("resume_success", (data) => {
   setSignedIn({
     username: data.username, nickname: data.nickname, avatar: data.avatar,
-    coins: data.coins,
+    coins: data.coins, rating: data.rating,
   });
 });
 
@@ -181,6 +181,7 @@ onMessage("profile", (data) => {
   if (state.currentUser && data.username === state.currentUser.username) {
     state.currentUser.nickname = data.nickname || "";
     state.currentUser.avatar = data.avatar || "";
+    state.currentUser.rating = data.rating;
     renderIdentity();
   }
   if (state.myRoom?.result) renderGameView();

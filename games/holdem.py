@@ -165,6 +165,7 @@ class HoldemRoom(BaseRoom):
                     "username": name,
                     "nickname": self.display_name(name),
                     "stack": member["stack"],
+                    "rating": self.player_rating(name),
                     "bet": round(g["street_committed"].get(name, 0), 2) if g else 0,
                     "hand_bet": round(g["committed"].get(name, 0), 2) if g else 0,
                     "folded": bool(g and name in g["folded"]),
@@ -380,6 +381,7 @@ class HoldemRoom(BaseRoom):
             await self.broadcast_views()
             await self.on_rooms_changed()
             return
+        self.begin_rating_hand(eligible)
         blind = self.blind
         big_blind = round(blind * 2, 2)
         previous_dealer = self.dealer
@@ -527,6 +529,8 @@ class HoldemRoom(BaseRoom):
         await self.broadcast_views()
 
     async def end_hand(self, reveal):
+        if not self.in_hand():
+            return
         self.cancel_timer("turn")
         g = self.game
         stakes = dict(g["committed"])
@@ -537,6 +541,9 @@ class HoldemRoom(BaseRoom):
             hands = {name: best7(g["holes"][name] + g["board"]) for name in alive}
         pots = build_side_pots(g["committed"], g["folded"])
         payouts = distribute_pots(pots, hands) if hands else {alive[0]: pot}
+        endings = {name: round(member["stack"] + payouts.get(name, 0), 2)
+                   for name, member in self.members.items()}
+        ratings = self.settle_ratings(endings)
         for name, amount in payouts.items():
             if amount > 0 and name in self.members:
                 self.members[name]["stack"] = round(self.members[name]["stack"] + amount, 2)
@@ -550,6 +557,7 @@ class HoldemRoom(BaseRoom):
         if len(g["board"]) == 5:
             shown = {name: best7(g["holes"][name] + g["board"]) for name in alive}
         g["result"] = {
+            "ratings": ratings,
             "board": [{"r": r, "s": s} for r, s in g["board"]],
             "pot": pot,
             "reveal": [

@@ -123,6 +123,7 @@ class UnoRoom(BaseRoom):
                     "username": name,
                     "nickname": self.display_name(name),
                     "stack": member["stack"],
+                    "rating": self.player_rating(name),
                     "in_hand": in_hand,
                     "cards": len(g["hands"][name]) if in_hand else 0,
                     "uno": bool(g and name in g["uno_pending"]),
@@ -468,6 +469,7 @@ class UnoRoom(BaseRoom):
             await self.broadcast_views()
             await self.on_rooms_changed()
             return
+        self.begin_rating_hand(eligible)
         deck = build_deck()
         hands = {name: [deck.pop() for _ in range(7)] for name in eligible}
         # 翻一张数字牌做起始牌（万能/功能牌沉底）
@@ -519,12 +521,15 @@ class UnoRoom(BaseRoom):
             await self.broadcast_views()
 
     async def end_hand(self, winner, reveal=True):
+        if not self.in_hand():
+            return
         self.cancel_timer("turn")
         self.cancel_timer("uno")
         g = self.game
         penalties = {}
         payouts = {}
         total = 0.0
+        endings = {name: member["stack"] for name, member in self.members.items()}
         for name in g["order"]:
             if name == winner:
                 continue
@@ -534,9 +539,12 @@ class UnoRoom(BaseRoom):
             if pay > 0:
                 payouts[name] = pay
                 total = round(total + pay, 2)
-                self.members[name]["stack"] = round(self.members[name]["stack"] - pay, 2)
+                endings[name] = round(endings[name] - pay, 2)
         if winner and winner in self.members:
-            self.members[winner]["stack"] = round(self.members[winner]["stack"] + total, 2)
+            endings[winner] = round(endings[winner] + total, 2)
+        ratings = self.settle_ratings(endings)
+        for name, amount in endings.items():
+            self.members[name]["stack"] = amount
         self.stacks_changed()
         g["stage"] = "showdown"
         g["to_act"] = None
@@ -544,6 +552,7 @@ class UnoRoom(BaseRoom):
         g["drawn_state"] = None
         g["uno_pending"] = set()
         g["result"] = {
+            "ratings": ratings,
             "hand_no": g["hand_no"],
             "winner": winner,
             "winner_name": self.display_name(winner) if winner else "",

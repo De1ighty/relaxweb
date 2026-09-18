@@ -1,6 +1,6 @@
 /* UNO 牌桌：手牌、出牌区、行动条与牌局回顾。 */
 
-import { displayNameOf, elements, formatCoins, renderGameView, requestProfile, send, startHallTicker, state } from "../core.js";
+import { displayNameOf, elements, formatCoins, ratingBadge, renderGameView, requestProfile, send, startHallTicker, state } from "../core.js";
 import { registerGame } from "../registry.js";
 import { openChatOverlay, reapplySeatBubbles } from "../room.js";
 
@@ -84,7 +84,7 @@ function unoSeatNode(p) {
   uno.className = "us-uno";
   uno.textContent = "UNO!";
   if (p.in_hand && p.cards === 1) uno.classList.add("show");
-  seat.append(name, info, uno);
+  seat.append(name, ratingBadge(p.rating), info, uno);
   return seat;
 }
 

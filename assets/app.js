@@ -292,6 +292,12 @@ function renderIdentity() {
   }
   elements.userName.textContent = name;
   elements.dropdownName.textContent = name;
+  if (user?.rating) {
+    const badge = document.createElement("span");
+    badge.className = "rating-badge";
+    badge.textContent = `${user.rating.tier} ${user.rating.score}`;
+    elements.dropdownName.append(badge);
+  }
 }
 
 function rememberProfile(data) {
@@ -406,13 +412,13 @@ const messageHandlers = {
     elements.authModal.style.display = "none";
     setSignedIn({
       username: data.username, nickname: data.nickname, avatar: data.avatar,
-      coins: data.coins,
+      coins: data.coins, rating: data.rating,
     });
   },
   resume_success(data) {
     setSignedIn({
       username: data.username, nickname: data.nickname, avatar: data.avatar,
-      coins: data.coins,
+      coins: data.coins, rating: data.rating,
     });
   },
   profile(data) {
@@ -420,12 +426,19 @@ const messageHandlers = {
     if (currentUser && data.username === currentUser.username) {
       currentUser.nickname = data.nickname || "";
       currentUser.avatar = data.avatar || "";
+      currentUser.rating = data.rating;
       renderIdentity();
     }
     refreshMessageIdentity(data.username);
   },
   profile_updated() {
     elements.profileModal.style.display = "none";
+  },
+  rating_update(data) {
+    if (currentUser && data.username === currentUser.username) {
+      currentUser.rating = data.rating;
+      renderIdentity();
+    }
   },
   profile_error(data) { uiAlert(data.message); },
   invite_list(data) {

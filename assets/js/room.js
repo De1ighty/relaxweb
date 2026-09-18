@@ -1,6 +1,7 @@
 /* 房间外壳：等待开局、房间聊天与座位气泡、结算投票页。 */
 
-import { elements, formatCoins, isRoomOwner, renderGameView, send, setRoomMode, state, stopHallTicker, updateCoinChip } from "./core.js";
+import { elements, formatCoins, isRoomOwner, ratingBadge, renderGameView, send, setRoomMode, state, stopHallTicker, updateCoinChip } from "./core.js";
+import { ratingResultsNode } from "./rating.js";
 import { alertDialog } from "./dialog.js";
 import { fillBlindOptions, gameMetaById } from "./hall.js";
 import { gameView, onMessage, registerView } from "./registry.js";
@@ -221,6 +222,7 @@ export function renderRoomLobby() {
     row.className = "game-player-row";
     const name = document.createElement("span");
     name.textContent = p.nickname;
+    name.append(ratingBadge(p.rating));
     if (p.username === state.myRoom.owner) {
       const badge = document.createElement("span");
       badge.className = "badge-owner";
@@ -275,6 +277,7 @@ export function renderSettlementView() {
   resultCard.className = "game-card-page";
   if (state.myRoom.result && game) {
     resultCard.append(game.renderReview(state.myRoom.result));
+    if (state.myRoom.result.ratings) resultCard.append(ratingResultsNode(state.myRoom.result.ratings));
   } else {
     const note = document.createElement("div");
     note.className = "game-hint";

@@ -18,6 +18,7 @@ import websockets
 from config import get, get_int
 from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
+from games.rating import rating_change, rating_info
 
 
 HOST = str(get("servers.chat_host", env="LIVE_CHAT_HOST", default="0.0.0.0"))
@@ -110,6 +111,28 @@ def init_db():
             conn.execute(
                 "ALTER TABLE users ADD COLUMN coins REAL NOT NULL DEFAULT 100"
             )
+        if "rating_score" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN rating_score INTEGER NOT NULL DEFAULT 1000")
+        if "rating_games" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN rating_games INTEGER NOT NULL DEFAULT 0")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rating_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hand_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                game_type TEXT NOT NULL,
+                room_name TEXT NOT NULL,
+                hand_no INTEGER NOT NULL,
+                initial REAL NOT NULL,
+                final REAL NOT NULL,
+                delta INTEGER NOT NULL,
+                score INTEGER NOT NULL,
+                games INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(hand_id, user_id)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rating_user ON rating_history(user_id, id)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS coin_transactions (
@@ -189,6 +212,84 @@ def set_escrow(username, room_id, amount):
                 "ON CONFLICT(username, room_id) DO UPDATE SET amount = excluded.amount",
                 (username, room_id, round(amount, 2)),
             )
+
+
+def get_rating(username):
+    with database() as conn:
+        row = conn.execute("SELECT rating_score, rating_games FROM users WHERE username = ?",
+                           (username,)).fetchone()
+    return rating_info(*row) if row else None
+
+
+def record_hand_ratings(room, hand_id, starts, endings):
+    """评分、流水、已结算筹码在同一事务落库，重试不会再次加分。"""
+    results = {}
+    with database() as conn, conn:
+        # 提前取写锁，读分数到更新的整个过程只有一个写者。
+        conn.execute("BEGIN IMMEDIATE")
+        for username, final in endings.items():
+            user = conn.execute(
+                "SELECT id, rating_score, rating_games FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+            if not user:
+                continue
+            saved = conn.execute(
+                "SELECT initial, final, delta, score, games FROM rating_history "
+                "WHERE hand_id = ? AND user_id = ?", (hand_id, user[0]),
+            ).fetchone()
+            if saved:
+                initial, final, delta, score, games = saved
+            else:
+                initial = starts[username]
+                score = max(0, user[1] + rating_change(initial, final))
+                delta, games = score - user[1], user[2] + 1
+                conn.execute("UPDATE users SET rating_score = ?, rating_games = ? WHERE id = ?",
+                             (score, games, user[0]))
+                conn.execute(
+                    "INSERT INTO rating_history "
+                    "(hand_id, user_id, game_type, room_name, hand_no, initial, final, "
+                    "delta, score, games, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (hand_id, user[0], room.game_type, room.name, room.hand_seq,
+                     initial, final, delta, score, games, int(time.time())),
+                )
+                # 离桌者的托管由离桌流程清除，不能在重试时重新创建。
+                if room.has_member(username):
+                    conn.execute(
+                        "UPDATE game_escrows SET amount = ? WHERE username = ? AND room_id = ?",
+                        (final, username, room.id),
+                    )
+            results[username] = {"initial": initial, "final": final,
+                                 "return_rate": round((final - initial) / initial, 6),
+                                 "delta": delta, "rating": rating_info(score, games)}
+    return results
+
+
+async def publish_ratings(room):
+    for username in tuple(room.pending_rating_updates):
+        room.pending_rating_updates.discard(username)
+        info = get_rating(username)
+        for client_state in clients.values():
+            user = client_state.get("user")
+            if user and user["username"] == username:
+                user["rating"] = info
+        await broadcast({"type": "rating_update", "username": username, "rating": info})
+
+
+async def handle_get_rating_history(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        return
+    with database() as conn:
+        rows = conn.execute(
+            "SELECT game_type, room_name, hand_no, initial, final, delta, score, games, created_at "
+            "FROM rating_history WHERE user_id = (SELECT id FROM users WHERE username = ?) "
+            "ORDER BY id DESC LIMIT 20", (user["username"],),
+        ).fetchall()
+    await send_json(websocket, {"type": "rating_history", "rating": get_rating(user["username"]),
+        "entries": [{"game_type": r[0], "room_name": r[1], "hand_no": r[2],
+                     "initial": r[3], "final": r[4], "delta": r[5],
+                     "rating": rating_info(r[6], r[7]), "created_at": r[8]} for r in rows]})
 
 
 def refund_game_escrows():
@@ -348,14 +449,14 @@ def authenticate_user(username, password):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT username, password_hash, salt, role, nickname, avatar, coins
+            SELECT username, password_hash, salt, role, nickname, avatar, coins, rating_score, rating_games
             FROM users WHERE username = ?
             """,
             (username.strip(),),
         ).fetchone()
     if not row:
         return None
-    real_username, saved_hash, salt, role, nickname, avatar, coins = row
+    real_username, saved_hash, salt, role, nickname, avatar, coins, score, games = row
     calculated_hash, _ = hash_password(password, salt)
     if not hmac.compare_digest(calculated_hash, saved_hash):
         return None
@@ -365,17 +466,19 @@ def authenticate_user(username, password):
         "nickname": nickname or "",
         "avatar": avatar or "",
         "coins": round(coins or 0.0, 2),
+        "rating": rating_info(score, games),
     }
 
 
 def get_profile(username):
     with database() as conn:
         row = conn.execute(
-            "SELECT nickname, avatar FROM users WHERE username = ?", (username,)
+            "SELECT nickname, avatar, rating_score, rating_games FROM users WHERE username = ?", (username,)
         ).fetchone()
     if not row:
         return {"username": username, "nickname": "", "avatar": ""}
-    return {"username": username, "nickname": row[0] or "", "avatar": row[1] or ""}
+    return {"username": username, "nickname": row[0] or "", "avatar": row[1] or "",
+            "rating": rating_info(row[2], row[3])}
 
 
 def create_session(username):
@@ -401,7 +504,8 @@ def resume_user(token):
     with database() as conn:
         row = conn.execute(
             """
-            SELECT users.username, users.role, users.nickname, users.avatar, users.coins
+            SELECT users.username, users.role, users.nickname, users.avatar, users.coins,
+                   users.rating_score, users.rating_games
             FROM auth_sessions
             JOIN users ON users.id = auth_sessions.user_id
             WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?
@@ -414,6 +518,7 @@ def resume_user(token):
         "nickname": row[2] or "",
         "avatar": row[3] or "",
         "coins": round(row[4] or 0.0, 2),
+        "rating": rating_info(row[5], row[6]),
     } if row else None
 
 
@@ -509,6 +614,7 @@ async def handle_login(websocket, state, data):
             "nickname": profile["nickname"],
             "avatar": profile["avatar"],
             "coins": user["coins"],
+            "rating": user["rating"],
         },
     )
 
@@ -529,6 +635,7 @@ async def handle_resume(websocket, state, data):
             "nickname": user.get("nickname", ""),
             "avatar": user.get("avatar", ""),
             "coins": user.get("coins", 0),
+            "rating": user["rating"],
         },
     )
 
@@ -620,6 +727,8 @@ async def handle_delete_account(websocket, state, data):
             "(SELECT id FROM users WHERE username = ?)",
             (user["username"],),
         )
+        conn.execute("DELETE FROM rating_history WHERE user_id = "
+                     "(SELECT id FROM users WHERE username = ?)", (user["username"],))
         conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
     state["user"] = None
     logger.info("account deleted: %s", user["username"])
@@ -1132,6 +1241,7 @@ def attach_host(room):
         await asyncio.gather(*(send_json(socket, payload) for socket in member_sockets()))
 
     async def broadcast_views():
+        await publish_ratings(room)
         targets = []
         for socket, client_state in list(clients.items()):
             user = client_state.get("user")
@@ -1154,6 +1264,15 @@ def attach_host(room):
     room.on_dissolve_requested = on_dissolve_requested
     room.display_name = display_name
     room.set_escrow = sync_escrow
+    room.player_rating = get_rating
+    room.pending_rating_updates = set()
+
+    def record_ratings(hand_id, starts, endings):
+        results = record_hand_ratings(room, hand_id, starts, endings)
+        room.pending_rating_updates.update(results)
+        return results
+
+    room.record_ratings = record_ratings
 
 
 async def broadcast_room_list():
@@ -1180,12 +1299,15 @@ async def dissolve_room(room, reason):
 
 
 async def leave_room_internal(room, username):
+    if room.in_hand() and room.has_member(username):
+        room.settle_ratings({username: room.members[username]["stack"]})
     member = room.remove_member(username)
     if not member:
         return
     mid_hand = room.note_leave(username)
     set_escrow(username, room.id, None)
     settle_room_coins(room, username, member["stack"], f"游戏厅离桌：{room.name}")
+    await publish_ratings(room)
     logger.info("%s left game room %s", username, room.id)
     if not room.members:
         room.close()
@@ -1720,6 +1842,7 @@ handlers = {
     "create_invite": handle_create_invite,
     "chat": handle_chat,
     "get_finance": handle_get_finance,
+    "get_rating_history": handle_get_rating_history,
     "transfer_coins": handle_transfer_coins,
     "get_bet": handle_get_bet,
     "create_bet": handle_create_bet,

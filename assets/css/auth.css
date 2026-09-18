@@ -388,3 +388,18 @@
     background:
         rgba(255, 214, 10, .16);
 }
+/* 段位在游戏厅与直播间账号菜单共用。 */
+.rating-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: #e9f2ed;
+    color: #28664e;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+.rating-badge[hidden] { display: none; }
+.user-dropdown-name .rating-badge,
+.game-player-row .rating-badge { margin-left: 8px; }

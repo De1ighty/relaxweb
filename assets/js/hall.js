@@ -4,6 +4,7 @@ import { openLogin } from "./auth.js";
 import { elements, formatCoins, renderGameView, send, state } from "./core.js";
 import { alertDialog } from "./dialog.js";
 import { onMessage, registerView } from "./registry.js";
+import { ratingCard } from "./rating.js";
 
 const GAME_TYPES = [
   {
@@ -82,6 +83,7 @@ function renderHall() {
     grid.append(card);
   }
   body.append(grid);
+  body.append(ratingCard());
 }
 
 function currentGameMeta() {

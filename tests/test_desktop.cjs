@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
   const core=await import('/assets/js/core.js'); window.core=core;
   core.state.currentUser={username:'玩家1',nickname:'玩家1'};
   core.state.socket={readyState:1, send: data => {window.sent=JSON.parse(data); window.sendCount=(window.sendCount||0)+1;}};
-  core.state.myRoom={room_id:123,name:'周末好友桌',game_type:'holdem',status:'playing',owner:'玩家1',owner_name:'玩家1',blind:5,hand_no:8,stage:'flop',pot:360,to_act:'玩家1',turn_left:30,board:[{r:14,s:0},{r:12,s:1},{r:10,s:2}],your_hole:[{r:14,s:1},{r:13,s:1}],your_options:{check:true,can_raise:true,raise_min:20,raise_max:880},players:Array.from({length:9},(_,i)=>({username:`玩家${i+1}`,nickname:['玩家1','小熊同学','River King','周末来一手','小橘子','All in','幸运星','月亮','最后一张'][i],stack:880-i*20,bet:20,hand_bet:40,in_hand:true,dealer:i===3}))};
+  core.state.myRoom={room_id:123,name:'周末好友桌',game_type:'holdem',status:'playing',owner:'玩家1',owner_name:'玩家1',blind:5,hand_no:8,stage:'flop',pot:360,to_act:'玩家1',turn_left:30,board:[{r:14,s:0},{r:12,s:1},{r:10,s:2}],your_hole:[{r:14,s:1},{r:13,s:1}],your_options:{check:true,can_raise:true,raise_min:20,raise_max:880},players:Array.from({length:9},(_,i)=>({username:`玩家${i+1}`,nickname:['玩家1','小熊同学','River King','周末来一手','小橘子','All in','幸运星','月亮','最后一张'][i],rating:{score:1000+i*40,tier:'白银',games:10},stack:880-i*20,bet:20,hand_bet:40,in_hand:true,dealer:i===3}))};
   core.renderGameView();
  });
 
