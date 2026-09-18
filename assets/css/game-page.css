@@ -1,0 +1,683 @@
+/* =========================================================
+   游戏厅独立页、直播间顶栏功能菜单（移动端）、移动端固定视口
+   原 styles.css 第 2878-3557 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   游戏厅独立页
+========================================================= */
+
+button {
+    touch-action: manipulation;
+}
+
+a.hall-stat {
+    text-decoration: none;
+
+    color: inherit;
+}
+
+.coin-chip {
+    display: none;
+
+    background: #fff6df;
+}
+
+.coin-chip:hover {
+    background: #ffefc2;
+}
+
+.game-container {
+    width: calc(100% - 32px);
+
+    max-width: 880px;
+
+    margin: 18px auto 44px;
+}
+
+.game-loading {
+    padding: 70px 0;
+
+    color: #86868b;
+
+    font-size: 14px;
+
+    text-align: center;
+}
+
+.hall-page-title {
+    margin: 4px 2px 12px;
+
+    font-size: 17px;
+
+    font-weight: 750;
+}
+
+.game-card-page {
+    padding: 18px;
+
+    border-radius: 18px;
+
+    background: rgba(255,255,255,.86);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow: 0 12px 40px rgba(0,0,0,.07);
+}
+
+.game-entry-card {
+    padding: 46px 20px;
+
+    border-radius: 22px;
+
+    background: rgba(255,255,255,.86);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow: 0 12px 40px rgba(0,0,0,.07);
+
+    text-align: center;
+}
+
+.game-entry-card .hall-game-icon {
+    width: 64px;
+
+    height: 64px;
+
+    min-width: 64px;
+
+    margin: 0 auto 14px;
+
+    font-size: 30px;
+}
+
+.game-entry-title {
+    font-size: 20px;
+
+    font-weight: 750;
+}
+
+.game-entry-desc {
+    margin-top: 8px;
+
+    color: #86868b;
+
+    font-size: 13px;
+}
+
+.game-entry-card .login-button {
+    margin-top: 20px;
+}
+
+.me-badge {
+    background: #e8f1ff !important;
+
+    color: #0071e3 !important;
+}
+
+.seat.me {
+    box-shadow:
+        inset 0 0 0 2px rgba(0,113,227,.55),
+        0 4px 14px rgba(0,0,0,.14);
+}
+
+.seat.me.active {
+    box-shadow:
+        inset 0 0 0 2px rgba(0,113,227,.55),
+        0 0 0 2.5px #ffd60a,
+        0 0 14px rgba(255,214,10,.65);
+}
+
+
+/* 牌桌页面布局：手牌与操作固定为吸底操作坞 */
+
+.poker-page {
+    display: flex;
+
+    flex-direction: column;
+}
+
+.poker-dock {
+    position: sticky;
+
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+
+    z-index: 30;
+
+    margin-top: 12px;
+
+    padding: 12px 14px;
+
+    border-radius: 16px;
+
+    background: rgba(255,255,255,.94);
+
+    backdrop-filter: blur(20px);
+
+    -webkit-backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow: 0 10px 34px rgba(0,0,0,.14);
+}
+
+.poker-dock .my-cards-label {
+    color: #86868b;
+}
+
+.poker-dock .my-cards {
+    min-height: 74px;
+}
+
+.poker-dock .countdown {
+    background: #e8e8ed;
+}
+
+.poker-dock .countdown .countdown-fill {
+    background: #ff9f0a;
+}
+
+.poker-dock .action-bar {
+    margin-top: 10px;
+}
+
+.poker-dock .last-action {
+    color: #86868b;
+
+    text-align: left;
+}
+
+.game-btn-row.page {
+    margin-top: 12px;
+}
+
+
+@media(max-width:650px) {
+
+    .game-container {
+        width: calc(100% - 20px);
+
+        margin-top: 12px;
+    }
+
+    .game-card-page {
+        padding: 14px 12px;
+    }
+
+    .poker-table {
+        padding: 12px 10px;
+
+        border-radius: 14px;
+    }
+
+    .poker-board {
+        gap: 5px;
+
+        min-height: 50px;
+
+        margin-bottom: 10px;
+    }
+
+    .poker-board .pcard-slot {
+        width: 36px;
+
+        height: 50px;
+    }
+
+    .pcard {
+        width: 36px;
+
+        height: 50px;
+
+        border-radius: 5px;
+    }
+
+    .pcard .pc-rank {
+        font-size: 15px;
+    }
+
+    .pcard .pc-suit {
+        font-size: 12px;
+    }
+
+    .pcard.big {
+        width: 48px;
+
+        height: 66px;
+
+        border-radius: 7px;
+    }
+
+    .pcard.big .pc-rank {
+        font-size: 20px;
+    }
+
+    .pcard.big .pc-suit {
+        font-size: 16px;
+    }
+
+    .poker-seats {
+        display: grid;
+
+        grid-template-columns: repeat(3, 1fr);
+
+        gap: 6px;
+    }
+
+    .seat {
+        width: auto;
+
+        padding: 7px 4px 6px;
+
+        border-radius: 10px;
+    }
+
+    .seat-name {
+        max-width: 100%;
+    }
+
+    .review-row {
+        grid-template-columns: minmax(52px, 1fr) auto minmax(48px, auto) auto;
+
+        gap: 6px;
+
+        padding: 7px 9px;
+
+        font-size: 12px;
+    }
+
+    .review-hand {
+        font-size: 11px;
+    }
+
+    .review-cards .pcard {
+        width: 26px;
+
+        height: 35px;
+    }
+
+    .poker-dock {
+        padding: 10px 10px 12px;
+
+        border-radius: 14px;
+    }
+
+    .poker-dock .my-cards {
+        min-height: 68px;
+    }
+
+    .action-bar {
+        gap: 6px;
+    }
+
+    .action-btn {
+        flex: 1 1 auto;
+
+        min-height: 44px;
+
+        padding: 10px 12px;
+
+        font-size: 15px;
+    }
+
+    .raise-input {
+        flex: 1 1 96px;
+
+        width: auto;
+
+        min-width: 0;
+
+        min-height: 44px;
+
+        font-size: 16px;
+    }
+
+    #gameMain .login-input {
+        font-size: 16px;
+    }
+
+    .hall-create-form {
+        flex-wrap: wrap;
+    }
+
+    .hall-create-form .login-input {
+        flex: 1 1 130px;
+
+        min-width: 120px;
+    }
+
+    .hall-join {
+        min-height: 40px;
+    }
+
+    .game-btn-row .login-submit,
+    .game-btn-row .bet-secondary {
+        min-height: 44px;
+    }
+
+}
+
+
+/* 游戏厅移动端头部收纳 */
+@media(max-width:650px) {
+
+    .game-header {
+        padding: 0 12px;
+
+        gap: 8px;
+    }
+
+    .game-header .left-header {
+        gap: 8px;
+
+        min-width: 0;
+    }
+
+    .game-header .logo {
+        font-size: 16px;
+    }
+
+    .game-header #onlineStat {
+        display: none;
+    }
+
+    .game-header .online-stat {
+        flex-shrink: 0;
+
+        white-space: nowrap;
+    }
+
+    .game-header .user-area {
+        flex-shrink: 0;
+
+        gap: 6px;
+    }
+
+    .game-header .user-name {
+        max-width: 64px;
+
+        overflow: hidden;
+
+        text-overflow: ellipsis;
+
+        white-space: nowrap;
+    }
+
+}
+
+
+/* =========================================================
+   直播间顶栏功能菜单（移动端）
+========================================================= */
+
+.header-menu-toggle,
+.header-menu {
+    display: none;
+}
+
+.header-menu-toggle {
+    align-items: center;
+
+    justify-content: center;
+
+    width: 30px;
+
+    height: 30px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #f0f0f3;
+
+    color: #86868b;
+
+    font-size: 14px;
+
+    cursor: pointer;
+}
+
+.header-menu-toggle:hover {
+    background: #e8e8ed;
+}
+
+.header-menu {
+    position: absolute;
+
+    top: calc(100% + 8px);
+
+    left: 12px;
+
+    z-index: 120;
+
+    min-width: 180px;
+
+    padding: 6px;
+
+    border: 1px solid rgba(0,0,0,.08);
+
+    border-radius: 13px;
+
+    background: white;
+
+    box-shadow: 0 12px 34px rgba(0,0,0,.14);
+}
+
+.header-menu-item {
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    width: 100%;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 11px 12px;
+
+    background: transparent;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 14px;
+
+    text-align: left;
+
+    text-decoration: none;
+
+    cursor: pointer;
+}
+
+.header-menu-item:hover {
+    background: #f0f0f3;
+}
+
+.header-menu-icon {
+    font-size: 15px;
+}
+
+.header-menu-count {
+    margin-left: auto;
+
+    color: #86868b;
+
+    font-size: 12px;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.header-menu-item.active-option #menuBetText::after {
+    content: " · 进行中";
+
+    color: #ff2d78;
+
+    font-size: 12px;
+
+    font-weight: 650;
+}
+
+@media(max-width:650px) {
+
+    .header {
+        height: 54px;
+
+        padding: 0 12px;
+    }
+
+    .left-header {
+        gap: 8px;
+    }
+
+    .logo {
+        font-size: 17px;
+    }
+
+    /* 顶栏只留标题和用户，功能入口收进下拉菜单 */
+    .left-header > .online-stat {
+        display: none;
+    }
+
+    .header-menu-toggle {
+        display: flex;
+    }
+
+    .header-menu {
+        display: none;
+    }
+
+    .header-menu.open {
+        display: block;
+    }
+
+    .user-area {
+        gap: 6px;
+    }
+
+    .login-button {
+        padding: 8px 14px;
+    }
+
+}
+
+
+/* =========================================================
+   移动端固定视口：聊天区填满剩余屏幕，输入条贴底
+========================================================= */
+
+@media(max-width:650px) {
+
+    body {
+        height: 100vh;
+        height: 100dvh;
+
+        overflow: hidden;
+
+        overscroll-behavior-y: none;
+    }
+
+    .container {
+        display: flex;
+
+        flex-direction: column;
+
+        width: 100%;
+
+        height: calc(100vh - 54px);
+        height: calc(100dvh - 54px);
+
+        margin: 0;
+    }
+
+    .live-layout {
+        flex: 1;
+
+        min-height: 0;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 0;
+    }
+
+    .video-column {
+        flex: none;
+    }
+
+    .video-card {
+        border-radius: 0;
+
+        border: 0;
+
+        box-shadow: none;
+    }
+
+    .chat-card {
+        flex: 1;
+
+        width: 100%;
+
+        height: auto;
+
+        border-radius: 0;
+
+        border: 0;
+
+        box-shadow: none;
+    }
+
+    /* 收窄字号与间距，同屏显示更多历史消息 */
+    .chat-header {
+        padding: 9px 14px;
+    }
+
+    .messages {
+        padding: 2px 12px 8px;
+    }
+
+    .message {
+        gap: 8px;
+
+        margin: 8px 0;
+    }
+
+    .message-avatar {
+        width: 26px;
+
+        min-width: 26px;
+
+        height: 26px;
+
+        font-size: 11px;
+    }
+
+    .message-user {
+        font-size: 12px;
+    }
+
+    .message-time {
+        margin-left: 5px;
+
+        font-size: 10px;
+    }
+
+    .message-text {
+        margin-top: 1px;
+
+        font-size: 12px;
+
+        line-height: 1.38;
+    }
+
+    .danmaku-composer {
+        min-height: 46px;
+
+        padding: 5px 8px;
+    }
+
+}

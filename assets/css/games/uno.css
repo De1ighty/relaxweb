@@ -1,0 +1,904 @@
+/* =========================================================
+   UNO 牌桌、手机横屏优化、竖屏小屏 UNO 微调
+   原 styles.css 第 4608-5506 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   UNO 牌桌
+======================================================== */
+
+.uno-table {
+    padding: 16px;
+
+    border-radius: 18px;
+
+    background:
+        radial-gradient(
+            ellipse at 50% 0%,
+            #b3552e,
+            #7c3a1f 70%
+        );
+
+    box-shadow:
+        inset 0 0 0 5px rgba(255,255,255,.14),
+        0 10px 30px rgba(90,40,20,.3);
+}
+
+.uno-seats {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    margin: 10px 0 14px;
+}
+
+.uno-seat {
+    position: relative;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 2px;
+
+    min-width: 92px;
+
+    padding: 8px 10px 7px;
+
+    border-radius: 12px;
+
+    background: rgba(255,255,255,.94);
+
+    transition: box-shadow .25s;
+}
+
+.uno-seat.active {
+    box-shadow: 0 0 0 2.5px #ffd60a, 0 0 14px rgba(255,214,10,.65);
+}
+
+.uno-seat.me {
+    box-shadow: 0 0 0 2px #34c759;
+}
+
+.uno-seat.active.me {
+    box-shadow:
+        0 0 0 2px #34c759,
+        0 0 0 4.5px #ffd60a,
+        0 0 14px rgba(255,214,10,.65);
+}
+
+.us-name {
+    max-width: 120px;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+    font-size: 12.5px;
+
+    font-weight: 700;
+}
+
+.us-info {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    font-size: 11.5px;
+
+    color: #6e6e73;
+}
+
+.us-count {
+    font-weight: 750;
+
+    color: #1d1d1f;
+}
+
+.us-uno {
+    position: absolute;
+
+    top: -9px;
+
+    right: -7px;
+
+    padding: 2px 7px;
+
+    border-radius: 9px;
+
+    background: #ff2d55;
+
+    color: #fff;
+
+    font-size: 9.5px;
+
+    font-weight: 900;
+
+    font-style: italic;
+
+    opacity: 0;
+
+    visibility: hidden;
+
+    transform: scale(.6);
+
+    transition: opacity .2s, transform .2s, visibility .2s;
+
+    pointer-events: none;
+}
+
+.us-uno.show {
+    opacity: 1;
+
+    visibility: visible;
+
+    transform: scale(1) rotate(-8deg);
+}
+
+.uno-center {
+    position: relative;
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 18px;
+
+    padding: 6px 0 22px;
+}
+
+.uno-pile {
+    position: relative;
+}
+
+.uno-pile.clickable {
+    cursor: pointer;
+}
+
+.uno-pile.clickable .ucard {
+    box-shadow:
+        0 0 0 2.5px rgba(255,255,255,.8),
+        0 8px 18px rgba(0,0,0,.3);
+}
+
+.uno-deck-count {
+    position: absolute;
+
+    bottom: -19px;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    font-size: 11px;
+
+    color: rgba(255,255,255,.85);
+
+    white-space: nowrap;
+}
+
+.uno-discard {
+    transform: rotate(-4deg);
+}
+
+.uno-color-strip {
+    padding: 5px 13px;
+
+    border-radius: 999px;
+
+    color: #fff;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+
+    white-space: nowrap;
+}
+
+.ucard {
+    position: relative;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex: 0 0 auto;
+
+    width: 46px;
+
+    height: 64px;
+
+    border-radius: 7px;
+
+    border: 3px solid #fff;
+
+    box-shadow: 0 3px 10px rgba(0,0,0,.22);
+
+    color: #fff;
+}
+
+.ucard.r {
+    background: #e02020;
+}
+
+.ucard.y {
+    background: #f5a623;
+}
+
+.ucard.g {
+    background: #1d9e4f;
+}
+
+.ucard.b {
+    background: #1f6fd6;
+}
+
+.ucard.w {
+    background: #26262a;
+}
+
+.ucard.back {
+    background:
+        radial-gradient(circle at 50% 50%, #3a3a40, #1c1c20 78%),
+        #1c1c20;
+}
+
+.uc-back-logo {
+    font-size: 12px;
+
+    font-weight: 900;
+
+    font-style: italic;
+
+    letter-spacing: 1px;
+
+    color: #ffd60a;
+
+    transform: rotate(-20deg);
+}
+
+.uc-corner {
+    position: absolute;
+
+    top: 2px;
+
+    left: 4px;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    line-height: 1;
+
+    text-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+
+.uc-corner.uc-flip {
+    top: auto;
+
+    left: auto;
+
+    bottom: 2px;
+
+    right: 4px;
+
+    transform: rotate(180deg);
+}
+
+.uc-mid {
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 30px;
+
+    height: 30px;
+
+    border-radius: 50%;
+
+    background: rgba(255,255,255,.22);
+
+    border: 2px solid rgba(255,255,255,.55);
+
+    font-size: 19px;
+
+    font-weight: 900;
+}
+
+.ucard.w .uc-mid {
+    background: conic-gradient(#e02020 0 25%, #f5a623 0 50%, #1d9e4f 0 75%, #1f6fd6 0);
+}
+
+.ucard.big {
+    width: 66px;
+
+    height: 92px;
+
+    border-radius: 9px;
+}
+
+.ucard.big .uc-mid {
+    width: 44px;
+
+    height: 44px;
+
+    font-size: 27px;
+}
+
+.ucard.big .uc-corner {
+    font-size: 13px;
+}
+
+.ucard.playable {
+    cursor: pointer;
+
+    box-shadow:
+        0 0 0 2.5px #ffd60a,
+        0 6px 16px rgba(255,214,10,.5);
+}
+
+.ucard.playable:hover {
+    transform: translateY(-6px);
+}
+
+.ucard.picked {
+    box-shadow:
+        0 0 0 3px #7c5cff,
+        0 6px 16px rgba(124,92,255,.5);
+}
+
+.ucard.drawn {
+    outline: 2px dashed rgba(255,255,255,.85);
+
+    outline-offset: -6px;
+}
+
+.uno-hand {
+    display: flex;
+
+    align-items: flex-end;
+
+    min-height: 76px;
+
+    padding: 12px 4px 2px;
+
+    overflow-x: auto;
+
+    overflow-y: visible;
+}
+
+.uno-hand .ucard {
+    margin-left: -14px;
+
+    transition: transform .15s, box-shadow .15s;
+}
+
+.uno-hand .ucard:first-child {
+    margin-left: 0;
+}
+
+.uno-color-picker {
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    width: 100%;
+
+    padding: 8px 12px;
+
+    border-radius: 10px;
+
+    background: #f2f2f7;
+}
+
+.uno-color-label {
+    font-size: 13px;
+
+    font-weight: 650;
+
+    color: #3a3a3c;
+}
+
+.uno-color-dot {
+    width: 30px;
+
+    height: 30px;
+
+    padding: 0;
+
+    border: 2.5px solid #fff;
+
+    border-radius: 50%;
+
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+
+    cursor: pointer;
+}
+
+.uno-color-dot.r {
+    background: #e02020;
+}
+
+.uno-color-dot.y {
+    background: #f5a623;
+}
+
+.uno-color-dot.g {
+    background: #1d9e4f;
+}
+
+.uno-color-dot.b {
+    background: #1f6fd6;
+}
+
+.uno-color-cancel {
+    margin-left: auto;
+
+    border: 0;
+
+    background: transparent;
+
+    color: #86868b;
+
+    font-size: 15px;
+
+    cursor: pointer;
+}
+
+.uno-btn {
+    background: #ff2d55;
+
+    color: #fff;
+
+    font-style: italic;
+
+    font-weight: 900;
+
+    letter-spacing: 1px;
+}
+
+.uno-btn:hover {
+    background: #ff4d70;
+}
+
+.uno-reveal {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+
+    margin-top: 10px;
+}
+
+.uno-reveal-row {
+    display: flex;
+
+    align-items: center;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+}
+
+.uno-reveal-name {
+    min-width: 64px;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    color: rgba(255,255,255,.92);
+}
+
+.uno-reveal-cards {
+    display: flex;
+}
+
+.uno-reveal-cards .ucard {
+    width: 26px;
+
+    height: 37px;
+
+    margin-left: -9px;
+
+    border-width: 2px;
+
+    border-radius: 4px;
+}
+
+.uno-reveal-cards .ucard:first-child {
+    margin-left: 0;
+}
+
+.uno-reveal-cards .uc-mid {
+    width: 17px;
+
+    height: 17px;
+
+    border-width: 1.5px;
+
+    font-size: 11px;
+}
+
+.uno-reveal-cards .uc-corner {
+    display: none;
+}
+
+.chat-open-row {
+    display: flex;
+
+    justify-content: center;
+
+    margin-top: 12px;
+}
+
+.chat-overlay-composer {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+
+    border-top: 1px solid rgba(0,0,0,.08);
+
+    background: rgba(245,245,247,.98);
+}
+
+.chat-overlay-composer .chat-input {
+    flex: 1;
+
+    min-width: 0;
+
+    height: 38px;
+
+    padding: 0 12px;
+
+    border: 1px solid transparent;
+
+    border-radius: 10px;
+
+    background: #ebebf0;
+
+    font: inherit;
+}
+
+.chat-overlay-composer .chat-input:focus {
+    outline: none;
+
+    border-color: #ffd60a;
+
+    background: #fff;
+}
+
+
+/* =========================================================
+   手机横屏优化（游戏页通用 + 德扑 + UNO）
+======================================================== */
+
+@media (orientation: landscape) and (max-height: 520px) {
+
+    .header {
+        height: 48px;
+
+        padding: 0 14px;
+    }
+
+    .game-container {
+        width: calc(100% - 20px);
+
+        margin-top: 8px;
+    }
+
+    .poker-table,
+    .uno-table {
+        padding: 10px 12px;
+
+        border-radius: 12px;
+    }
+
+    .poker-topbar {
+        font-size: 12px;
+
+        margin-bottom: 6px;
+    }
+
+    .poker-status {
+        margin: -2px 0 6px;
+
+        padding: 4px 10px;
+
+        font-size: 11.5px;
+
+        min-height: 22px;
+
+        line-height: 14px;
+    }
+
+    .poker-board {
+        gap: 4px;
+
+        min-height: 42px;
+
+        margin-bottom: 6px;
+    }
+
+    .poker-board .pcard-slot,
+    .poker-board .pcard {
+        width: 30px;
+
+        height: 42px;
+    }
+
+    .poker-seats {
+        gap: 6px;
+    }
+
+    .seat {
+        width: 88px;
+
+        padding: 6px 4px 5px;
+    }
+
+    .seat-bet,
+    .seat-total {
+        font-size: 10px;
+    }
+
+    .poker-dock {
+        margin-top: 8px;
+
+        padding: 8px 12px;
+
+        border-radius: 12px;
+
+        bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .poker-dock .my-cards {
+        min-height: 54px;
+    }
+
+    .my-cards-label {
+        font-size: 11px;
+    }
+
+    .dock-chat-toggle {
+        padding: 4px 9px;
+
+        font-size: 11px;
+    }
+
+    .action-bar {
+        gap: 6px;
+
+        margin-top: 6px;
+    }
+
+    .action-btn {
+        min-height: 38px;
+
+        padding: 8px 12px;
+
+        font-size: 13.5px;
+    }
+
+    .raise-input {
+        min-height: 38px;
+    }
+
+    .countdown {
+        margin-top: 6px;
+    }
+
+    .poker-result {
+        max-height: 130px;
+
+        overflow-y: auto;
+    }
+
+    .poker-table .poker-review {
+        max-height: 148px;
+
+        overflow-y: auto;
+    }
+
+    .review-board {
+        gap: 4px;
+
+        padding: 6px 8px;
+    }
+
+    .review-board .pcard,
+    .review-board .pcard-slot {
+        width: 30px;
+
+        height: 42px;
+    }
+
+    .review-board .pcard .pc-rank {
+        font-size: 14px;
+    }
+
+    .review-board .pcard .pc-suit {
+        font-size: 11px;
+    }
+
+    .review-row {
+        gap: 6px;
+
+        padding: 6px 8px;
+
+        font-size: 11.5px;
+    }
+
+    .review-cards .pcard {
+        width: 24px;
+
+        height: 32px;
+    }
+
+    .review-cards .pcard .pc-rank {
+        font-size: 11px;
+    }
+
+    .review-cards .pcard .pc-suit {
+        font-size: 9px;
+    }
+
+    .uno-seats {
+        gap: 6px;
+
+        margin: 6px 0 8px;
+    }
+
+    .uno-seat {
+        min-width: 76px;
+
+        padding: 5px 8px 4px;
+    }
+
+    .us-name {
+        font-size: 11.5px;
+
+        max-width: 96px;
+    }
+
+    .us-info {
+        font-size: 10.5px;
+
+        gap: 6px;
+    }
+
+    .uno-center {
+        gap: 20px;
+
+        padding: 4px 0 20px;
+    }
+
+    .ucard.big {
+        width: 50px;
+
+        height: 70px;
+    }
+
+    .ucard.big .uc-mid {
+        width: 34px;
+
+        height: 34px;
+
+        font-size: 21px;
+    }
+
+    .uno-hand {
+        min-height: 60px;
+
+        padding-top: 8px;
+    }
+
+    .uno-hand .ucard {
+        width: 37px;
+
+        height: 52px;
+
+        margin-left: -13px;
+    }
+
+    .uno-hand .uc-mid {
+        width: 23px;
+
+        height: 23px;
+
+        font-size: 14px;
+    }
+
+    .uno-hand .uc-corner {
+        font-size: 8.5px;
+    }
+
+    .uno-color-strip {
+        font-size: 11px;
+
+        padding: 4px 10px;
+    }
+
+    .uno-color-picker {
+        padding: 6px 10px;
+
+        gap: 8px;
+    }
+
+    .uno-color-dot {
+        width: 26px;
+
+        height: 26px;
+    }
+
+    .chat-open-row .dock-chat-toggle {
+        padding: 6px 12px;
+    }
+}
+
+
+/* =========================================================
+   竖屏小屏 UNO 微调
+======================================================== */
+
+@media (max-width: 650px) {
+
+    .uno-seat {
+        min-width: 84px;
+
+        padding: 6px 8px 5px;
+    }
+
+    .uno-hand .ucard {
+        width: 40px;
+
+        height: 56px;
+
+        margin-left: -14px;
+    }
+
+    .ucard.big {
+        width: 56px;
+
+        height: 78px;
+    }
+
+    .ucard.big .uc-mid {
+        width: 38px;
+
+        height: 38px;
+
+        font-size: 23px;
+    }
+
+    .uno-center {
+        gap: 14px;
+    }
+}

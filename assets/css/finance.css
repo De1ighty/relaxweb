@@ -1,0 +1,173 @@
+/* =========================================================
+   财务管理（金币明细与转账弹窗）
+   原 styles.css 第 1478-1647 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   财务管理
+========================================================= */
+
+.finance-balance {
+    display: flex;
+
+    align-items: baseline;
+
+    justify-content: space-between;
+
+    padding: 14px 16px;
+
+    border-radius: 13px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #fff7e6,
+            #ffedf5
+        );
+
+    margin-bottom: 14px;
+}
+
+.finance-balance-label {
+    color: #86868b;
+
+    font-size: 13px;
+}
+
+.finance-balance-value {
+    font-size: 24px;
+
+    font-weight: 750;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.finance-tabs {
+    display: flex;
+
+    gap: 4px;
+
+    padding: 4px;
+
+    border-radius: 11px;
+
+    background: #f0f0f3;
+
+    margin-bottom: 10px;
+}
+
+.finance-tab {
+    flex: 1;
+
+    border: 0;
+
+    padding: 8px 0;
+
+    border-radius: 8px;
+
+    background: transparent;
+
+    color: #6e6e73;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    cursor: pointer;
+}
+
+.finance-tab.active {
+    background: white;
+
+    color: #1d1d1f;
+
+    font-weight: 600;
+
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.finance-list {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 8px;
+
+    max-height: 260px;
+
+    overflow-y: auto;
+
+    padding-right: 2px;
+}
+
+.finance-row {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    padding: 10px 12px;
+
+    border-radius: 10px;
+
+    background: #f5f5f7;
+}
+
+.finance-row-kind {
+    font-size: 13px;
+
+    font-weight: 600;
+}
+
+.finance-row-detail {
+    margin-top: 2px;
+
+    color: #86868b;
+
+    font-size: 12px;
+
+    word-break: break-all;
+}
+
+.finance-row-amount {
+    font-size: 14px;
+
+    font-weight: 700;
+
+    font-variant-numeric: tabular-nums;
+
+    white-space: nowrap;
+}
+
+.finance-row-amount.plus {
+    color: #1a9e45;
+}
+
+.finance-row-amount.minus {
+    color: #ff2d55;
+}
+
+.finance-row-balance {
+    margin-top: 2px;
+
+    color: #86868b;
+
+    font-size: 11px;
+
+    text-align: right;
+}
+
+.transfer-feedback {
+    min-height: 18px;
+
+    margin-top: 10px;
+
+    text-align: center;
+
+    color: #1a9e45;
+
+    font-size: 13px;
+}

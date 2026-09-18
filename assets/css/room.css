@@ -1,0 +1,842 @@
+/* =========================================================
+   游戏厅房间：多游戏大厅/房间列表/房间顶栏、房间聊天与座位气泡、转账目标选择
+   原 styles.css 第 3558-4396 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   游戏厅：多游戏大厅 / 房间列表 / 房间顶栏
+========================================================= */
+
+
+
+.game-header.in-room .left-header,
+.game-header.in-room .user-area {
+    visibility: hidden;
+}
+
+.hall-grid {
+    display: grid;
+
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+
+    gap: 12px;
+}
+
+.hall-game-card {
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 10px;
+
+    padding: 16px;
+
+    border: 1px solid rgba(0,0,0,.06);
+
+    border-radius: 16px;
+
+    background: white;
+
+    font: inherit;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    box-shadow: 0 8px 24px rgba(0,0,0,.05);
+
+    transition: transform .15s, box-shadow .15s;
+}
+
+.hall-game-card:hover {
+    transform: translateY(-2px);
+
+    box-shadow: 0 12px 28px rgba(0,0,0,.1);
+}
+
+.hall-game-card .hall-game-icon {
+    width: 44px;
+
+    height: 44px;
+
+    min-width: 44px;
+
+    font-size: 20px;
+
+    border-radius: 11px;
+}
+
+.hall-game-card .hall-game-desc {
+    min-height: 32px;
+}
+
+.hall-game-go {
+    margin-top: auto;
+
+    color: #1fa971;
+
+    font-size: 13px;
+
+    font-weight: 650;
+}
+
+.rooms-toolbar {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 12px;
+}
+
+.rooms-toolbar .hall-page-title {
+    margin: 0;
+
+    min-width: 0;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.hall-back {
+    flex: none;
+
+    white-space: nowrap;
+}
+
+.new-room-card {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 100%;
+
+    min-height: 58px;
+
+    margin-top: 8px;
+
+    border: 2px dashed #d2d2d7;
+
+    border-radius: 11px;
+
+    background: transparent;
+
+    color: #86868b;
+
+    font: inherit;
+
+    font-size: 26px;
+
+    font-weight: 300;
+
+    cursor: pointer;
+
+    transition: border-color .15s, color .15s;
+}
+
+.new-room-card:hover {
+    border-color: #1fa971;
+
+    color: #1fa971;
+}
+
+.create-form-column {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 10px;
+
+    margin-top: 12px;
+}
+
+.create-form-column .login-input {
+    margin-top: 0;
+
+    width: 100%;
+}
+
+.create-form-column .login-submit {
+    margin-top: 4px;
+}
+
+.room-topbar {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 5;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding: 0 12px;
+
+    background: rgba(255,255,255,.92);
+
+    backdrop-filter: blur(24px);
+
+    -webkit-backdrop-filter: blur(24px);
+}
+
+.room-topbar[hidden] {
+    display: none;
+}
+
+.room-leave {
+    flex: none;
+
+    border: 0;
+
+    border-radius: 10px;
+
+    padding: 8px 12px;
+
+    background: #f0f0f3;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+}
+
+.room-leave:hover {
+    background: #e8e8ed;
+}
+
+.room-topbar-name {
+    flex: 1;
+
+    min-width: 0;
+
+    color: #1d1d1f;
+
+    font-size: 15px;
+
+    font-weight: 750;
+
+    text-align: center;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.room-manage {
+    position: relative;
+
+    flex: none;
+}
+
+.room-manage-toggle {
+    border: 0;
+
+    border-radius: 10px;
+
+    padding: 8px 12px;
+
+    background: #1d1d1f;
+
+    color: white;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+}
+
+.room-manage-menu {
+    position: absolute;
+
+    top: calc(100% + 8px);
+
+    right: 0;
+
+    z-index: 60;
+
+    min-width: 136px;
+
+    padding: 6px;
+
+    border: 1px solid rgba(0,0,0,.08);
+
+    border-radius: 12px;
+
+    background: white;
+
+    box-shadow: 0 12px 34px rgba(0,0,0,.16);
+}
+
+.room-manage-menu[hidden] {
+    display: none;
+}
+
+.room-manage-item {
+    display: block;
+
+    width: 100%;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 10px 12px;
+
+    background: transparent;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 14px;
+
+    text-align: left;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+}
+
+.room-manage-item:hover {
+    background: #f0f0f3;
+}
+
+.room-manage-item.danger-fill {
+    background: #ff2d55;
+
+    color: white;
+
+    font-weight: 650;
+}
+
+.room-manage-item.danger-fill:hover {
+    background: #e6284c;
+}
+
+.paused-overlay {
+    margin-top: 10px;
+
+    padding: 14px;
+
+    border-radius: 12px;
+
+    background: rgba(255,255,255,.14);
+
+    color: rgba(255,255,255,.92);
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    text-align: center;
+}
+
+@media(max-width:650px) {
+
+    .hall-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rooms-toolbar {
+        gap: 8px;
+    }
+
+    .room-leave,
+    .room-manage-toggle {
+        padding: 8px 10px;
+
+        font-size: 12.5px;
+    }
+
+    .room-topbar-name {
+        font-size: 14px;
+    }
+
+}
+
+
+/* =========================================================
+   房间聊天 + 座位气泡
+========================================================= */
+
+.room-chat {
+    margin-top: 12px;
+
+    border-radius: 14px;
+
+    background: rgba(255,255,255,.94);
+
+    border: 1px solid rgba(255,255,255,.9);
+
+    box-shadow: 0 8px 26px rgba(0,0,0,.08);
+
+    overflow: hidden;
+}
+
+.room-chat-head {
+    display: block;
+
+    width: 100%;
+
+    border: 0;
+
+    padding: 10px 14px;
+
+    background: transparent;
+
+    color: #86868b;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.room-chat-head:hover {
+    background: #f7f7fa;
+}
+
+.room-chat-body {
+    display: none;
+}
+
+.room-chat.open .room-chat-body {
+    display: flex;
+
+    flex-direction: column;
+}
+
+.room-chat-list {
+    max-height: 190px;
+
+    min-height: 60px;
+
+    overflow-y: auto;
+
+    padding: 2px 12px 8px;
+}
+
+.rc-message {
+    margin: 8px 0;
+
+    font-size: 12.5px;
+}
+
+.rc-name {
+    margin-right: 6px;
+
+    font-weight: 700;
+}
+
+.rc-time {
+    margin-left: 4px;
+
+    color: #aaa;
+
+    font-size: 10px;
+}
+
+.rc-text {
+    margin-top: 1px;
+
+    color: #424245;
+
+    line-height: 1.4;
+
+    word-break: break-word;
+}
+
+.room-chat-composer {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 8px 10px;
+
+    border-top: 1px solid rgba(0,0,0,.06);
+
+    background: rgba(255,255,255,.94);
+}
+
+.room-chat-composer .chat-input {
+    flex: 1;
+
+    min-width: 0;
+
+    height: 36px;
+
+    padding: 0 12px;
+
+    border: 1px solid transparent;
+
+    border-radius: 9px;
+
+    background: #f2f2f7;
+
+    color: #29292e;
+}
+
+.room-chat-composer .chat-input:focus {
+    border-color: rgba(255,91,153,.48);
+
+    background: white;
+
+    outline: 0;
+}
+
+.room-chat-composer .send-button {
+    flex: none;
+
+    height: 36px;
+
+    padding: 0 14px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #ff5b99;
+
+    color: white;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+}
+
+.seat-bubble {
+    position: absolute;
+
+    bottom: calc(100% + 6px);
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    z-index: 6;
+
+    max-width: 150px;
+
+    padding: 5px 9px;
+
+    border-radius: 9px;
+
+    background: rgba(29,29,31,.92);
+
+    color: white;
+
+    font-size: 11px;
+
+    line-height: 1.35;
+
+    text-align: center;
+
+    word-break: break-all;
+
+    pointer-events: none;
+
+    animation: bubble-in .18s ease both;
+}
+
+.seat-bubble::after {
+    content: "";
+
+    position: absolute;
+
+    top: 100%;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    border: 5px solid transparent;
+
+    border-top-color: rgba(29,29,31,.92);
+}
+
+@keyframes bubble-in {
+    from {
+        opacity: 0;
+
+        transform: translate(-50%, 5px);
+    }
+
+    to {
+        opacity: 1;
+
+        transform: translate(-50%, 0);
+    }
+}
+
+
+/* =========================================================
+   转账目标选择（下拉）
+========================================================= */
+
+.user-select {
+    position: relative;
+}
+
+.user-select-toggle {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    width: 100%;
+
+    min-height: 38px;
+
+    padding: 7px 12px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #f2f2f7;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.user-select-toggle:hover {
+    background: #ececf1;
+}
+
+.user-select-placeholder {
+    color: #92929c;
+}
+
+.user-select-chosen {
+    font-weight: 650;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-menu {
+    position: absolute;
+
+    top: calc(100% + 6px);
+
+    left: 0;
+
+    right: 0;
+
+    z-index: 70;
+
+    max-height: 236px;
+
+    overflow-y: auto;
+
+    padding: 6px;
+
+    border: 1px solid rgba(0,0,0,.08);
+
+    border-radius: 12px;
+
+    background: white;
+
+    box-shadow: 0 12px 34px rgba(0,0,0,.16);
+}
+
+.user-select-menu[hidden] {
+    display: none;
+}
+
+.user-select-item {
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    width: 100%;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 7px 9px;
+
+    background: transparent;
+
+    font: inherit;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.user-select-item:hover {
+    background: #f0f0f3;
+}
+
+.user-select-item:disabled {
+    opacity: .4;
+
+    cursor: not-allowed;
+}
+
+.user-select-item:disabled:hover {
+    background: transparent;
+}
+
+.user-select-avatar {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 28px;
+
+    height: 28px;
+
+    min-width: 28px;
+
+    border-radius: 50%;
+
+    overflow: hidden;
+
+    background:
+        linear-gradient(
+            135deg,
+            #ffb6d2,
+            #ff6ba5
+        );
+
+    color: white;
+
+    font-size: 12px;
+
+    font-weight: 700;
+}
+
+.user-select-avatar.small {
+    width: 22px;
+
+    height: 22px;
+
+    min-width: 22px;
+
+    font-size: 10px;
+}
+
+.user-select-avatar img {
+    width: 100%;
+
+    height: 100%;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+}
+
+.user-select-meta {
+    min-width: 0;
+}
+
+.user-select-name {
+    display: block;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-id {
+    display: block;
+
+    margin-top: 1px;
+
+    color: #86868b;
+
+    font-size: 11px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-empty {
+    padding: 10px;
+
+    color: #86868b;
+
+    font-size: 13px;
+
+    text-align: center;
+}
+
+
+.finance-row-pending {
+    margin-left: 6px;
+
+    padding: 1px 6px;
+
+    border-radius: 6px;
+
+    background: #fff3e0;
+
+    color: #b45309;
+
+    font-size: 10px;
+
+    font-weight: 650;
+}

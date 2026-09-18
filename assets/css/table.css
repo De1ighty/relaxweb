@@ -1,0 +1,214 @@
+/* =========================================================
+   牌桌状态栏 / dock 聊天 / 聊天浮层 / 结算投票
+   原 styles.css 第 4397-4607 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   牌桌状态栏 / dock 聊天 / 聊天浮层 / 结算投票
+========================================================= */
+
+.poker-status {
+    margin: -4px 0 8px;
+
+    padding: 7px 12px;
+
+    border-radius: 9px;
+
+    background: rgba(255,255,255,.12);
+
+    color: rgba(255,255,255,.94);
+
+    font-size: 12.5px;
+
+    font-weight: 650;
+
+    text-align: center;
+
+    min-height: 30px;
+
+    line-height: 16px;
+}
+
+.poker-dock .dock-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+}
+
+.poker-dock .dock-head .my-cards-label {
+    margin-bottom: 0;
+}
+
+.dock-chat-toggle {
+    border: 0;
+
+    border-radius: 8px;
+
+    padding: 5px 10px;
+
+    background: #f0f0f3;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 12px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+}
+
+.dock-chat-toggle:hover {
+    background: #e8e8ed;
+}
+
+.dock-chat-composer {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    margin-top: 8px;
+}
+
+.dock-chat-composer .chat-input {
+    flex: 1;
+
+    min-width: 0;
+
+    height: 34px;
+
+    padding: 0 12px;
+
+    border: 1px solid transparent;
+
+    border-radius: 9px;
+
+    background: #f2f2f7;
+
+    color: #29292e;
+}
+
+.dock-chat-composer .chat-input:focus {
+    border-color: rgba(255,91,153,.48);
+
+    background: white;
+
+    outline: 0;
+}
+
+.dock-chat-composer .send-button {
+    flex: none;
+
+    height: 34px;
+
+    padding: 0 13px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #ff5b99;
+
+    color: white;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+}
+
+.chat-overlay {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 300;
+
+    display: flex;
+
+    flex-direction: column;
+
+    background: rgba(245,245,247,.98);
+}
+
+.chat-overlay-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    padding: 14px 16px;
+
+    border-bottom: 1px solid rgba(0,0,0,.08);
+
+    font-weight: 750;
+}
+
+.chat-overlay-close {
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 6px 12px;
+
+    background: #f0f0f3;
+
+    font: inherit;
+
+    cursor: pointer;
+}
+
+.chat-overlay-list {
+    flex: 1;
+
+    max-height: none;
+
+    padding: 6px 16px 16px;
+}
+
+.settle-progress {
+    color: #1fa971;
+
+    font-size: 13px;
+
+    font-weight: 650;
+}
+
+.settle-blind-row {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-top: 12px;
+}
+
+.settle-blind-label {
+    color: #86868b;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+}
+
+.settle-blind-row .login-input {
+    margin-top: 0;
+
+    width: 140px;
+}
+
+.game-btn-row .login-submit.danger {
+    background: #ff2d55;
+}

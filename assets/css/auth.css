@@ -1,0 +1,390 @@
+/* =========================================================
+   登录注册、全屏、手机、桌面端铺满视口、顶栏竞猜入口、聊天室系统消息
+   原 styles.css 第 1091-1477 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   登录 / 注册
+========================================================= */
+
+.modal {
+    display: none;
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 999;
+
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(0,0,0,.25);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.login-card {
+    width: 360px;
+
+    max-width: calc(100% - 30px);
+
+    padding: 28px;
+
+    border-radius: 23px;
+
+    background: rgba(255,255,255,.96);
+
+    box-shadow:
+        0 30px 80px rgba(0,0,0,.2);
+}
+
+.login-card h2 {
+    margin-top: 0;
+
+    margin-bottom: 18px;
+}
+
+.login-input {
+    width: 100%;
+
+    margin-top: 10px;
+
+    padding: 12px;
+
+    border-radius: 12px;
+
+    border: 1px solid #d2d2d7;
+
+    outline: 0;
+
+    background: white;
+}
+
+.login-input:focus {
+    border-color: #0071e3;
+}
+
+.login-submit {
+    width: 100%;
+
+    margin-top: 16px;
+
+    border: 0;
+
+    border-radius: 12px;
+
+    padding: 12px;
+
+    background: #0071e3;
+
+    color: white;
+
+    cursor: pointer;
+}
+
+.auth-switch {
+    text-align: center;
+
+    margin-top: 16px;
+
+    color: #86868b;
+
+    font-size: 13px;
+}
+
+.auth-link {
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    font: inherit;
+
+    color: #0071e3;
+
+    cursor: pointer;
+}
+
+
+/* =========================================================
+   全屏
+========================================================= */
+
+.player:fullscreen {
+    width: 100vw;
+    height: 100vh;
+
+    background: black;
+}
+
+.player:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+
+    background: black;
+}
+
+.player:fullscreen .player-stage,
+.player:-webkit-full-screen .player-stage {
+    flex: 1;
+    min-height: 0;
+    aspect-ratio: auto;
+}
+
+.player-tools .danmaku-composer.in-player-controls {
+    flex: 1;
+    min-width: 120px;
+    max-width: 620px;
+    min-height: 0;
+
+    margin: 0 12px;
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    pointer-events: auto;
+}
+
+.player-tools .danmaku-composer-label {
+    color: rgba(255,255,255,.72);
+}
+
+.player-tools .danmaku-composer .chat-input {
+    height: 34px;
+
+    background: rgba(30,30,34,.78);
+    color: white;
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.player-tools .danmaku-composer .chat-input:focus {
+    background: rgba(42,42,47,.94);
+}
+
+
+/* =========================================================
+   手机
+========================================================= */
+
+@media(max-width:1000px) {
+
+    .live-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-card {
+        width: 100%;
+        height: 540px;
+    }
+
+}
+
+@media(max-width:650px) {
+
+    .header {
+        padding: 0 15px;
+    }
+
+    .container {
+        width: 100%;
+
+        margin-top: 0;
+    }
+
+    .video-card,
+    .chat-card {
+        border-radius: 0;
+    }
+
+    .player-tools {
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+    }
+
+    .player-tool-group {
+        gap: 5px;
+    }
+
+    .player-tool {
+        width: 34px;
+        height: 30px;
+
+        font-size: 12px;
+    }
+
+    .volume-slider {
+        width: 58px;
+    }
+
+    .danmaku-composer {
+        gap: 6px;
+        padding: 7px 8px;
+    }
+
+    .danmaku-composer-label {
+        display: none;
+    }
+
+    .send-button {
+        padding: 0 13px;
+    }
+
+    .player-tools .danmaku-composer.in-player-controls {
+        min-width: 70px;
+        margin: 0 6px;
+    }
+
+    .player:fullscreen .volume-slider,
+    .player:-webkit-full-screen .volume-slider {
+        display: none;
+    }
+
+    .live-overlay {
+        top: 10px;
+        left: 10px;
+    }
+
+    .danmaku-item {
+        font-size: 15px;
+
+        line-height: 22px;
+    }
+
+    .character-text {
+        width: 62%;
+    }
+
+}
+
+
+/* =========================================================
+   桌面端铺满视口
+========================================================= */
+
+@media(min-width:1001px) {
+
+    .container {
+        width: calc(100% - 32px);
+
+        max-width: none;
+
+        margin: 16px auto;
+    }
+
+    .live-layout {
+        height: calc(100vh - 100px);
+    }
+
+    .video-column {
+        min-height: 0;
+
+        display: flex;
+    }
+
+    .video-card {
+        flex: 1;
+
+        min-width: 0;
+        min-height: 0;
+
+        display: flex;
+
+        flex-direction: column;
+    }
+
+    .player {
+        flex: 1;
+
+        min-height: 0;
+    }
+
+    .player-stage {
+        flex: 1;
+
+        min-height: 0;
+
+        aspect-ratio: auto;
+    }
+
+    .chat-card {
+        align-self: stretch;
+    }
+}
+
+.user-dropdown-version {
+    padding: 6px 10px 4px;
+
+    color: #c0c0c7;
+
+    font-size: 11px;
+
+    text-align: center;
+}
+
+
+/* =========================================================
+   顶栏竞猜入口
+========================================================= */
+
+.bet-stat .bet-stat-title {
+    max-width: 170px;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.bet-stat.active {
+    background: #fff0f6;
+}
+
+.bet-stat.active:hover {
+    background: #ffe4ee;
+}
+
+.bet-stat.active .bet-stat-title {
+    color: #ff2d78;
+
+    font-weight: 650;
+}
+
+
+/* =========================================================
+   聊天室系统消息
+========================================================= */
+
+.system-message .system-avatar {
+    background:
+        linear-gradient(
+            135deg,
+            #ffe29a,
+            #ffb84d
+        );
+}
+
+.system-name-chat {
+    color: #b45309;
+}
+
+.system-text {
+    color: #a16207;
+
+    font-weight: 550;
+}
+
+.danmaku-item.system {
+    color: #ffd60a;
+
+    background:
+        rgba(255, 214, 10, .16);
+}

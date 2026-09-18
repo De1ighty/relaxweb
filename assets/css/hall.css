@@ -1,0 +1,243 @@
+/* =========================================================
+   游戏厅：游戏选择卡与房间列表
+   原 styles.css 第 1974-2213 行；加载顺序见 index.html / game.html 的 <link> 列表
+========================================================= */
+
+/* =========================================================
+   游戏厅
+========================================================= */
+
+.game-card {
+    width: 720px;
+}
+
+.hall-intro {
+    display: flex;
+
+    align-items: center;
+
+    gap: 14px;
+
+    padding: 16px;
+
+    border-radius: 14px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #eef4ff,
+            #f5f0ff
+        );
+
+    margin-bottom: 14px;
+}
+
+.hall-game-icon {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 52px;
+
+    height: 52px;
+
+    min-width: 52px;
+
+    border-radius: 13px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #1fa971,
+            #12875c
+        );
+
+    color: white;
+
+    font-size: 24px;
+}
+
+.hall-game-name {
+    font-size: 15px;
+
+    font-weight: 700;
+}
+
+.hall-game-desc {
+    margin-top: 3px;
+
+    color: #86868b;
+
+    font-size: 12px;
+}
+
+.hall-room {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    padding: 11px 13px;
+
+    border-radius: 11px;
+
+    background: #f5f5f7;
+
+    margin-top: 8px;
+}
+
+.hall-room-name {
+    font-size: 13px;
+
+    font-weight: 650;
+
+    word-break: break-all;
+}
+
+.hall-room-meta {
+    margin-top: 2px;
+
+    color: #86868b;
+
+    font-size: 12px;
+}
+
+.hall-room-meta .live-dot {
+    color: #1fa971;
+
+    font-weight: 700;
+}
+
+.hall-join {
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 7px 14px;
+
+    background: #1fa971;
+
+    color: white;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+
+    cursor: pointer;
+}
+
+.hall-join:hover {
+    background: #18945f;
+}
+
+.hall-create-form {
+    display: flex;
+
+    gap: 8px;
+
+    margin-top: 12px;
+}
+
+.hall-create-form .login-input {
+    margin-top: 0;
+}
+
+.hall-create-form select.login-input {
+    width: 92px;
+
+    min-width: 92px;
+}
+
+.hall-section-title {
+    margin: 16px 0 4px;
+
+    color: #86868b;
+
+    font-size: 12px;
+
+    font-weight: 650;
+}
+
+.game-hint {
+    margin-top: 10px;
+
+    color: #86868b;
+
+    font-size: 12px;
+
+    line-height: 1.6;
+}
+
+.game-players {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 8px;
+
+    margin-top: 10px;
+
+    max-height: 220px;
+
+    overflow-y: auto;
+}
+
+.game-player-row {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding: 9px 12px;
+
+    border-radius: 10px;
+
+    background: #f5f5f7;
+
+    font-size: 13px;
+}
+
+.game-player-row .badge-owner {
+    padding: 2px 7px;
+
+    border-radius: 6px;
+
+    background: #fff0f6;
+
+    color: #ff2d78;
+
+    font-size: 11px;
+
+    font-weight: 650;
+}
+
+.game-player-row .badge-stack {
+    margin-left: auto;
+
+    color: #b45309;
+
+    font-weight: 700;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.game-btn-row {
+    display: flex;
+
+    gap: 8px;
+
+    margin-top: 14px;
+}
+
+.game-btn-row .login-submit,
+.game-btn-row .bet-secondary {
+    margin-top: 0;
+}
