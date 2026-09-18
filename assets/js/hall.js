@@ -19,9 +19,16 @@ const GAME_TYPES = [
     icon: "🃏",
     desc: "同色同数出牌，功能牌逆转战局。剩牌按张赔给赢家，先出完者通吃本局。",
   },
+  {
+    id: "guandan",
+    name: "掼蛋 · 组队升级",
+    icon: "🎴",
+    maxPlayers: 4,
+    desc: "双副牌四人组队，级牌为王前第二大，逢人配、炸弹翻倍。头游定胜负，从 2 打到 A。",
+  },
 ];
 
-const createDraft = { name: "", buyin: "100", blind: "5" };
+const createDraft = { name: "", buyin: "100", blind: "5", rules: { wild: 1, bomb: 8, ace: 1 } };
 
 /* 未登录介绍语由 GAME_TYPES 生成：登录后的大厅本来就是遍历它渲染的，
    只有这句是写死的，加了小游戏就会漏掉。游戏名的「家族 · 变体」约定见上面。 */
@@ -102,7 +109,8 @@ export function fillBlindOptions(select, gameId, selected) {
   for (const b of [1, 2, 5, 10]) {
     const opt = document.createElement("option");
     opt.value = String(b);
-    opt.textContent = gameId === "uno" ? `每张赔付 ${b}` : `盲注 ${b}/${b * 2}`;
+    opt.textContent = gameId === "holdem" ? `盲注 ${b}/${b * 2}`
+      : gameId === "uno" ? `每张赔付 ${b}` : `底注 ${b}`;
     if (String(b) === String(selected)) opt.selected = true;
     select.append(opt);
   }
@@ -190,7 +198,7 @@ function fillRoomList(box) {
     join.className = "hall-join";
     join.type = "button";
     join.textContent = "进入";
-    join.disabled = room.players.length >= 9;
+    join.disabled = room.players.length >= (gameMetaById(room.game)?.maxPlayers || 9);
     join.addEventListener("click", () => send({ type: "join_room", room_id: room.id }));
     row.append(info, join);
     box.append(row);
@@ -244,6 +252,52 @@ function renderCreate() {
   blind.className = "login-input";
   fillBlindOptions(blind, game.id, createDraft.blind);
   blind.addEventListener("change", () => { createDraft.blind = blind.value; });
+  form.append(name, buyin, blind);
+
+  // 掼蛋自定义规则：逢人配 / 炸弹翻倍封顶 / 打A条件
+  if (game.id === "guandan") {
+    const rulesLabel = document.createElement("div");
+    rulesLabel.className = "create-rules-label";
+    rulesLabel.textContent = "常用规则";
+    const wild = document.createElement("select");
+    wild.className = "login-input";
+    wild.setAttribute("aria-label", "逢人配");
+    for (const [value, text] of [[1, "逢人配：开（红桃级牌可代任意牌）"], [0, "逢人配：关"]]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.wild) === value) opt.selected = true;
+      wild.append(opt);
+    }
+    wild.addEventListener("change", () => { createDraft.rules.wild = Number(wild.value); });
+    const bomb = document.createElement("select");
+    bomb.className = "login-input";
+    bomb.setAttribute("aria-label", "炸弹翻倍");
+    for (const [value, text] of [
+      [0, "炸弹：不翻倍"], [4, "炸弹翻倍 · ×4 封顶"], [8, "炸弹翻倍 · ×8 封顶"],
+      [16, "炸弹翻倍 · ×16 封顶"], [999, "炸弹翻倍 · 不封顶"],
+    ]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.bomb) === value) opt.selected = true;
+      bomb.append(opt);
+    }
+    bomb.addEventListener("change", () => { createDraft.rules.bomb = Number(bomb.value); });
+    const ace = document.createElement("select");
+    ace.className = "login-input";
+    ace.setAttribute("aria-label", "过A条件");
+    for (const [value, text] of [[1, "过 A：严格（需双上）"], [0, "过 A：宽松（搭档非末游即可）"]]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.ace) === value) opt.selected = true;
+      ace.append(opt);
+    }
+    ace.addEventListener("change", () => { createDraft.rules.ace = Number(ace.value); });
+    form.append(rulesLabel, wild, bomb, ace);
+  }
+
   const create = document.createElement("button");
   create.className = "login-submit";
   create.type = "button";
@@ -258,22 +312,32 @@ function renderCreate() {
       void alertDialog("金币不足");
       return;
     }
-    send({
+    const payload = {
       type: "create_room",
       game: state.currentGameId,
       name: name.value.trim(),
       buy_in: value,
       blind: Number(blind.value),
-    });
+    };
+    if (state.currentGameId === "guandan") {
+      payload.rules = {
+        wild: Boolean(Number(createDraft.rules.wild)),
+        bomb_cap: Number(createDraft.rules.bomb),
+        ace_strict: Boolean(Number(createDraft.rules.ace)),
+      };
+    }
+    send(payload);
   });
-  form.append(name, buyin, blind, create);
+  form.append(create);
   page.append(form);
 
   const note = document.createElement("div");
   note.className = "game-hint";
-  note.textContent = game.id === "uno"
-    ? "买入至少为赔付单位的 20 倍。一手结束赢家按各家剩牌数（每张 × 底注）收注，离桌自动按筹码结算。"
-    : "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
+  note.textContent = game.id === "guandan"
+    ? "掼蛋需 4 名玩家，买入至少为底注的 20 倍。座位间隔的两人为一队，各自从 2 打到 A；头游方获胜升级（双上×3 / 三游×2 / 末游×1），输家各付 底注×炸弹倍率（双上再×2），赢家平分。为便于线上对局，未实现进贡还贡。"
+    : game.id === "uno"
+      ? "买入至少为赔付单位的 20 倍。一手结束赢家按各家剩牌数（每张 × 底注）收注，离桌自动按筹码结算。"
+      : "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
   page.append(note);
 }
 

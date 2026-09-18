@@ -1462,6 +1462,10 @@ async def handle_create_room(websocket, state, data):
             {"type": "game_error", "message": f"买入至少需要 {blind * 20:.0f} 金币（20 倍小盲注）"},
         )
         return
+    # 玩法自定义规则原样交给房间类清洗（各引擎自己 sanitize）
+    rules = data.get("rules")
+    if not isinstance(rules, dict):
+        rules = {}
     room_seq += 1
     room_id = int(time.time() * 1000) % 1_000_000_000 + room_seq
     room_name = name or f"{display_name(username)}的房间"
@@ -1486,6 +1490,7 @@ async def handle_create_room(websocket, state, data):
         owner=username,
         buy_in=buy_in,
         blind=blind,
+        rules=rules,
     )
     attach_host(room)
     room.add_member(username, buy_in)
@@ -1512,7 +1517,7 @@ async def handle_join_room(websocket, state, data):
     if not room:
         await send_json(websocket, {"type": "game_error", "message": "房间不存在或已解散"})
         return
-    if len(room.seating) >= GAME_MAX_PLAYERS:
+    if len(room.seating) >= getattr(room, "max_seats", GAME_MAX_PLAYERS):
         await send_json(websocket, {"type": "game_error", "message": "房间已满"})
         return
     buy_in = room.buy_in

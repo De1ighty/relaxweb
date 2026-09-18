@@ -65,12 +65,15 @@ class BaseRoom:
         record_ratings(id, starts, endings) 同步提交积分及已结算筹码，返回逐人明细
     """
 
-    def __init__(self, room_id, name, owner, buy_in, blind):
+    max_seats = 9
+
+    def __init__(self, room_id, name, owner, buy_in, blind, rules=None):
         self.id = room_id
         self.name = name
         self.owner = owner
         self.buy_in = buy_in
         self.blind = blind
+        self.rules = rules if isinstance(rules, dict) else {}
         self.status = "waiting"          # waiting | playing
         self.paused = False
         self.seating = []                # 座位顺序即加入顺序
