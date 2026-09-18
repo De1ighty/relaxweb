@@ -26,9 +26,19 @@ const GAME_TYPES = [
     maxPlayers: 4,
     desc: "双副牌四人组队，级牌为王前第二大，逢人配、炸弹翻倍。头游定胜负，从 2 打到 A。",
   },
+  {
+    id: "mahjong",
+    name: "国标麻将 · 八番起和",
+    icon: "🀄",
+    maxPlayers: 4,
+    desc: "144 张牌吃碰杠胡，圈风门风随庄轮转，76 个常用番种、花牌计分。自摸三家各付，点炮包三家。",
+  },
 ];
 
-const createDraft = { name: "", buyin: "100", blind: "5", rules: { wild: 1, bomb: 8, ace: 1 } };
+const createDraft = {
+  name: "", buyin: "100", blind: "5",
+  rules: { wild: 1, bomb: 8, ace: 1, min_fan: 8, flowers: 1, chow: 1, dianpao: 1 },
+};
 
 /* 未登录介绍语由 GAME_TYPES 生成：登录后的大厅本来就是遍历它渲染的，
    只有这句是写死的，加了小游戏就会漏掉。游戏名的「家族 · 变体」约定见上面。 */
@@ -298,6 +308,62 @@ function renderCreate() {
     form.append(rulesLabel, wild, bomb, ace);
   }
 
+  // 国标麻将自定义规则：起和番数 / 花牌 / 吃牌 / 点炮计法
+  if (game.id === "mahjong") {
+    const rulesLabel = document.createElement("div");
+    rulesLabel.className = "create-rules-label";
+    rulesLabel.textContent = "常用规则";
+    const minFan = document.createElement("select");
+    minFan.className = "login-input";
+    minFan.setAttribute("aria-label", "起和番数");
+    for (const [value, text] of [
+      [8, "八番起和（国标标准）"], [4, "四番起和（低门槛）"], [0, "不起和（任意牌型可胡）"],
+    ]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.min_fan) === value) opt.selected = true;
+      minFan.append(opt);
+    }
+    minFan.addEventListener("change", () => { createDraft.rules.min_fan = Number(minFan.value); });
+    const flowers = document.createElement("select");
+    flowers.className = "login-input";
+    flowers.setAttribute("aria-label", "花牌");
+    for (const [value, text] of [[1, "花牌：开（144 张，每张 1 分）"], [0, "花牌：关（136 张）"]]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.flowers) === value) opt.selected = true;
+      flowers.append(opt);
+    }
+    flowers.addEventListener("change", () => { createDraft.rules.flowers = Number(flowers.value); });
+    const chow = document.createElement("select");
+    chow.className = "login-input";
+    chow.setAttribute("aria-label", "吃牌");
+    for (const [value, text] of [[1, "吃牌：开（仅上家）"], [0, "吃牌：关（只能碰杠）"]]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.chow) === value) opt.selected = true;
+      chow.append(opt);
+    }
+    chow.addEventListener("change", () => { createDraft.rules.chow = Number(chow.value); });
+    const dianpao = document.createElement("select");
+    dianpao.className = "login-input";
+    dianpao.setAttribute("aria-label", "点炮计法");
+    for (const [value, text] of [
+      [1, "点炮：包三家（官方，点炮者付 3 份）"], [0, "点炮：只付一份（民间常见）"],
+    ]) {
+      const opt = document.createElement("option");
+      opt.value = String(value);
+      opt.textContent = text;
+      if (Number(createDraft.rules.dianpao) === value) opt.selected = true;
+      dianpao.append(opt);
+    }
+    dianpao.addEventListener("change", () => { createDraft.rules.dianpao = Number(dianpao.value); });
+    form.append(rulesLabel, minFan, flowers, chow, dianpao);
+  }
+
   const create = document.createElement("button");
   create.className = "login-submit";
   create.type = "button";
@@ -326,6 +392,14 @@ function renderCreate() {
         ace_strict: Boolean(Number(createDraft.rules.ace)),
       };
     }
+    if (state.currentGameId === "mahjong") {
+      payload.rules = {
+        min_fan: Number(createDraft.rules.min_fan),
+        flowers: Boolean(Number(createDraft.rules.flowers)),
+        chow: Boolean(Number(createDraft.rules.chow)),
+        dianpao_full: Boolean(Number(createDraft.rules.dianpao)),
+      };
+    }
     send(payload);
   });
   form.append(create);
@@ -333,11 +407,13 @@ function renderCreate() {
 
   const note = document.createElement("div");
   note.className = "game-hint";
-  note.textContent = game.id === "guandan"
-    ? "掼蛋需 4 名玩家，买入至少为底注的 20 倍。座位间隔的两人为一队，各自从 2 打到 A；头游方获胜升级（双上×3 / 三游×2 / 末游×1），输家各付 底注×炸弹倍率（双上再×2），赢家平分。为便于线上对局，未实现进贡还贡。"
-    : game.id === "uno"
-      ? "买入至少为赔付单位的 20 倍。一手结束赢家按各家剩牌数（每张 × 底注）收注，离桌自动按筹码结算。"
-      : "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
+  note.textContent = game.id === "mahjong"
+    ? "国标麻将需 4 名玩家，买入至少为底注的 20 倍。总番 = 底注 × 番数：自摸三家各付一份，点炮按所选计法赔付；花牌每张 1 分计入总番，荒庄流局不计分且庄家连庄。庄家胡牌或荒庄连庄，否则下家坐庄，四人各庄一轮为一圈。"
+    : game.id === "guandan"
+      ? "掼蛋需 4 名玩家，买入至少为底注的 20 倍。座位间隔的两人为一队，各自从 2 打到 A；头游方获胜升级（双上×3 / 三游×2 / 末游×1），输家各付 底注×炸弹倍率（双上再×2），赢家平分。为便于线上对局，未实现进贡还贡。"
+      : game.id === "uno"
+        ? "买入至少为赔付单位的 20 倍。一手结束赢家按各家剩牌数（每张 × 底注）收注，离桌自动按筹码结算。"
+        : "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
   page.append(note);
 }
 

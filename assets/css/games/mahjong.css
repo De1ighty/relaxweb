@@ -1,0 +1,856 @@
+/* 国标麻将牌桌样式：牌面组件、四方座位、牌河、手牌与操作区。
+   手机竖屏优先，横屏与桌面端（≥1024px）分别放大适配。 */
+
+.mj-page {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 12px;
+}
+
+/* ---- 方形牌桌 ---- */
+
+.mj-table {
+    position: relative;
+
+    width: 100%;
+
+    max-width: 520px;
+
+    aspect-ratio: 1 / 0.98;
+
+    margin: 0 auto;
+
+    padding: 10px 10px 12px;
+
+    border-radius: 20px;
+
+    background:
+        radial-gradient(
+            ellipse at 50% 0%,
+            #1f5a40,
+            #123726 74%
+        );
+
+    box-shadow:
+        inset 0 0 0 5px rgba(255,255,255,.14),
+        0 10px 30px rgba(8,44,28,.32);
+}
+
+.mj-table .poker-topbar {
+    font-size: 11px;
+}
+
+.mj-table .poker-status {
+    margin: 4px 0 0;
+
+    padding: 5px 10px;
+
+    background: rgba(255,255,255,.12);
+
+    font-size: 12px;
+
+    min-height: 26px;
+}
+
+/* ---- 座位 ---- */
+
+.mj-seats {
+    position: absolute;
+
+    inset: 74px 4px 8px;
+
+    pointer-events: none;
+}
+
+.mj-seat {
+    position: absolute;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 2px;
+
+    width: 108px;
+
+    padding: 6px 6px 5px;
+
+    border-radius: 12px;
+
+    background: rgba(255,255,255,.93);
+
+    box-shadow: 0 3px 10px rgba(0,0,0,.28);
+
+    font-size: 12px;
+
+    z-index: 3;
+}
+
+.mj-seat.pos-top {
+    top: 0;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+}
+
+.mj-seat.pos-bottom {
+    bottom: 0;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+}
+
+.mj-seat.pos-left {
+    left: 0;
+
+    top: 42%;
+
+    transform: translateY(-50%);
+}
+
+.mj-seat.pos-right {
+    right: 0;
+
+    top: 42%;
+
+    transform: translateY(-50%);
+}
+
+.mj-seat.me {
+    outline: 2px solid #1fa971;
+}
+
+@keyframes mjSeatPulse {
+    0%, 100% { box-shadow: 0 3px 10px rgba(0,0,0,.28), 0 0 0 0 rgba(64, 180, 120, 0); }
+    50% { box-shadow: 0 3px 10px rgba(0,0,0,.28), 0 0 0 5px rgba(64, 180, 120, .55); }
+}
+
+.mj-seat.active {
+    animation: mjSeatPulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mj-seat.active {
+        animation: none;
+
+        outline: 2.5px solid #40b478;
+    }
+}
+
+.ms-name {
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+
+    max-width: 96px;
+
+    font-weight: 750;
+
+    color: #21313d;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.ms-wind {
+    flex: none;
+
+    display: inline-grid;
+
+    place-items: center;
+
+    width: 18px;
+
+    height: 18px;
+
+    border-radius: 6px;
+
+    background: #e4e9ee;
+
+    color: #44535f;
+
+    font-size: 11px;
+
+    font-weight: 800;
+}
+
+.ms-wind.dealer {
+    background: #ffe1a6;
+
+    color: #8a5b00;
+
+    box-shadow: 0 0 0 1.5px #e8b64c;
+}
+
+.ms-info {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    color: #5a6a76;
+
+    font-size: 11px;
+}
+
+.ms-flowers {
+    color: #b0682c;
+
+    font-weight: 700;
+}
+
+.ms-stack {
+    font-variant-numeric: tabular-nums;
+
+    font-weight: 700;
+
+    color: #21313d;
+}
+
+.ms-melds {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    justify-content: center;
+
+    gap: 4px;
+
+    max-width: 100%;
+}
+
+.ms-meld {
+    display: inline-flex;
+
+    gap: 1px;
+
+    padding: 1px;
+
+    border-radius: 5px;
+
+    background: rgba(0,0,0,.08);
+}
+
+.ms-meld.meld-angang {
+    background: rgba(36, 86, 166, .18);
+
+    outline: 1px dashed #7f9cc4;
+}
+
+.ms-backs {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    justify-content: center;
+
+    gap: 1px;
+
+    max-width: 100px;
+}
+
+/* ---- 牌面组件 ---- */
+
+.mj-tile {
+    position: relative;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 30px;
+
+    height: 42px;
+
+    border-radius: 6px;
+
+    background: linear-gradient(180deg, #ffffff, #eef2f4 88%);
+
+    border: 1px solid #b9c4cc;
+
+    box-shadow:
+        inset 0 -2px 0 rgba(148,163,175,.35),
+        0 1.5px 2.5px rgba(0,0,0,.22);
+
+    color: #21313d;
+
+    font-weight: 800;
+
+    user-select: none;
+}
+
+.mj-tile .mt-face {
+    font-size: 17px;
+
+    line-height: 1;
+}
+
+.mj-tile .mt-suit {
+    position: absolute;
+
+    right: 3px;
+
+    bottom: 2px;
+
+    font-size: 9px;
+
+    font-weight: 700;
+
+    opacity: .85;
+}
+
+.mj-tile.suit0 { color: #b93a3a; }
+.mj-tile.suit1 { color: #1a7a45; }
+.mj-tile.suit2 { color: #2456a6; }
+.mj-tile.suit-z { color: #c0392b; }
+.mj-tile.suit-f { color: #1a7a45; }
+.mj-tile.suit-w { color: #34495e; }
+
+.mj-tile.flower {
+    background: linear-gradient(180deg, #f6f4e8, #e8e4d2 88%);
+
+    color: #7a6a3a;
+
+    font-size: 14px;
+}
+
+.mj-tile.back {
+    background:
+        repeating-linear-gradient(
+            45deg,
+            #2c6e52,
+            #2c6e52 5px,
+            #255f47 5px,
+            #255f47 10px
+        );
+
+    border-color: #1d523c;
+
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.2), 0 1.5px 2.5px rgba(0,0,0,.25);
+}
+
+.mj-tile.small {
+    width: 24px;
+
+    height: 34px;
+
+    border-radius: 5px;
+}
+
+.mj-tile.small .mt-face {
+    font-size: 14px;
+}
+
+.mj-tile.small .mt-suit {
+    font-size: 8px;
+}
+
+.mj-tile.tiny {
+    width: 17px;
+
+    height: 24px;
+
+    border-radius: 4px;
+}
+
+.mj-tile.tiny .mt-face {
+    font-size: 11px;
+}
+
+.mj-tile.tiny .mt-suit {
+    display: none;
+}
+
+.mj-tile.win {
+    box-shadow:
+        0 0 0 2.5px #e8b64c,
+        0 4px 10px rgba(232,182,76,.5);
+}
+
+/* ---- 中央：牌河与圈风 ---- */
+
+.mj-center {
+    position: absolute;
+
+    inset: 25% 21%;
+
+    z-index: 1;
+}
+
+.mj-center-badge {
+    position: absolute;
+
+    top: 42%;
+
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    padding: 3px 10px;
+
+    border-radius: 999px;
+
+    background: rgba(255,255,255,.16);
+
+    color: rgba(255,255,255,.9);
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.mj-pile {
+    position: absolute;
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    align-content: flex-start;
+
+    gap: 1.5px;
+
+    width: 34%;
+
+    max-height: 34%;
+
+    overflow: hidden;
+}
+
+.pile-bottom {
+    bottom: 0;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+}
+
+.pile-top {
+    top: 0;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+}
+
+.pile-left {
+    left: 0;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+}
+
+.pile-right {
+    right: 0;
+
+    top: 50%;
+
+    transform: translateY(-50%);
+}
+
+@keyframes mjDiscardPop {
+    from { transform: scale(1.45); }
+    to { transform: scale(1); }
+}
+
+.mj-tile.just-discarded {
+    animation: mjDiscardPop .28s ease-out;
+
+    box-shadow: 0 0 0 2px #ffd66b, 0 2px 6px rgba(0,0,0,.3);
+}
+
+.mj-claim-badge {
+    position: absolute;
+
+    bottom: -12%;
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    padding: 3px 10px;
+
+    border-radius: 999px;
+
+    background: #ffe6a8;
+
+    color: #6b4a08;
+
+    font-size: 11px;
+
+    font-weight: 750;
+
+    white-space: nowrap;
+
+    z-index: 2;
+}
+
+/* ---- 操作区（手牌 / 花牌 / 听牌 / 按钮）---- */
+
+.mj-dock {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 8px;
+
+    padding: 12px 14px;
+}
+
+.mj-dock.is-my-turn {
+    border-color: #7fae8d;
+
+    box-shadow: 0 0 0 2px #7fae8d33;
+}
+
+.mj-dock .dock-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+}
+
+.mj-my-flowers,
+.mj-tenpai {
+    display: flex;
+
+    align-items: center;
+
+    flex-wrap: wrap;
+
+    gap: 6px;
+}
+
+.mj-tenpai-label {
+    display: inline-grid;
+
+    place-items: center;
+
+    width: 20px;
+
+    height: 20px;
+
+    border-radius: 6px;
+
+    background: #ffe1a6;
+
+    color: #8a5b00;
+
+    font-size: 12px;
+
+    font-weight: 800;
+}
+
+.mj-tenpai-chip {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 3px;
+
+    padding: 2px 6px 2px 2px;
+
+    border-radius: 8px;
+
+    background: rgba(31, 90, 64, .1);
+
+    color: #1f5a40;
+
+    font-size: 11px;
+
+    font-weight: 700;
+}
+
+.mj-hand {
+    display: flex;
+
+    align-items: flex-end;
+
+    min-height: 66px;
+
+    padding: 12px 4px 4px;
+
+    overflow-x: auto;
+
+    overscroll-behavior-x: contain;
+}
+
+.mj-hand-card {
+    flex: none;
+
+    margin-left: -14px;
+
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    font: inherit;
+
+    cursor: pointer;
+}
+
+.mj-hand-card:first-child {
+    margin-left: 0;
+}
+
+.mj-hand-card:focus-visible {
+    outline: 3px solid #7256ef;
+
+    outline-offset: 3px;
+
+    z-index: 2;
+}
+
+.mj-hand-card .mj-tile {
+    width: 38px;
+
+    height: 54px;
+
+    border-radius: 7px;
+
+    transition: transform .15s, box-shadow .15s;
+}
+
+.mj-hand-card .mj-tile .mt-face {
+    font-size: 22px;
+}
+
+.mj-hand-card .mj-tile .mt-suit {
+    font-size: 11px;
+}
+
+.mj-hand-card .mj-tile.picked {
+    transform: translateY(-10px);
+
+    box-shadow:
+        0 0 0 2.5px #1fa971,
+        0 8px 16px rgba(0,0,0,.3);
+}
+
+.mj-dock .action-bar {
+    margin-top: 0;
+
+    flex-wrap: wrap;
+}
+
+.mj-dock .countdown {
+    margin-top: 0;
+}
+
+/* ---- 结算 ---- */
+
+.mj-win-row {
+    font-size: 14px;
+
+    font-weight: 750;
+}
+
+.mj-fans {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 5px;
+
+    margin: 6px 0;
+}
+
+.mj-fan-chip {
+    padding: 3px 9px;
+
+    border-radius: 999px;
+
+    background: #eef4ef;
+
+    color: #1f5a40;
+
+    font-size: 12px;
+
+    font-weight: 700;
+}
+
+.mj-result .uno-reveal-cards {
+    display: inline-flex;
+
+    flex-wrap: wrap;
+
+    gap: 2px;
+
+    max-width: 72vw;
+}
+
+/* ---- 窄屏 ---- */
+
+@media (max-width: 400px) {
+    .mj-seat {
+        width: 96px;
+    }
+
+    .mj-hand-card .mj-tile {
+        width: 34px;
+
+        height: 48px;
+    }
+
+    .mj-hand-card .mj-tile .mt-face {
+        font-size: 20px;
+    }
+
+    .mj-center {
+        inset: 24% 18%;
+    }
+}
+
+/* ---- 手机横屏：压紧桌面，状态并入顶栏 ---- */
+
+@media (orientation: landscape) and (max-height: 540px) {
+    .mj-table {
+        max-width: none;
+
+        aspect-ratio: auto;
+
+        height: max(170px, calc(100dvh - 234px));
+
+        padding: 6px 10px 8px;
+    }
+
+    .mj-table .poker-topbar {
+        font-size: 10.5px;
+    }
+
+    .mj-table .poker-status {
+        display: none;
+    }
+
+    .mj-seats {
+        inset: 26px 4px 6px;
+    }
+
+    .mj-seat {
+        width: 92px;
+
+        padding: 3px 5px;
+
+        gap: 0;
+
+        font-size: 11px;
+    }
+
+    .mj-seat .rating-badge {
+        display: none;
+    }
+
+    .ms-name {
+        max-width: 84px;
+
+        font-size: 10.5px;
+    }
+
+    .ms-backs {
+        display: none;
+    }
+
+    .ms-melds {
+        display: none;
+    }
+
+    .mj-center {
+        inset: 22% 24%;
+    }
+
+    .mj-hand {
+        min-height: 58px;
+
+        padding-top: 8px;
+    }
+
+    .mj-hand-card .mj-tile {
+        width: 32px;
+
+        height: 46px;
+    }
+}
+
+/* ---- 桌面端（≥1024px）---- */
+
+@media (min-width: 1024px) {
+    .mj-table {
+        max-width: 640px;
+
+        aspect-ratio: 1 / 0.86;
+    }
+
+    .mj-seats {
+        inset: 88px 12px 12px;
+    }
+
+    .mj-seat {
+        width: 126px;
+
+        padding: 8px 8px 7px;
+
+        font-size: 13px;
+    }
+
+    .ms-backs {
+        max-width: 118px;
+    }
+
+    .mj-center {
+        inset: 22% 20%;
+    }
+
+    .mj-center-badge {
+        font-size: 12px;
+    }
+
+    .mj-hand {
+        justify-content: center;
+
+        flex-wrap: wrap;
+
+        overflow: visible;
+
+        row-gap: 8px;
+    }
+
+    .mj-hand-card {
+        margin-left: -10px;
+    }
+
+    .mj-hand-card .mj-tile {
+        width: 46px;
+
+        height: 64px;
+    }
+
+    .mj-hand-card .mj-tile .mt-face {
+        font-size: 26px;
+    }
+
+    .mj-dock {
+        padding: 16px 22px;
+    }
+}
