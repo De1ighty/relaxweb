@@ -4,7 +4,9 @@
    每项展示缩小头像、昵称与用户名；选中后写进隐藏输入框。
    两处财务弹窗（直播间 / 游戏厅）共用。 */
 
-const TransferSelect = (() => {
+/* 必须挂在 window 上：拆成 ES 模块后调用方只能通过 window 取到这个组件
+   （见 core.js 的 transferSelect），而顶层 const 不会成为 window 属性。 */
+window.TransferSelect = (() => {
   const state = {
     parts: null,
     onRequest: null,

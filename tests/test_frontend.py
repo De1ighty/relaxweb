@@ -11,6 +11,9 @@
   4. 页面里引用的本地脚本/样式都存在，且带 ?v= 版本号（避免浏览器缓存旧代码）
   5. 前端不许用原生 alert/confirm/prompt —— 它们会阻塞主线程，自动化测试会卡死；
      请改用 assets/js/dialog.js 的 alertDialog/confirmDialog（直播间用 window.LiveDialog）
+  6. ES 模块只能通过 window 读经典脚本提供的全局组件 —— 那些组件必须真被赋值到
+     window 上（顶层 const/let 只进全局词法环境，不是 window 属性），
+     否则调用方拿到 undefined 后静默短路，点了没反应
 """
 import re
 import sys
@@ -23,6 +26,16 @@ PAGES = ["index.html", "game.html"]
 
 # 原生弹窗调用：alert( / confirm( / prompt(（含 window.alert 写法）
 NATIVE_DIALOG = re.compile(r"(?<![\w.$])(?:window\.)?(alert|confirm|prompt)\s*\(")
+
+# 通过 window 读这些名字是正常的：浏览器内置 API，以及 deploy/serve.py 注入的配置。
+# 其余 window.X 必须是项目自己赋值出来的（见 web 检查 6）。
+EXTERNAL_GLOBALS = {
+    "LIVE_CONFIG",
+    "setTimeout", "setInterval", "clearTimeout", "clearInterval",
+    "requestAnimationFrame", "cancelAnimationFrame",
+    "matchMedia", "addEventListener", "removeEventListener",
+    "AudioContext", "webkitAudioContext",
+}
 
 # 服务端注入的全局对象由 deploy/serve.py 提供，前端只能读 window.LIVE_CONFIG
 results = []
@@ -204,6 +217,26 @@ def main():
         not natives,
         "改用 alertDialog/confirmDialog（直播间用 window.LiveDialog）: " + "; ".join(natives),
     )
+
+    # 6. window.X 读到的全局必须真有脚本赋值（经典脚本的顶层 const 不是 window 属性）
+    assigned = set()
+    for path in sorted(ASSETS.rglob("*.js")):
+        assigned |= set(
+            re.findall(
+                r"(?:\bwindow|\bself|\bglobalThis)\.([A-Za-z_$][\w$]*)\s*=",
+                path.read_text(encoding="utf-8"),
+            )
+        )
+    dangling = set()
+    for name in sorted(code):
+        for hit in re.finditer(r"(?<![\w.$])window\.([A-Za-z_$][\w$]*)", code[name]):
+            symbol = hit.group(1)
+            if symbol not in EXTERNAL_GLOBALS and symbol not in assigned:
+                dangling.add(f"{rel[name]} 读 window.{symbol}，但没有脚本赋值它")
+    detail = "; ".join(sorted(dangling))
+    if dangling:
+        detail += "  ← 若是浏览器内置 API，请加进 EXTERNAL_GLOBALS"
+    check("window 上读的全局都有脚本赋值", not dangling, detail)
 
     failed = [name for name, ok in results if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} 通过")
