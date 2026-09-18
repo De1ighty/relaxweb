@@ -36,7 +36,7 @@ assets/
   app.js reader.js    直播间前端（含 WebRTC 播放器与弹幕）
   transfer-select.js  转账收款人选择组件
 index.html            直播间页面      game.html  游戏厅页面
-tests/test_games.py   引擎单元测试
+tests/                引擎单元测试与前端模块静态检查
 live-test/            联调与协议测试（git submodule，独立仓库）
 ```
 
@@ -88,6 +88,7 @@ python3 deploy/serve.py        # http://localhost:8000
 
 ```bash
 python3 tests/test_games.py            # 引擎纯逻辑（不需要起服务）
+python3 tests/test_frontend.py         # 前端模块静态检查（import/导出、state 前缀、页面资源）
 
 git submodule update --init live-test  # 协议级联调脚本
 bash live-test/reset.sh                # 重置测试库、重建测试账号、重启服务
