@@ -17,6 +17,7 @@ BaseRoom.schedule（内部为 loop.call_later + ensure_future）回到事件循�
 """
 import asyncio
 import math
+import uuid
 from collections import deque
 
 ROOM_TYPES = {}
@@ -60,6 +61,8 @@ class BaseRoom:
         on_rooms_changed()           房间列表发生变化时通知宿主广播
         display_name(username)       用户名 -> 展示昵称
         set_escrow(username, amount) 筹码变动后同步托管（宿主写数据库）
+        player_rating(username)     读取公开段位
+        record_ratings(id, starts, endings) 同步提交积分及已结算筹码，返回逐人明细
     """
 
     def __init__(self, room_id, name, owner, buy_in, blind):
@@ -81,6 +84,28 @@ class BaseRoom:
         self.on_dissolve_requested = None   # async (reason) -> None，宿主注入
         self.display_name = lambda username: username
         self.set_escrow = lambda username, amount: None
+        self.player_rating = lambda username: None
+        self.record_ratings = lambda hand_id, starts, endings: {}
+        self.rating_hand_id = None
+        self.rating_starts = {}
+        self.rating_results = {}
+
+    def begin_rating_hand(self, names):
+        """在扣盲注/发牌之前固定本金；重开只替换未完成的快照。"""
+        self.rating_hand_id = uuid.uuid4().hex
+        self.rating_starts = {name: self.members[name]["stack"] for name in names}
+        self.rating_results = {}
+
+    def settle_ratings(self, endings=None):
+        """正常结束结算全员；提前离桌仅结算离开者，同一手每人最多一次。"""
+        if endings is None:
+            endings = {name: member["stack"] for name, member in self.members.items()}
+        pending = {name: amount for name, amount in endings.items()
+                   if name in self.rating_starts and name not in self.rating_results}
+        if pending:
+            self.rating_results.update(self.record_ratings(
+                self.rating_hand_id, self.rating_starts, pending))
+        return dict(self.rating_results)
 
     # ---- 成员与筹码 ----
     def has_member(self, username):
@@ -166,6 +191,7 @@ class BaseRoom:
                     "username": name,
                     "nickname": self.display_name(name),
                     "stack": self.members[name]["stack"],
+                    "rating": self.player_rating(name),
                 }
                 for name in self.seating
             ],

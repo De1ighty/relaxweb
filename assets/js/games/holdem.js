@@ -1,6 +1,6 @@
 /* 德州扑克牌桌：座位下注、动作条、公共牌与手牌回顾。 */
 
-import { displayNameOf, elements, formatCoins, renderGameView, send, startHallTicker, state } from "../core.js";
+import { displayNameOf, elements, formatCoins, ratingBadge, renderGameView, send, startHallTicker, state } from "../core.js";
 import { registerGame } from "../registry.js";
 import { openChatOverlay, reapplySeatBubbles } from "../room.js";
 
@@ -164,7 +164,7 @@ function seatNode(p) {
   } else {
     status.textContent = p.in_hand ? "" : "观战";
   }
-  seat.append(name, stack, bet, total, status);
+  seat.append(name, ratingBadge(p.rating), stack, bet, total, status);
   return seat;
 }
 
