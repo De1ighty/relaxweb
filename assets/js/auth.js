@@ -1,6 +1,6 @@
 /* 登录注册与财务（金币明细、转账）。 */
 
-import { AUTH_TOKEN_KEY, elements, formatClock, formatCoins, rememberProfile, renderGameView, renderIdentity, send, setSignedIn, setUserMenu, state, transferSelect, updateCoinChip } from "./core.js";
+import { AUTH_TOKEN_KEY, elements, formatClock, formatCoins, rememberProfile, renderGameView, renderIdentity, rewardsPanel, send, setSignedIn, setUserMenu, state, transferSelect, updateCoinChip } from "./core.js";
 import { alertDialog } from "./dialog.js";
 import { onMessage } from "./registry.js";
 
@@ -16,6 +16,7 @@ const coinKinds = {
   game_settle: "游戏厅结算",
   bet_result: "竞猜结果",
   game_result: "游戏结算",
+  lottery_win: "签到抽奖",
 };
 
 export function setAuthMode(mode) {
@@ -198,6 +199,9 @@ onMessage("auth_expired", () => {
 onMessage("auth_error", (data) => { void alertDialog(data.message); });
 
 onMessage("finance", (data) => { renderFinance(data); });
+for (const type of ["daily_rewards", "checkin_result", "lottery_result", "rewards_error"]) {
+  onMessage(type, (data) => rewardsPanel.handle(data));
+}
 
 onMessage("transfer_success", (data) => {
   if (state.currentUser) state.currentUser.coins = data.coins;

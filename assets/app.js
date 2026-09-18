@@ -90,6 +90,7 @@ const coinKinds = {
   game_settle: "游戏厅结算",
   bet_result: "竞猜结果",
   game_result: "游戏结算",
+  lottery_win: "签到抽奖",
 };
 const profiles = new Map();
 const pendingProfiles = new Set();
@@ -105,6 +106,15 @@ let chatHeightObserver = null;
 let betCache = null;
 let lastSettled = null;
 let joinDraft = { optionIndex: 0, amount: "" };
+
+const rewardsPanel = window.DailyRewards.create({
+  send,
+  onCoins(coins) {
+    if (!currentUser) return;
+    currentUser.coins = coins;
+    if (elements.financeModal.style.display === "flex") send({ type: "get_finance" });
+  },
+});
 
 function formatCoins(value) {
   return Number(value || 0).toFixed(2);
@@ -260,6 +270,7 @@ function setConnectionStatus(text) {
 
 function setSignedIn(user) {
   currentUser = user;
+  rewardsPanel.setUser(user);
   elements.loginButton.hidden = Boolean(user);
   elements.userAvatar.style.display = user ? "flex" : "none";
   elements.userName.style.display = user ? "block" : "none";
@@ -463,6 +474,10 @@ const messageHandlers = {
   error(data) { uiAlert(data.message); },
   user_list(data) { TransferSelect.setUsers(data.users || []); },
   finance(data) { renderFinance(data); },
+  daily_rewards(data) { rewardsPanel.handle(data); },
+  checkin_result(data) { rewardsPanel.handle(data); },
+  lottery_result(data) { rewardsPanel.handle(data); },
+  rewards_error(data) { rewardsPanel.handle(data); },
   transfer_success(data) {
     if (currentUser) currentUser.coins = data.coins;
     elements.transferAmount.value = "";

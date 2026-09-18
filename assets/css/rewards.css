@@ -1,0 +1,37 @@
+.rewards-dialog {
+    width: min(480px, calc(100% - 24px));
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: auto;
+    padding: 24px;
+    border: 1px solid #e7e9e8;
+    border-radius: 22px;
+    color: #24332b;
+    background: #fff;
+    box-shadow: 0 24px 80px #12251c30;
+}
+.rewards-dialog::backdrop { background: #16201c66; backdrop-filter: blur(4px); }
+.rewards-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.rewards-heading h2 { margin: 4px 0 0; font-size: 24px; }
+.rewards-eyebrow { color: #368264; font-size: 12px; font-weight: 650; }
+.rewards-close { width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f1f4f2; font-size: 24px; cursor: pointer; }
+.rewards-copy { color: #6d7771; font-size: 13px; line-height: 1.7; }
+.rewards-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; padding: 20px; border-radius: 16px; background: #edf6ef; }
+.rewards-summary span { display: block; color: #567060; font-size: 12px; }
+.rewards-summary strong { display: block; margin-top: 8px; font-size: 28px; overflow-wrap: anywhere; }
+.rewards-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rewards-actions button { min-height: 48px; padding: 10px; border: 0; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; background: #edf1ee; color: #315641; }
+.rewards-actions #lotteryDraw { background: #228557; color: white; }
+.rewards-actions button:disabled { opacity: .5; cursor: default; }
+.rewards-feedback { min-height: 24px; color: #21754c; font-size: 14px; line-height: 1.6; }
+.rewards-rules, .rewards-history { padding: 14px 0; border-top: 1px solid #edf0ee; font-size: 13px; line-height: 1.7; }
+.rewards-dialog summary { cursor: pointer; font-weight: 650; }
+.rewards-dialog ul { padding-left: 20px; color: #647069; }
+.rewards-dialog button:focus-visible, .rewards-dialog summary:focus-visible { outline: 3px solid #80b49c; outline-offset: 2px; }
+@media (max-width: 360px) {
+    .rewards-dialog { padding: 18px; }
+    .rewards-summary { gap: 10px; padding: 14px; }
+    .rewards-summary strong { font-size: 24px; }
+}
