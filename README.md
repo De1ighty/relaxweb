@@ -159,7 +159,8 @@ python3 tests/test_uno_challenge_protocol.py # 本地真实 WebSocket 质疑联�
 不会出现阻塞主线程、让测试卡住的原生对话框。
 
 浏览器回归：启动 `python3 deploy/serve.py` 后，用安装了 Playwright 的 Node 环境运行
-`node tests/test_desktop.cjs` 和 `node tests/test_ratings.cjs`。
+`node tests/test_desktop.cjs`、`node tests/test_ratings.cjs` 和 `node tests/test_mobile_settlement.cjs`。
+手机结算回归使用触摸滑动和坐标点击，验证长结算页底部的继续/解散按钮可达。
 可通过 `NODE_PATH` 指定 Playwright 包路径、`CHROME_PATH` 指定 Chrome 可执行文件。
 
 ## 部署
