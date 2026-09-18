@@ -6,6 +6,12 @@ import { fillBlindOptions, gameMetaById } from "./hall.js";
 import { gameView, onMessage, registerView } from "./registry.js";
 
 const seatBubbles = new Map();
+const desktopRoom = window.matchMedia("(min-width: 1024px)");
+desktopRoom.addEventListener("change", () => {
+  closeChatOverlay();
+  document.getElementById("desktopRoomChat")?.remove();
+  if (state.myRoom && desktopRoom.matches) openChatOverlay();
+});
 
 function roomChatRowNode(m) {
   const row = document.createElement("div");
@@ -41,9 +47,10 @@ function refillRoomChatList() {
 function appendRoomChatRow(m) {
   const row = roomChatRowNode(m);
   for (const list of document.querySelectorAll(".room-chat-list")) {
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
     list.append(row.cloneNode(true));
     while (list.children.length > 60) list.firstElementChild.remove();
-    list.scrollTop = list.scrollHeight;
+    if (atBottom) list.scrollTop = list.scrollHeight;
   }
 }
 
@@ -100,14 +107,17 @@ function applySeatBubble(username) {
 }
 
 function removeSeatBubble(seat) {
-  seat.querySelector(".seat-bubble")?.remove();
+  seat?.querySelector(".seat-bubble")?.remove();
 }
 
 export function openChatOverlay() {
+  const existing = document.getElementById("desktopRoomChat");
+  if (desktopRoom.matches && existing) return;
   closeChatOverlay();
   const overlay = document.createElement("div");
-  overlay.className = "chat-overlay";
-  overlay.id = "chatOverlay";
+  overlay.className = desktopRoom.matches ? "desktop-room-chat" : "chat-overlay";
+  overlay.id = desktopRoom.matches ? "desktopRoomChat" : "chatOverlay";
+  overlay.setAttribute("aria-label", "房间聊天室");
   const head = document.createElement("div");
   head.className = "chat-overlay-head";
   const title = document.createElement("div");
@@ -117,16 +127,20 @@ export function openChatOverlay() {
   close.type = "button";
   close.textContent = "✕";
   close.addEventListener("click", closeChatOverlay);
-  head.append(title, close);
+  head.append(title);
+  if (!desktopRoom.matches) head.append(close);
   const list = document.createElement("div");
   list.className = "room-chat-list chat-overlay-list";
+  list.setAttribute("role", "log");
+  list.setAttribute("aria-label", "聊天消息");
   list.replaceChildren(...state.roomChat.map((m) => roomChatRowNode(m)));
-  // 聊天输入整合进二级菜单（浮层），桌面与手机横屏共用
+  // 两种布局复用同一输入框，牌桌重绘不会重建桌面聊天。
   const composer = document.createElement("div");
   composer.className = "chat-overlay-composer";
   const input = document.createElement("input");
   input.className = "chat-input";
   input.id = "roomChatInput";
+  input.setAttribute("aria-label", "发送房间消息");
   input.maxLength = 200;
   input.placeholder = "说点什么…（对全桌可见）";
   input.value = state.roomChatDraft;
@@ -145,9 +159,9 @@ export function openChatOverlay() {
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) closeChatOverlay();
   });
-  document.body.append(overlay);
+  (desktopRoom.matches ? document.querySelector(".game-workspace") : document.body).append(overlay);
   list.scrollTop = list.scrollHeight;
-  input.focus({ preventScroll: true });
+  if (!desktopRoom.matches) input.focus({ preventScroll: true });
 }
 
 export function closeChatOverlay() {
@@ -161,6 +175,7 @@ export function closeChatOverlay() {
 
 export function renderRoom() {
   setRoomMode();
+  if (desktopRoom.matches) openChatOverlay();
   if (state.myRoom.status === "playing") {
     if (state.myRoom.settlement) renderSettlementView();
     else gameView(state.myRoom.game_type)?.renderTable();
@@ -362,7 +377,11 @@ onMessage("room_chat", (data) => {
   showSeatBubble(data.username, data.text);
 });
 
-onMessage("error", (data) => { void alertDialog(data.message); });
+function reportGameError(data) {
+  document.dispatchEvent(new Event("gameactionerror"));
+  void alertDialog(data.message);
+}
+onMessage("error", reportGameError);
 
 onMessage("game_update", (data) => {
   if (state.myRoom && data.room_id !== state.myRoom.room_id) return;
@@ -385,6 +404,6 @@ onMessage("room_closed", (data) => {
   renderGameView();
 });
 
-onMessage("game_error", (data) => { void alertDialog(data.message); });
+onMessage("game_error", reportGameError);
 
 registerView("room", renderRoom);

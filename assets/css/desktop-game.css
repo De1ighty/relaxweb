@@ -1,0 +1,182 @@
+/* 桌面布局单独覆盖；手机和平板继续使用原牌桌和聊天浮层。 */
+.desktop-room-chat,
+.desktop-turn-notice,
+.desktop-raise-presets { display: none; }
+
+@media (min-width: 1024px) {
+    .game-workspace { width: calc(100% - 40px); margin: 20px auto; }
+    .game-workspace > .game-container { width: 100%; max-width: none; margin: 0; }
+    .game-in-room .game-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) clamp(280px, 23vw, 360px);
+        gap: 20px;
+        align-items: start;
+    }
+    .game-in-room .game-container { min-width: 0; }
+    .desktop-room-chat {
+        display: flex;
+        flex-direction: column;
+        position: sticky;
+        top: 84px;
+        height: calc(100dvh - 104px);
+        min-height: 420px;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid #e2e5e9;
+        border-radius: 18px;
+        box-shadow: 0 8px 28px #182c3d08;
+    }
+    .desktop-room-chat .chat-overlay-head { padding: 20px; font-size: 15px; }
+    .desktop-room-chat .chat-overlay-head::after {
+        content: "全桌可见";
+        color: #8b929b;
+        font-size: 12px;
+        font-weight: 400;
+    }
+    .desktop-room-chat .room-chat-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .desktop-room-chat .room-chat-list:empty::before {
+        content: "欢迎来到牌桌，和同桌玩家聊聊吧";
+        display: block;
+        padding: 32px 12px;
+        text-align: center;
+        color: #969da5;
+        font-size: 13px;
+        line-height: 1.8;
+    }
+    .desktop-room-chat .rc-message { margin: 18px 0; font-size: 13px; }
+    .desktop-room-chat .rc-text { margin-top: 5px; line-height: 1.65; }
+    .desktop-room-chat .chat-overlay-composer {
+        display: flex;
+        gap: 8px;
+        padding: 16px;
+        border-top: 1px solid #edf0f2;
+    }
+    .desktop-room-chat .chat-input {
+        width: 0;
+        flex: 1;
+        min-width: 0;
+        border: 1px solid #e3e6ea;
+        border-radius: 10px;
+        background: #f7f8fa;
+        padding: 12px;
+    }
+    .desktop-room-chat .send-button {
+        border: 0;
+        border-radius: 10px;
+        background: #167557;
+        color: white;
+        padding: 0 14px;
+        cursor: pointer;
+    }
+    .game-in-room .chat-open-row,
+    .game-in-room .dock-chat-toggle { display: none; }
+    .poker-page { gap: 16px; }
+    .poker-table {
+        position: relative;
+        height: max(430px, calc(100dvh - 326px));
+        padding: 0;
+        isolation: isolate;
+        background: radial-gradient(ellipse at center, #273f46, #142830);
+        box-shadow: 0 14px 36px #132c3220;
+        border: 1px solid #30474c;
+        border-radius: 22px;
+    }
+    .poker-table::before {
+        content: "";
+        position: absolute;
+        inset: 72px 7% 48px;
+        z-index: -1;
+        border: 10px solid #3e5554;
+        border-radius: 48%;
+        background: radial-gradient(ellipse, #247c61, #165c49);
+        box-shadow: 0 0 0 2px #102c2d, inset 0 0 0 2px #a2c2a12b, inset 0 8px 36px #062c2940, 0 12px 24px #0004;
+    }
+    .poker-topbar { position: absolute; inset: 18px 22px auto; font-size: 13px; }
+    .poker-status {
+        position: absolute;
+        top: 60%;
+        left: 26%;
+        width: 48%;
+        margin: 0;
+        background: transparent;
+        font-weight: 400;
+        color: #c4ded4;
+    }
+    .poker-pot { position: absolute; top: 34%; left: 25%; width: 50%; font-size: 20px; }
+    .poker-board { position: absolute; top: 44%; left: 24%; width: 52%; gap: 8px; margin: 0; }
+    .poker-board .pcard, .poker-board .pcard-slot { width: clamp(36px, 3.8vw, 60px); height: clamp(52px, 5.3vw, 82px); }
+    .poker-board .pc-rank { font-size: 23px; }
+    .poker-board .pc-suit { font-size: 19px; }
+    .poker-seats { position: absolute; inset: 55px 0 28px; display: block; pointer-events: none; }
+    .poker-seats .seat {
+        position: absolute;
+        left: var(--seat-x);
+        top: var(--seat-y);
+        transform: translate(-50%, -50%);
+        width: clamp(92px, 8.6vw, 142px);
+        min-height: 92px;
+        padding: 10px 6px;
+        background: #f8faf9;
+        border: 1px solid #ffffff7a;
+        pointer-events: auto;
+        box-shadow: 0 6px 16px #0002;
+    }
+    .poker-seats .seat-name { max-width: 100%; font-size: 13px; }
+    .poker-seats .seat-stack { font-size: 16px; }
+    .poker-seats .seat.me { background: #e8f3ff; box-shadow: inset 0 0 0 2px #76a9e2; }
+    .poker-seats .seat.active { box-shadow: 0 0 0 3px #f5cd69, 0 0 26px #f5cd6955; }
+    .poker-table .paused-overlay { position: absolute; top: 70%; left: 24%; width: 52%; padding: 8px; margin: 0; }
+    .poker-table:has(.poker-review) { height: auto; min-height: 430px; padding-top: 430px; }
+    .poker-table .poker-review { margin: 16px; }
+    .poker-dock {
+        position: sticky;
+        bottom: 12px;
+        display: grid;
+        grid-template-columns: 142px minmax(0, 1fr);
+        grid-template-rows: auto auto auto;
+        column-gap: 22px;
+        margin: 0;
+        padding: 14px 18px;
+        border: 1px solid #dfe5e5;
+        border-radius: 18px;
+        box-shadow: 0 8px 24px #182c3d0d;
+        min-height: 174px;
+        transition: border-color .2s, box-shadow .2s;
+    }
+    .poker-dock .dock-head { grid-column: 1; grid-row: 1; justify-content: center; }
+    .poker-dock .my-cards { grid-column: 1; grid-row: 2 / 4; align-self: center; margin: 0; }
+    .desktop-turn-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; grid-column: 2; grid-row: 1; font-size: 14px; color: #68757c; }
+    .turn-sound { flex: none; padding: 5px 8px; border: 0; border-radius: 6px; background: #edf2f1; color: #50645d; font-size: 11px; cursor: pointer; }
+    .poker-dock .countdown { grid-column: 2; grid-row: 2; height: 4px; margin: 8px 0; }
+    .poker-dock:not(.is-my-turn) .countdown { visibility: hidden; }
+    .poker-dock .action-bar { grid-column: 2; grid-row: 3; margin: 0; gap: 8px; align-items: center; }
+    .poker-dock .last-action { display: none; }
+    .poker-dock .action-btn { min-height: 40px; padding: 10px 16px; font-size: 14px; transition: transform .15s, opacity .15s; }
+    .poker-dock .action-btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .poker-dock .action-btn:disabled { opacity: .45; cursor: wait; }
+    .poker-dock .raise-input { width: 100px; height: 40px; background: #f4f7f5; color: #244535; border: 1px solid #dbe5df; }
+    .desktop-raise-presets { display: flex; gap: 6px; flex-basis: 100%; order: 10; }
+    .desktop-raise-presets button { padding: 5px 10px; background: #f1f5f3; color: #406052; border: 1px solid #dbe5df; border-radius: 6px; cursor: pointer; }
+    .desktop-raise-presets button:hover { background: #dcece3; }
+    .poker-dock.is-my-turn { border-color: #249e72; box-shadow: 0 0 0 2px #249e7222, 0 8px 24px #182c3d0d; }
+    .is-my-turn .desktop-turn-notice > span { color: #147554; font-weight: 750; }
+    .is-my-turn .desktop-turn-notice > span::before { content: "●"; display: inline-block; margin-right: 8px; animation: turn-beacon 1.4s ease-in-out infinite; }
+    .turn-urgent .desktop-turn-notice > span { color: #c14b21; }
+    .turn-urgent .countdown-fill { background: #d5532c; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #78a9e6; outline-offset: 3px; }
+}
+@keyframes turn-beacon { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+    .game-workspace *, .game-workspace *::before { animation: none !important; transition: none !important; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+    .poker-seats .seat { min-height: 80px; padding: 5px 4px; gap: 1px; line-height: 1.15; }
+    .poker-seats .seat-name { font-size: 12px; }
+    .poker-seats .seat-stack { font-size: 14px; }
+    .poker-dock { grid-template-columns: 120px minmax(0, 1fr); column-gap: 14px; }
+    .poker-dock .action-btn { padding-inline: 12px; }
+}
+@media (min-width: 1024px) and (max-height: 850px) {
+    .poker-seats .seat { min-height: 80px; padding: 5px 4px; gap: 1px; line-height: 1.15; }
+    .poker-seats .seat-stack { font-size: 14px; }
+}

@@ -185,6 +185,8 @@ export function setSignedIn(user) {
 ========================================================= */
 
 export function renderGameView() {
+  stopHallTicker();
+  document.dispatchEvent(new Event("gameviewchange"));
   if (!state.currentUser) {
     clearRoomMode();
     renderView("entry");
@@ -214,6 +216,7 @@ function leaveConfirm() {
 }
 
 export function setRoomMode() {
+  document.body.classList.add("game-in-room");
   elements.gameHeader.classList.add("in-room");
   elements.roomTopbar.hidden = false;
   elements.roomTopName.textContent = state.myRoom.name;
@@ -224,6 +227,9 @@ export function setRoomMode() {
 }
 
 function clearRoomMode() {
+  document.body.classList.remove("game-in-room");
+  document.getElementById("desktopRoomChat")?.remove();
+  document.getElementById("chatOverlay")?.remove();
   elements.gameHeader.classList.remove("in-room");
   elements.roomTopbar.hidden = true;
   setManageMenu(false);
