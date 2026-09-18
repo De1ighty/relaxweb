@@ -3,7 +3,7 @@
 /* 入口：装配各模块（模块加载时自行注册消息处理与视图）、绑定静态元素事件、启动连接。 */
 
 import {
-  $, AUTH_TOKEN_KEY, connectGame, elements, leaveRoom, send, setManageMenu,
+  $, AUTH_TOKEN_KEY, SITE, connectGame, elements, leaveRoom, send, setManageMenu,
   setSignedIn, setUserMenu, state, stopHallTicker, transferSelect,
 } from "./core.js";
 import {
@@ -78,6 +78,12 @@ window.addEventListener("beforeunload", () => {
   stopHallTicker();
   closeChatOverlay();
 });
+
+if (SITE.game_title) {
+  document.title = SITE.game_title;
+  const brand = document.querySelector(".game-header .logo, .logo");
+  if (brand && brand.textContent.trim() === "游戏厅") brand.textContent = SITE.game_title;
+}
 
 transferSelect()?.init(
   {

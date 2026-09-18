@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """资产后端管理入口（命令行）。
 
-数据库默认与 chat_server 一致，可用环境变量 LIVE_DB_FILE 覆盖：
+数据库与 chat_server 一致：读 config.json 的 database.file，可用环境变量 LIVE_DB_FILE 覆盖：
+  python3 admin.py <命令> [参数]
   LIVE_DB_FILE=/path/users.db python3 admin.py <命令> [参数]
 
 命令：
@@ -14,8 +15,8 @@
   clear-log [-y]        仅清空全部金币记录（不改变现有余额）
 
 说明：还原/清空是物理删除记录、不写对账明细；set/add/sub 会记一条
-「管理员调整」明细。修改默认金币数量请调整 chat_server.NEW_USER_COINS
-（支持环境变量 NEW_USER_COINS），改后需重启 live-chat 服务。
+「管理员调整」明细。修改新玩家默认金币请改 config.json 的
+economy.new_user_coins（或环境变量 NEW_USER_COINS），改后需重启 live-chat 服务。
 """
 import sys
 

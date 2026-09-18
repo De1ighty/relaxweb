@@ -15,13 +15,14 @@ from contextlib import closing
 
 import websockets
 
+from config import get, get_int
 from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
 
 
-HOST = "0.0.0.0"
-PORT = 8765
-DB_FILE = os.environ.get("LIVE_DB_FILE", "/path/to/relaxweb/users.db")
+HOST = str(get("servers.chat_host", env="LIVE_CHAT_HOST", default="0.0.0.0"))
+PORT = get_int("servers.chat_port", env="LIVE_CHAT_PORT", default=8765)
+DB_FILE = str(get("database.file", env="LIVE_DB_FILE", default="users.db"))
 MAX_CHAT_LENGTH = 200
 MAX_AVATAR_LENGTH = 200_000
 AVATAR_PATTERN = re.compile(
@@ -33,7 +34,7 @@ REGISTER_IP_LIMIT = 10
 REGISTER_IP_WINDOW = 3600
 INVITE_UNUSED_LIMIT = 5
 SESSION_TTL = 30 * 24 * 60 * 60
-NEW_USER_COINS = float(os.environ.get("NEW_USER_COINS", "1000"))
+NEW_USER_COINS = float(get("economy.new_user_coins", env="NEW_USER_COINS", default=1000))
 BET_MIN_STAKE = 10.0
 BET_MAX_OPTIONS = 6
 BET_QUESTION_LIMIT = 60

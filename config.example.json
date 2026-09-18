@@ -1,0 +1,26 @@
+{
+  "site": {
+    "title": "我的直播间",
+    "brand": "Live",
+    "game_title": "游戏厅"
+  },
+  "servers": {
+    "chat_host": "0.0.0.0",
+    "chat_port": 8765,
+    "web_port": 8000,
+    "auth_host": "127.0.0.1",
+    "auth_port": 8001
+  },
+  "stream": {
+    "whep_port": 8889,
+    "path": "xiaopang",
+    "publish_user": "xiaopang",
+    "publish_password": "改成你自己的推流密码"
+  },
+  "database": {
+    "file": "users.db"
+  },
+  "economy": {
+    "new_user_coins": 1000
+  }
+}

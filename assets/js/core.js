@@ -33,6 +33,11 @@ export const elements = {
 
 export const AUTH_TOKEN_KEY = "liveAuthToken";
 
+/* 服务端注入的配置（见 config.py / deploy/serve.py）；直接打开文件时用默认值兜底。 */
+const LIVE_CONFIG = window.LIVE_CONFIG || {};
+export const CHAT_PORT = LIVE_CONFIG.chat_port || 8765;
+export const SITE = LIVE_CONFIG.site || {};
+
 const profiles = new Map();
 const pendingProfiles = new Set();
 
@@ -99,7 +104,7 @@ export function send(payload) {
 export function connectGame() {
   clearTimeout(state.reconnectTimer);
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  state.socket = new WebSocket(`${protocol}://${location.hostname}:8765/?client=game`);
+  state.socket = new WebSocket(`${protocol}://${location.hostname}:${CHAT_PORT}/?client=game`);
   state.socket.addEventListener("open", () => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) send({ type: "resume", token });

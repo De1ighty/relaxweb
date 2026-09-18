@@ -46,6 +46,22 @@ const elements = {
   username: $("username"), volumeSlider: $("volumeSlider"),
 };
 
+/* 服务端注入的配置（见 config.py / deploy/serve.py）：站点文案、拉流地址与端口。
+   直接打开本地文件时没有 window.LIVE_CONFIG，用这里的默认值兜底。 */
+const LIVE_CONFIG = window.LIVE_CONFIG || {};
+const SITE = LIVE_CONFIG.site || {};
+const CHAT_PORT = LIVE_CONFIG.chat_port || 8765;
+const STREAM = {
+  whepPort: (LIVE_CONFIG.stream && LIVE_CONFIG.stream.whep_port) || 8889,
+  path: (LIVE_CONFIG.stream && LIVE_CONFIG.stream.path) || "xiaopang",
+};
+
+function applySiteConfig() {
+  if (SITE.title) document.title = SITE.title;
+  const logo = document.querySelector(".logo");
+  if (logo && SITE.brand) logo.textContent = SITE.brand;
+}
+
 const roles = {
   streamer: { icon: "👑 ", className: "streamer" },
   admin: { icon: "🛡 ", className: "admin" },
@@ -156,7 +172,7 @@ function connectStream() {
   }
   const protocol = location.protocol === "https:" ? "https:" : "http:";
   streamReader = new MediaMTXWebRTCReader({
-    url: `${protocol}//${location.hostname}:8889/xiaopang/whep`,
+    url: `${protocol}//${location.hostname}:${STREAM.whepPort}/${STREAM.path}/whep`,
     user: currentUser.username,
     pass: token,
     onError: () => {
@@ -329,7 +345,7 @@ function send(payload) {
 function connectChat() {
   clearTimeout(reconnectTimer);
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  socket = new WebSocket(`${protocol}://${location.hostname}:8765`);
+  socket = new WebSocket(`${protocol}://${location.hostname}:${CHAT_PORT}`);
   socket.addEventListener("open", () => {
     setConnectionStatus("在线");
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -1429,6 +1445,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 updatePlaybackButton();
+applySiteConfig();
 updateMuteButton();
 updateDanmakuButton();
 updateFullscreenButton();

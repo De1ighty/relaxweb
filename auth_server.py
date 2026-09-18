@@ -7,11 +7,13 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
-HOST = "127.0.0.1"
-PORT = 8001
-DB_FILE = "/path/to/relaxweb/users.db"
-STREAM_USER = "xiaopang"
-STREAM_PASS = "changeme"
+from config import get, get_int
+
+HOST = str(get("servers.auth_host", env="LIVE_AUTH_HOST", default="127.0.0.1"))
+PORT = get_int("servers.auth_port", env="LIVE_AUTH_PORT", default=8001)
+DB_FILE = str(get("database.file", env="LIVE_DB_FILE", default="users.db"))
+STREAM_USER = str(get("stream.publish_user", env="STREAM_PUBLISH_USER", default="xiaopang"))
+STREAM_PASS = str(get("stream.publish_password", env="STREAM_PUBLISH_PASSWORD", default=""))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("live-auth")
@@ -76,5 +78,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if not STREAM_PASS:
+        logger.warning("未配置 stream.publish_password，推流与播放鉴权会全部失败")
     logger.info("auth server listening on http://%s:%d", HOST, PORT)
     ThreadingHTTPServer((HOST, PORT), AuthHandler).serve_forever()
