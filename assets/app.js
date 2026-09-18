@@ -306,6 +306,8 @@ function renderIdentity() {
   if (user?.rating) {
     const badge = document.createElement("span");
     badge.className = "rating-badge";
+    badge.dataset.tier = user.rating.tier;
+    badge.title = `段位分 ${user.rating.score} · 已结算 ${user.rating.games} 局`;
     badge.textContent = `${user.rating.tier} ${user.rating.score}`;
     elements.dropdownName.append(badge);
   }

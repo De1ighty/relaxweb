@@ -18,7 +18,7 @@ import websockets
 from config import get, get_int
 from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
-from games.rating import rating_change, rating_info
+from games.rating import TIERS, rating_change, rating_info
 from rewards import init_rewards, rewards_state, claim_checkin, draw_lottery
 
 
@@ -292,6 +292,36 @@ async def handle_get_rating_history(websocket, state, data):
         "entries": [{"game_type": r[0], "room_name": r[1], "hand_no": r[2],
                      "initial": r[3], "final": r[4], "delta": r[5],
                      "rating": rating_info(r[6], r[7]), "created_at": r[8]} for r in rows]})
+
+
+async def handle_get_rating_leaderboard(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        return
+    # 一条查询保证榜单、本人名次和总人数来自同一快照；同分并列，按用户名稳定展示。
+    limit = 100
+    with database() as conn:
+        rows = conn.execute("""
+            WITH ranked AS (
+                SELECT username, nickname, rating_score, rating_games,
+                       RANK() OVER (ORDER BY rating_score DESC) AS rank,
+                       ROW_NUMBER() OVER (ORDER BY rating_score DESC, username) AS position,
+                       COUNT(*) OVER () AS total
+                FROM users
+            )
+            SELECT * FROM ranked WHERE position <= ? OR username = ? ORDER BY position
+        """, (limit, user["username"])).fetchall()
+    entries, own = [], None
+    for username, nickname, score, games, rank, position, total in rows:
+        entry = {"username": username, "nickname": nickname, "rank": rank,
+                 "rating": rating_info(score, games)}
+        if position <= limit:
+            entries.append(entry)
+        if username == user["username"]:
+            own = entry
+    await send_json(websocket, {"type": "rating_leaderboard", "entries": entries,
+        "self": own, "total": rows[0][6] if rows else 0, "limit": limit,
+        "tiers": [rating_info(floor) for floor, _ in TIERS]})
 
 
 def refund_game_escrows():
@@ -1903,6 +1933,7 @@ handlers = {
     "daily_checkin": handle_daily_checkin,
     "draw_lottery": handle_draw_lottery,
     "get_rating_history": handle_get_rating_history,
+    "get_rating_leaderboard": handle_get_rating_leaderboard,
     "transfer_coins": handle_transfer_coins,
     "get_bet": handle_get_bet,
     "create_bet": handle_create_bet,

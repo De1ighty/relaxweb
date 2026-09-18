@@ -1,6 +1,6 @@
 /* 段位概览、公开计分规则与逐局收益明细。分数只取服务端结果。 */
-import { formatClock, formatCoins, ratingBadge, renderGameView, renderIdentity, send, state } from "./core.js";
-import { onMessage } from "./registry.js";
+import { elements, formatClock, formatCoins, ratingBadge, renderGameView, renderIdentity, send, state } from "./core.js";
+import { onMessage, registerView } from "./registry.js";
 
 function signed(value) {
   return `${value > 0 ? "+" : ""}${value}`;
@@ -42,6 +42,17 @@ export function ratingCard() {
   heading.textContent = "我的段位";
   const rating = state.currentUser?.rating;
   heading.append(ratingBadge(rating));
+  const rankingButton = document.createElement("button");
+  rankingButton.type = "button";
+  rankingButton.className = "online-stat rating-ranking-button";
+  rankingButton.textContent = "查看段位排行 →";
+  rankingButton.addEventListener("click", () => {
+    state.hallPage = "rankings";
+    state.ratingLeaderboard = null;
+    send({ type: "get_rating_leaderboard" });
+    renderGameView();
+  });
+  heading.append(rankingButton);
   const progress = document.createElement("p");
   progress.className = "rating-detail";
   progress.textContent = rating
@@ -82,6 +93,9 @@ export function ratingCard() {
 }
 
 onMessage("rating_update", (data) => {
+  if (state.currentUser && !state.myRoom && state.hallPage === "rankings") {
+    send({ type: "get_rating_leaderboard" });
+  }
   if (data.username !== state.currentUser?.username) return;
   state.currentUser.rating = data.rating;
   renderIdentity();
@@ -95,3 +109,118 @@ onMessage("rating_history", (data) => {
   renderIdentity();
   if (!state.myRoom && !state.hallPage) renderGameView();
 });
+
+function renderRankings() {
+  const toolbar = document.createElement("div");
+  toolbar.className = "rooms-toolbar rating-toolbar";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "online-stat hall-back";
+  back.textContent = "← 游戏厅";
+  back.addEventListener("click", () => {
+    state.hallPage = null;
+    renderGameView();
+  });
+  const heading = document.createElement("h1");
+  heading.className = "hall-page-title";
+  heading.textContent = "段位排行榜";
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.className = "online-stat";
+  refresh.textContent = "刷新排行";
+  refresh.addEventListener("click", () => send({ type: "get_rating_leaderboard" }));
+  toolbar.append(back, heading, refresh);
+
+  const board = document.createElement("section");
+  board.className = "game-card-page rating-leaderboard";
+  board.setAttribute("aria-label", "段位排行");
+  const data = state.ratingLeaderboard;
+  if (!data) {
+    const loading = document.createElement("p");
+    loading.className = "rating-detail";
+    loading.setAttribute("role", "status");
+    loading.textContent = "正在读取排行，未显示时可点击刷新。";
+    board.append(loading);
+    elements.gameMain.replaceChildren(toolbar, board);
+    return;
+  }
+
+  if (data.self) {
+    const own = document.createElement("div");
+    own.className = "rating-own-rank";
+    const rank = document.createElement("strong");
+    rank.textContent = `我的名次 · 第 ${data.self.rank} 名`;
+    own.append(rank, ratingBadge(data.self.rating));
+    board.append(own);
+  }
+  const note = document.createElement("p");
+  note.className = "rating-detail";
+  note.textContent = `共 ${data.total} 位玩家 · 展示前 ${data.limit} 位 · 按段位分排序，同分并列（如 1、1、3）。所有账号均参与，德州与 UNO 共用积分。`;
+  board.append(note);
+
+  const list = document.createElement("ol");
+  list.className = "rating-ranking-list";
+  for (const entry of data.entries) {
+    const row = document.createElement("li");
+    row.className = "rating-ranking-row";
+    row.value = entry.rank;
+    if (entry.username === state.currentUser.username) row.classList.add("is-self");
+    const place = document.createElement("strong");
+    place.className = "rating-place";
+    place.textContent = String(entry.rank);
+    place.setAttribute("aria-label", `第 ${entry.rank} 名`);
+    if (entry.rank <= 3) place.dataset.podium = String(entry.rank);
+    const player = document.createElement("div");
+    player.className = "rating-player";
+    const name = document.createElement("strong");
+    name.textContent = entry.nickname || entry.username;
+    const username = document.createElement("div");
+    username.className = "rating-detail";
+    username.textContent = `@${entry.username}${entry.username === state.currentUser.username ? " · 我" : ""}`;
+    player.append(name, username);
+    const outcome = document.createElement("div");
+    outcome.className = "rating-ranking-score";
+    const games = document.createElement("div");
+    games.className = "rating-detail";
+    games.textContent = `已结算 ${entry.rating.games} 局`;
+    outcome.append(ratingBadge(entry.rating), games);
+    row.append(place, player, outcome);
+    list.append(row);
+  }
+  board.append(list);
+  if (!data.entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "rating-detail";
+    empty.textContent = "暂无排行数据。";
+    board.append(empty);
+  }
+
+  const legend = document.createElement("section");
+  legend.className = "game-card-page rating-tier-guide";
+  const title = document.createElement("h2");
+  title.textContent = "段位标志";
+  const tiers = document.createElement("div");
+  tiers.className = "rating-tier-grid";
+  for (const tier of data.tiers) {
+    const item = document.createElement("div");
+    item.className = "rating-tier-item";
+    const badge = ratingBadge(tier);
+    badge.textContent = tier.tier;
+    badge.title = `${tier.tier} · ${tier.floor} 分起`;
+    const range = document.createElement("div");
+    range.className = "rating-detail";
+    range.textContent = tier.next_score == null ? `${tier.floor}+` : `${tier.floor}–${tier.next_score - 1}`;
+    item.append(badge, range);
+    tiers.append(item);
+  }
+  legend.append(title, tiers);
+  elements.gameMain.replaceChildren(toolbar, legend, board);
+}
+
+onMessage("rating_leaderboard", (data) => {
+  if (!state.currentUser) return;
+  state.ratingLeaderboard = data;
+  if (!state.myRoom && state.hallPage === "rankings") renderGameView();
+});
+
+registerView("rankings", renderRankings);

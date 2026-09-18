@@ -60,6 +60,7 @@ export const state = {
   roomChat: [],
   roomChatDraft: "",
   ratingEntries: [],
+  ratingLeaderboard: null,
 };
 
 export const rewardsPanel = window.DailyRewards.create({
@@ -83,6 +84,7 @@ export function ratingBadge(rating) {
   badge.className = "rating-badge";
   badge.hidden = !rating;
   if (rating) {
+    badge.dataset.tier = rating.tier;
     badge.textContent = `${rating.tier} ${rating.score}`;
     badge.title = `段位分 ${rating.score} · 已结算 ${rating.games} 局`;
   }
@@ -187,6 +189,7 @@ export function setSignedIn(user) {
   state.currentUser = user;
   rewardsPanel.setUser(user);
   state.ratingEntries = [];
+  state.ratingLeaderboard = null;
   elements.loginButton.hidden = Boolean(user);
   elements.coinChip.style.display = user ? "flex" : "none";
   elements.userAvatar.style.display = user ? "flex" : "none";
@@ -197,6 +200,7 @@ export function setSignedIn(user) {
   updateCoinChip();
   if (user) {
     send({ type: "get_rating_history" });
+    if (state.hallPage === "rankings") send({ type: "get_rating_leaderboard" });
     renderGameView();
   }
   else {
@@ -227,6 +231,7 @@ export function renderGameView() {
   clearRoomMode();
   if (state.hallPage === "create" && state.currentGameId) renderView("create");
   else if (state.hallPage === "rooms" && state.currentGameId) renderView("rooms");
+  else if (state.hallPage === "rankings") renderView("rankings");
   else renderView("hall");
 }
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs><linearGradient id="metal" x2="1" y2="1"><stop stop-color="#f4f9ff"/><stop offset="1" stop-color="#8b9fb8"/></linearGradient></defs>
+  <path d="M32 3 56 17l-5 28-19 16L13 45 8 17Z" fill="url(#metal)" stroke="#64778f" stroke-width="3"/>
+  <path d="m32 11 16 10-4 21-12 10-12-10-4-21Z" fill="#607992"/>
+  <path d="m21 22 11 7 11-7v7l-11 7-11-7Zm0 12 11 7 11-7v7l-11 7-11-7Z" fill="#edf5ff"/>
+</svg>

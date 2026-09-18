@@ -390,7 +390,10 @@
 }
 /* 段位在游戏厅与直播间账号菜单共用。 */
 .rating-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
     padding: 2px 7px;
     border-radius: 6px;
     background: #e9f2ed;
@@ -400,6 +403,19 @@
     line-height: 1.5;
     white-space: nowrap;
 }
+.rating-badge::before {
+    content: "";
+    flex: 0 0 auto;
+    width: var(--rating-icon-size, 18px);
+    height: var(--rating-icon-size, 18px);
+    background: var(--rating-icon) center / contain no-repeat;
+}
+.rating-badge[data-tier="青铜"] { --rating-icon: url("../ranks/bronze.svg"); background: #f8eee5; color: #86501e; }
+.rating-badge[data-tier="白银"] { --rating-icon: url("../ranks/silver.svg"); background: #edf1f6; color: #536579; }
+.rating-badge[data-tier="黄金"] { --rating-icon: url("../ranks/gold.svg"); background: #fff3d4; color: #886010; }
+.rating-badge[data-tier="铂金"] { --rating-icon: url("../ranks/platinum.svg"); background: #e2f4f0; color: #226e62; }
+.rating-badge[data-tier="钻石"] { --rating-icon: url("../ranks/diamond.svg"); background: #e5f1ff; color: #285fa1; }
+.rating-badge[data-tier="大师"] { --rating-icon: url("../ranks/master.svg"); background: #f1e9fb; color: #7448a3; }
 .rating-badge[hidden] { display: none; }
 .user-dropdown-name .rating-badge,
 .game-player-row .rating-badge { margin-left: 8px; }

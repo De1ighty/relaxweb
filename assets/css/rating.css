@@ -10,9 +10,34 @@
 .rating-gain { color: #207957; }
 .rating-loss { color: #b53b43; }
 .rating-history-row { padding: 12px 0; border-bottom: 1px solid #edf0f2; overflow-wrap: anywhere; }
-.seat > .rating-badge { padding: 0 4px; font-size: 10px; }
-.uno-seat > .rating-badge { margin: 2px 0; }
+.seat > .rating-badge { --rating-icon-size: 12px; padding: 0 4px; font-size: 10px; }
+.uno-seat > .rating-badge { --rating-icon-size: 14px; margin: 2px 0; }
+.rating-ranking-button { margin-left: auto; cursor: pointer; }
+.rating-toolbar { flex-wrap: wrap; }
+.rating-toolbar h1 { flex: 1; margin: 0; }
+.rating-toolbar button { cursor: pointer; }
+.rating-tier-guide { margin-bottom: 20px; }
+.rating-tier-guide h2 { margin: 0 0 18px; font-size: 16px; }
+.rating-tier-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.rating-tier-item { min-width: 0; text-align: center; }
+.rating-tier-item .rating-badge { --rating-icon-size: 48px; display: flex; flex-direction: column; gap: 8px; padding: 12px 4px 8px; font-size: 13px; border-radius: 12px; }
+.rating-tier-item .rating-detail { margin-top: 5px; }
+.rating-own-rank { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 18px; border-radius: 12px; background: #eaf3ef; color: #285e48; }
+.rating-own-rank .rating-badge { font-size: 13px; --rating-icon-size: 24px; }
+.rating-ranking-list { list-style: none; padding: 0; margin: 18px 0 0; }
+.rating-ranking-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 10px; border-top: 1px solid #edf0f2; border-radius: 8px; }
+.rating-ranking-row.is-self { background: #f1f8f4; }
+.rating-place { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #737984; font-size: 14px; }
+.rating-place[data-podium="1"] { color: #896015; background: #fff0be; }
+.rating-place[data-podium="2"] { color: #566577; background: #e9eef5; }
+.rating-place[data-podium="3"] { color: #915c37; background: #f6e6d8; }
+.rating-player { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.rating-ranking-score { text-align: right; }
 @media (max-width: 600px) {
     .rating-result-row { align-items: flex-start; }
     .rating-outcome { flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 4px; }
+    .rating-ranking-button { margin-left: 0; }
+    .rating-tier-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .rating-ranking-row { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; padding: 12px 0; }
+    .rating-place { width: 28px; height: 28px; }
 }

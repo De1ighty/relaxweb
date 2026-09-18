@@ -243,6 +243,88 @@ class RatingTests(unittest.IsolatedAsyncioTestCase):
             await server.handle_get_rating_history(None, {}, {})
             send.assert_not_called()
 
+    async def leaderboard(self, username="alice", **request):
+        with patch.object(server, "send_json") as send:
+            await server.handle_get_rating_leaderboard(None, {"user": {"username": username}}, request)
+            return send.call_args.args[1]
+
+    async def test_leaderboard_ties_public_fields_and_tier_ranges(self):
+        with server.database() as conn, conn:
+            conn.execute("UPDATE users SET rating_score=2400, nickname='同名玩家' WHERE username!='carol'")
+        data = await self.leaderboard(username="bob")
+        self.assertEqual([(e["username"], e["rank"]) for e in data["entries"]],
+                         [("alice", 1), ("bob", 1), ("carol", 3)])
+        self.assertEqual(data["total"], 3)
+        self.assertEqual(data["self"], data["entries"][1])
+        for entry in data["entries"]:
+            self.assertEqual(set(entry), {"username", "nickname", "rating", "rank"})
+        self.assertEqual([t["floor"] for t in data["tiers"]], [0, 800, 1200, 1600, 2000, 2400])
+        self.assertEqual([t["next_score"] for t in data["tiers"]], [800, 1200, 1600, 2000, 2400, None])
+
+    async def test_leaderboard_caps_players_and_keeps_own_rank_outside_top_100(self):
+        with server.database() as conn, conn:
+            conn.executemany("INSERT INTO users(username,password_hash,salt,created_at,rating_score) "
+                             "VALUES (?, '', '', 0, ?)",
+                             [(f"player{i:03d}", 2000) for i in range(105)])
+        data = await self.leaderboard()
+        self.assertEqual(data["limit"], 100)
+        self.assertEqual(data["total"], 108)
+        self.assertEqual(len(data["entries"]), 100)
+        self.assertEqual(data["entries"][-1]["username"], "player099")
+        self.assertTrue(all(e["rank"] == 1 for e in data["entries"]))
+        self.assertEqual(data["self"]["rank"], 106)
+        self.assertEqual(data["self"]["rating"], rating_info())
+        # 全部初始分也只取 100 位；本人的并列名次不因榜单截断改变。
+        with server.database() as conn, conn:
+            conn.execute("UPDATE users SET rating_score=1000")
+        data = await self.leaderboard(username="player104")
+        self.assertEqual(len(data["entries"]), 100)
+        self.assertEqual(data["self"]["rank"], 1)
+
+    async def test_leaderboard_requires_login_and_ignores_client_score_or_target(self):
+        with patch.object(server, "send_json") as send:
+            await server.handle_get_rating_leaderboard(None, {}, {})
+            send.assert_not_called()
+        with patch.object(server, "send_json") as send:
+            await server.handle_get_rating_leaderboard(None, {"user": {"username": "alice"}},
+                {"username": "bob", "rating_score": 99999, "limit": 99999})
+            data = send.call_args.args[1]
+        self.assertEqual(data["self"]["username"], "alice")
+        self.assertEqual(data["self"]["rating"]["score"], 1000)
+        self.assertEqual(data["limit"], 100)
+
+    async def test_leaderboard_protocol_reads_new_settlement_and_persisted_scores(self):
+        import websockets
+
+        async def receive(ws, kind):
+            async def read():
+                while True:
+                    message = json.loads(await ws.recv())
+                    if message["type"] == kind:
+                        return message
+            return await asyncio.wait_for(read(), 5)
+
+        token = server.create_session("alice")
+        async with websockets.serve(server.handler, "127.0.0.1", 0) as host:
+            uri = f"ws://127.0.0.1:{host.sockets[0].getsockname()[1]}"
+            async with websockets.connect(uri) as ws:
+                await ws.send(json.dumps({"type": "resume", "token": token}))
+                await receive(ws, "resume_success")
+                await ws.send(json.dumps({"type": "get_rating_leaderboard"}))
+                data = await receive(ws, "rating_leaderboard")
+                self.assertEqual(data["self"]["rating"], rating_info())
+                room = self.room("uno")
+                await room.start()
+                await room.end_hand("bob")
+                await receive(ws, "rating_update")
+                server.init_db()
+                await ws.send(json.dumps({"type": "get_rating_leaderboard"}))
+                data = await receive(ws, "rating_leaderboard")
+                self.assertEqual(data["entries"][0]["username"], "bob")
+                self.assertEqual(data["self"]["rating"], server.get_rating("alice"))
+                self.assertEqual(data["self"]["rank"], 3)
+                await server.dissolve_room(room, "测试结束")
+
     async def test_rating_update_reaches_all_connections(self):
         class Socket:
             def __init__(self):
