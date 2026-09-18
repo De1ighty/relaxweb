@@ -3949,3 +3949,451 @@ a.hall-stat {
         transform: translate(-50%, 0);
     }
 }
+
+
+/* =========================================================
+   转账目标选择（下拉）
+========================================================= */
+
+.user-select {
+    position: relative;
+}
+
+.user-select-toggle {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    width: 100%;
+
+    min-height: 38px;
+
+    padding: 7px 12px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #f2f2f7;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.user-select-toggle:hover {
+    background: #ececf1;
+}
+
+.user-select-placeholder {
+    color: #92929c;
+}
+
+.user-select-chosen {
+    font-weight: 650;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-menu {
+    position: absolute;
+
+    top: calc(100% + 6px);
+
+    left: 0;
+
+    right: 0;
+
+    z-index: 70;
+
+    max-height: 236px;
+
+    overflow-y: auto;
+
+    padding: 6px;
+
+    border: 1px solid rgba(0,0,0,.08);
+
+    border-radius: 12px;
+
+    background: white;
+
+    box-shadow: 0 12px 34px rgba(0,0,0,.16);
+}
+
+.user-select-menu[hidden] {
+    display: none;
+}
+
+.user-select-item {
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    width: 100%;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 7px 9px;
+
+    background: transparent;
+
+    font: inherit;
+
+    text-align: left;
+
+    cursor: pointer;
+}
+
+.user-select-item:hover {
+    background: #f0f0f3;
+}
+
+.user-select-item:disabled {
+    opacity: .4;
+
+    cursor: not-allowed;
+}
+
+.user-select-item:disabled:hover {
+    background: transparent;
+}
+
+.user-select-avatar {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 28px;
+
+    height: 28px;
+
+    min-width: 28px;
+
+    border-radius: 50%;
+
+    overflow: hidden;
+
+    background:
+        linear-gradient(
+            135deg,
+            #ffb6d2,
+            #ff6ba5
+        );
+
+    color: white;
+
+    font-size: 12px;
+
+    font-weight: 700;
+}
+
+.user-select-avatar.small {
+    width: 22px;
+
+    height: 22px;
+
+    min-width: 22px;
+
+    font-size: 10px;
+}
+
+.user-select-avatar img {
+    width: 100%;
+
+    height: 100%;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+}
+
+.user-select-meta {
+    min-width: 0;
+}
+
+.user-select-name {
+    display: block;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-id {
+    display: block;
+
+    margin-top: 1px;
+
+    color: #86868b;
+
+    font-size: 11px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.user-select-empty {
+    padding: 10px;
+
+    color: #86868b;
+
+    font-size: 13px;
+
+    text-align: center;
+}
+
+
+.finance-row-pending {
+    margin-left: 6px;
+
+    padding: 1px 6px;
+
+    border-radius: 6px;
+
+    background: #fff3e0;
+
+    color: #b45309;
+
+    font-size: 10px;
+
+    font-weight: 650;
+}
+
+
+/* =========================================================
+   牌桌状态栏 / dock 聊天 / 聊天浮层 / 结算投票
+========================================================= */
+
+.poker-status {
+    margin: -4px 0 8px;
+
+    padding: 7px 12px;
+
+    border-radius: 9px;
+
+    background: rgba(255,255,255,.12);
+
+    color: rgba(255,255,255,.94);
+
+    font-size: 12.5px;
+
+    font-weight: 650;
+
+    text-align: center;
+
+    min-height: 30px;
+
+    line-height: 16px;
+}
+
+.poker-dock .dock-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 8px;
+}
+
+.poker-dock .dock-head .my-cards-label {
+    margin-bottom: 0;
+}
+
+.dock-chat-toggle {
+    border: 0;
+
+    border-radius: 8px;
+
+    padding: 5px 10px;
+
+    background: #f0f0f3;
+
+    color: #29292e;
+
+    font: inherit;
+
+    font-size: 12px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+}
+
+.dock-chat-toggle:hover {
+    background: #e8e8ed;
+}
+
+.dock-chat-composer {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    margin-top: 8px;
+}
+
+.dock-chat-composer .chat-input {
+    flex: 1;
+
+    min-width: 0;
+
+    height: 34px;
+
+    padding: 0 12px;
+
+    border: 1px solid transparent;
+
+    border-radius: 9px;
+
+    background: #f2f2f7;
+
+    color: #29292e;
+}
+
+.dock-chat-composer .chat-input:focus {
+    border-color: rgba(255,91,153,.48);
+
+    background: white;
+
+    outline: 0;
+}
+
+.dock-chat-composer .send-button {
+    flex: none;
+
+    height: 34px;
+
+    padding: 0 13px;
+
+    border: 0;
+
+    border-radius: 9px;
+
+    background: #ff5b99;
+
+    color: white;
+
+    font: inherit;
+
+    font-size: 13px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+}
+
+.chat-overlay {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 300;
+
+    display: flex;
+
+    flex-direction: column;
+
+    background: rgba(245,245,247,.98);
+}
+
+.chat-overlay-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    padding: 14px 16px;
+
+    border-bottom: 1px solid rgba(0,0,0,.08);
+
+    font-weight: 750;
+}
+
+.chat-overlay-close {
+    border: 0;
+
+    border-radius: 9px;
+
+    padding: 6px 12px;
+
+    background: #f0f0f3;
+
+    font: inherit;
+
+    cursor: pointer;
+}
+
+.chat-overlay-list {
+    flex: 1;
+
+    max-height: none;
+
+    padding: 6px 16px 16px;
+}
+
+.settle-progress {
+    color: #1fa971;
+
+    font-size: 13px;
+
+    font-weight: 650;
+}
+
+.settle-blind-row {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-top: 12px;
+}
+
+.settle-blind-label {
+    color: #86868b;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+}
+
+.settle-blind-row .login-input {
+    margin-top: 0;
+
+    width: 140px;
+}
+
+.game-btn-row .login-submit.danger {
+    background: #ff2d55;
+}

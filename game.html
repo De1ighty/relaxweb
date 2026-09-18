@@ -8,7 +8,7 @@
 
 <title>游戏厅</title>
 
-<link rel="stylesheet" href="assets/styles.css?v=17">
+<link rel="stylesheet" href="assets/styles.css?v=21">
 
 </head>
 
@@ -339,12 +339,33 @@
 >
 
     <input
-        class="login-input"
         id="transferTo"
-        maxlength="20"
-        autocomplete="off"
-        placeholder="对方用户名"
+        type="hidden"
     >
+
+    <div
+        class="user-select"
+        id="transferSelect"
+    >
+        <button
+            class="user-select-toggle"
+            id="transferSelectToggle"
+            type="button"
+        >
+            <span class="user-select-placeholder">选择转账对象…</span>
+        </button>
+
+        <div
+            class="user-select-menu"
+            id="transferSelectMenu"
+            hidden
+        >
+            <div
+                class="user-select-list"
+                id="transferSelectList"
+            ></div>
+        </div>
+    </div>
 
     <input
         class="login-input"
@@ -388,7 +409,8 @@
 </div>
 
 
-<script src="assets/game.js?v=18" defer></script>
+<script src="assets/transfer-select.js?v=20" defer></script>
+<script src="assets/game.js?v=21" defer></script>
 
 
 </body>

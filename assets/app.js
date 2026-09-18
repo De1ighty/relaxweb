@@ -72,6 +72,8 @@ const coinKinds = {
   bet_refund: "竞猜退款",
   game_buyin: "游戏厅买入",
   game_settle: "游戏厅结算",
+  bet_result: "竞猜结果",
+  game_result: "游戏结算",
 };
 const profiles = new Map();
 const pendingProfiles = new Set();
@@ -425,10 +427,12 @@ const messageHandlers = {
   },
   auth_error(data) { alert(data.message); },
   error(data) { alert(data.message); },
+  user_list(data) { TransferSelect.setUsers(data.users || []); },
   finance(data) { renderFinance(data); },
   transfer_success(data) {
     if (currentUser) currentUser.coins = data.coins;
     elements.transferAmount.value = "";
+    TransferSelect.reset();
     elements.transferFeedback.textContent = "转账成功";
     send({ type: "get_finance" });
   },
@@ -724,6 +728,7 @@ function switchFinanceTab(tab) {
   elements.financeDetailPanel.hidden = !detail;
   elements.financeTransferPanel.hidden = detail;
   elements.transferFeedback.textContent = "";
+  if (!detail) TransferSelect.requestUsers();
 }
 
 function openFinance() {
@@ -761,6 +766,12 @@ function renderFinance(data) {
     const kind = document.createElement("div");
     kind.className = "finance-row-kind";
     kind.textContent = coinKinds[tx.kind] || tx.kind;
+    if (tx.kind === "bet_stake" || tx.kind === "game_buyin") {
+      const pending = document.createElement("span");
+      pending.className = "finance-row-pending";
+      pending.textContent = "未结算";
+      kind.append(pending);
+    }
     const detail = document.createElement("div");
     detail.className = "finance-row-detail";
     detail.textContent = [tx.detail, formatClock(tx.created_at)].filter(Boolean).join(" · ");
@@ -783,7 +794,7 @@ function submitTransfer() {
   const to = elements.transferTo.value.trim();
   const amount = Number(elements.transferAmount.value);
   if (!to) {
-    alert("请输入对方用户名");
+    alert("请选择转账对象");
     return;
   }
   if (to === currentUser.username) {
@@ -1427,4 +1438,14 @@ chatHeightObserver = new ResizeObserver(syncChatHeight);
 chatHeightObserver.observe(elements.player);
 syncChatHeight();
 setPlayerMessage(localStorage.getItem(AUTH_TOKEN_KEY) ? "正在连接直播…" : "登录后观看直播");
+TransferSelect.init(
+  {
+    toggle: $("transferSelectToggle"),
+    menu: $("transferSelectMenu"),
+    list: $("transferSelectList"),
+    hidden: $("transferTo"),
+  },
+  () => send({ type: "list_users" }),
+  () => currentUser?.username,
+);
 connectChat();

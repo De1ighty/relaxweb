@@ -47,6 +47,8 @@ const coinKinds = {
   bet_refund: "竞猜退款",
   game_buyin: "游戏厅买入",
   game_settle: "游戏厅结算",
+  bet_result: "竞猜结果",
+  game_result: "游戏结算",
 };
 const SUIT_CHARS = ["♠", "♥", "♦", "♣"];
 const RANK_CHARS = { 11: "J", 12: "Q", 13: "K", 14: "A" };
@@ -184,6 +186,7 @@ const messageHandlers = {
     if (currentUser) currentUser.coins = data.coins;
     updateCoinChip();
     elements.transferAmount.value = "";
+    TransferSelect.reset();
     elements.transferFeedback.textContent = "转账成功";
     send({ type: "get_finance" });
   },
@@ -234,11 +237,13 @@ const messageHandlers = {
     roomChat = [];
     roomChatDraft = "";
     seatBubbles.clear();
+    closeChatOverlay();
     send({ type: "get_finance" });
     if (hadRoom && data.reason) alert(data.reason);
     renderGameView();
   },
   game_error(data) { alert(data.message); },
+  user_list(data) { TransferSelect.setUsers(data.users || []); },
 };
 
 function handleServerMessage(data) {
@@ -354,6 +359,7 @@ function switchFinanceTab(tab) {
   elements.financeDetailPanel.hidden = !detail;
   elements.financeTransferPanel.hidden = detail;
   elements.transferFeedback.textContent = "";
+  if (!detail) TransferSelect.requestUsers();
 }
 
 function openFinance() {
@@ -392,6 +398,12 @@ function renderFinance(data) {
     const kind = document.createElement("div");
     kind.className = "finance-row-kind";
     kind.textContent = coinKinds[tx.kind] || tx.kind;
+    if (tx.kind === "bet_stake" || tx.kind === "game_buyin") {
+      const pending = document.createElement("span");
+      pending.className = "finance-row-pending";
+      pending.textContent = "未结算";
+      kind.append(pending);
+    }
     const detail = document.createElement("div");
     detail.className = "finance-row-detail";
     detail.textContent = [tx.detail, formatClock(tx.created_at)].filter(Boolean).join(" · ");
@@ -414,7 +426,7 @@ function submitTransfer() {
   const to = elements.transferTo.value.trim();
   const amount = Number(elements.transferAmount.value);
   if (!to) {
-    alert("请输入对方用户名");
+    alert("请选择转账对象");
     return;
   }
   if (to === currentUser.username) {
@@ -711,7 +723,7 @@ function setRoomMode() {
   elements.gameHeader.classList.add("in-room");
   elements.roomTopbar.hidden = false;
   elements.roomTopName.textContent = myRoom.name;
-  const showManage = isRoomOwner() && myRoom.status === "playing";
+  const showManage = isRoomOwner() && myRoom.status === "playing" && !myRoom.settlement;
   elements.roomManage.hidden = !showManage;
   setManageMenu(manageMenuOpen && showManage);
   elements.managePauseButton.textContent = myRoom.paused ? "继续" : "暂停";
@@ -731,8 +743,10 @@ function renderRoom() {
   const typing = document.activeElement
     && document.activeElement.id === "roomChatInput";
   setRoomMode();
-  if (myRoom.status === "playing") renderPokerTable();
-  else renderRoomLobby();
+  if (myRoom.status === "playing") {
+    if (myRoom.settlement) renderSettlementView();
+    else renderPokerTable();
+  } else renderRoomLobby();
   if (typing) {
     const input = document.getElementById("roomChatInput");
     if (input) {
@@ -765,20 +779,22 @@ function scrollRoomChat() {
 }
 
 function refillRoomChatList() {
-  const list = document.getElementById("roomChatList");
-  if (!list) return;
-  list.replaceChildren(...roomChat.map((m) => roomChatRowNode(m)));
-  scrollRoomChat();
+  const lists = document.querySelectorAll(".room-chat-list");
+  if (!lists.length) return;
+  const rows = roomChat.map((m) => roomChatRowNode(m));
+  for (const list of lists) {
+    list.replaceChildren(...rows.map((r) => r.cloneNode(true)));
+    list.scrollTop = list.scrollHeight;
+  }
 }
 
 function appendRoomChatRow(m) {
-  const list = document.getElementById("roomChatList");
-  if (!list) return;
-  list.append(roomChatRowNode(m));
-  while (list.children.length > 60) list.firstElementChild.remove();
-  scrollRoomChat();
-  const head = document.querySelector(".room-chat-head");
-  if (head) head.textContent = `💬 房间聊天（${roomChat.length}）`;
+  const row = roomChatRowNode(m);
+  for (const list of document.querySelectorAll(".room-chat-list")) {
+    list.append(row.cloneNode(true));
+    while (list.children.length > 60) list.firstElementChild.remove();
+    list.scrollTop = list.scrollHeight;
+  }
 }
 
 function sendRoomChat() {
@@ -1110,6 +1126,101 @@ function cardNode(card, opts = {}) {
   return node;
 }
 
+function renderSettlementView() {
+  const body = elements.gameMain;
+  body.replaceChildren();
+
+  const heading = document.createElement("div");
+  heading.className = "hall-page-title";
+  heading.textContent = `${myRoom.name} · 本局结算`;
+  body.append(heading);
+
+  const resultCard = document.createElement("div");
+  resultCard.className = "game-card-page";
+  if (myRoom.result) resultCard.append(resultNode(myRoom.result));
+  else {
+    const note = document.createElement("div");
+    note.className = "game-hint";
+    note.style.marginTop = "0";
+    note.textContent = "牌局已结束。";
+    resultCard.append(note);
+  }
+  body.append(resultCard);
+
+  const settlement = myRoom.settlement;
+  const votes = settlement?.votes || {};
+  const total = settlement?.total || myRoom.players.length;
+  const nextCount = Object.values(votes).filter((v) => v.choice === "next").length;
+  const dissolveCount = Object.values(votes).filter((v) => v.choice === "dissolve").length;
+  const myChoice = currentUser ? votes[currentUser.username]?.choice : null;
+
+  const voteCard = document.createElement("div");
+  voteCard.className = "game-card-page";
+  const voteTitle = document.createElement("div");
+  voteTitle.className = "hall-section-title";
+  voteTitle.style.marginTop = "0";
+  voteTitle.textContent = "接下来做什么？（过半数生效）";
+  voteCard.append(voteTitle);
+
+  const progress = document.createElement("div");
+  progress.className = "settle-progress";
+  progress.textContent = `已投 ${nextCount + dissolveCount} / ${total} 票 · 再来一局 ${nextCount} 票 · 解散 ${dissolveCount} 票`;
+  voteCard.append(progress);
+
+  const canNext = Boolean(settlement?.can_next);
+  const blindRow = document.createElement("div");
+  blindRow.className = "settle-blind-row";
+  const blindLabel = document.createElement("span");
+  blindLabel.className = "settle-blind-label";
+  blindLabel.textContent = "下一局盲注";
+  const blind = document.createElement("select");
+  blind.className = "login-input";
+  blind.id = "settleBlindSelect";
+  for (const b of [1, 2, 5, 10]) {
+    const opt = document.createElement("option");
+    opt.value = String(b);
+    opt.textContent = `盲注 ${b}/${b * 2}`;
+    if (b === (settlement?.blind || myRoom.blind)) opt.selected = true;
+    blind.append(opt);
+  }
+  blind.disabled = !canNext;
+  blindRow.append(blindLabel, blind);
+  voteCard.append(blindRow);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "game-btn-row";
+  const again = document.createElement("button");
+  again.className = "login-submit";
+  again.type = "button";
+  again.textContent = myChoice === "next" ? "已投：再来一局" : "结算并再来一局";
+  again.disabled = !canNext;
+  if (!canNext) again.title = "有人筹码不足下一局盲注";
+  again.addEventListener("click", () => {
+    send({ type: "settle_vote", choice: "next", blind: Number(blind.value) });
+  });
+  btnRow.append(again);
+
+  const dissolve = document.createElement("button");
+  dissolve.className = "login-submit danger";
+  dissolve.type = "button";
+  dissolve.textContent = myChoice === "dissolve" ? "已投：结算并解散房间" : "结算并解散房间";
+  dissolve.addEventListener("click", () => {
+    send({ type: "settle_vote", choice: "dissolve" });
+  });
+  btnRow.append(dissolve);
+  voteCard.append(btnRow);
+
+  const hint = document.createElement("div");
+  hint.className = "game-hint";
+  hint.textContent = canNext
+    ? "过半数玩家投「再来一局」即按新盲注开下一手；过半数投「解散」则按当前筹码退还所有人并关闭房间。"
+    : "有玩家筹码不足下一局门槛（20 倍小盲注），过半数投「解散」后房间将按当前筹码退还所有人。";
+  voteCard.append(hint);
+  body.append(voteCard);
+
+  body.append(chatPanelNode(true));
+}
+
 function renderPokerTable() {
   const body = elements.gameMain;
   body.replaceChildren();
@@ -1129,6 +1240,17 @@ function renderPokerTable() {
   right.textContent = myRoom.paused ? "⏸ 已暂停" : (STAGE_NAMES[myRoom.stage] || "");
   topbar.append(left, right);
   table.append(topbar);
+
+  // 状态栏：最新状态变化一目了然
+  const status = document.createElement("div");
+  status.className = "poker-status";
+  const la = myRoom.last_action;
+  status.textContent = la
+    ? `${la.nickname} ${la.text}`
+    : myRoom.to_act
+      ? `等待 ${displayNameOf(myRoom.to_act)} 行动…`
+      : "发牌中…";
+  table.append(status);
 
   const pot = document.createElement("div");
   pot.className = "poker-pot";
@@ -1171,10 +1293,18 @@ function renderPokerTable() {
 
   const dock = document.createElement("div");
   dock.className = "poker-dock";
+  const dockHead = document.createElement("div");
+  dockHead.className = "dock-head";
   const label = document.createElement("div");
   label.className = "my-cards-label";
   label.textContent = "你的手牌";
-  dock.append(label);
+  const chatToggle = document.createElement("button");
+  chatToggle.className = "dock-chat-toggle";
+  chatToggle.type = "button";
+  chatToggle.textContent = "💬 聊天记录";
+  chatToggle.addEventListener("click", openChatOverlay);
+  dockHead.append(label, chatToggle);
+  dock.append(dockHead);
   const myCards = document.createElement("div");
   myCards.className = "my-cards";
   const holeKey = myRoom.your_hole ? JSON.stringify(myRoom.your_hole) : "";
@@ -1192,6 +1322,9 @@ function renderPokerTable() {
   lastHoleKey = holeKey;
   dock.append(myCards);
 
+  // 聊天输入整合在操作区上方，不随记录增多被挤出屏幕
+  dock.append(buildDockChatComposer());
+
   const isMyTurn = Boolean(currentUser) && myRoom.to_act === currentUser.username;
   const countdown = document.createElement("div");
   countdown.className = "countdown";
@@ -1205,22 +1338,65 @@ function renderPokerTable() {
       dock.append(actionBarNode(myRoom.your_options));
       if (myRoom.turn_left > 0) startHallTicker(fill, myRoom.turn_left);
     }
-    const last = document.createElement("div");
-    last.className = "last-action";
-    last.textContent = myRoom.last_action
-      ? `${myRoom.last_action.nickname} ${myRoom.last_action.text}`
-      : "";
-    dock.append(last);
   } else {
     const pausedNote = document.createElement("div");
     pausedNote.className = "last-action";
     pausedNote.textContent = "牌局已暂停";
     dock.append(pausedNote);
   }
-  wrap.append(chatPanelNode(roomChatOpen));
   wrap.append(dock);
 
   for (const username of seatBubbles.keys()) applySeatBubble(username);
+}
+
+function buildDockChatComposer() {
+  const composer = document.createElement("div");
+  composer.className = "dock-chat-composer";
+  const input = document.createElement("input");
+  input.className = "chat-input";
+  input.id = "roomChatInput";
+  input.maxLength = 200;
+  input.placeholder = "说点什么…（对全桌可见）";
+  input.value = roomChatDraft;
+  input.autocomplete = "off";
+  input.addEventListener("input", () => { roomChatDraft = input.value; });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) sendRoomChat();
+  });
+  const sendBtn = document.createElement("button");
+  sendBtn.className = "send-button";
+  sendBtn.type = "button";
+  sendBtn.textContent = "发送";
+  sendBtn.addEventListener("click", sendRoomChat);
+  composer.append(input, sendBtn);
+  return composer;
+}
+
+function openChatOverlay() {
+  closeChatOverlay();
+  const overlay = document.createElement("div");
+  overlay.className = "chat-overlay";
+  overlay.id = "chatOverlay";
+  const head = document.createElement("div");
+  head.className = "chat-overlay-head";
+  const title = document.createElement("div");
+  title.textContent = "房间聊天";
+  const close = document.createElement("button");
+  close.className = "chat-overlay-close";
+  close.type = "button";
+  close.textContent = "✕";
+  close.addEventListener("click", closeChatOverlay);
+  head.append(title, close);
+  const list = document.createElement("div");
+  list.className = "room-chat-list chat-overlay-list";
+  list.replaceChildren(...roomChat.map((m) => roomChatRowNode(m)));
+  overlay.append(head, list);
+  document.body.append(overlay);
+  list.scrollTop = list.scrollHeight;
+}
+
+function closeChatOverlay() {
+  document.getElementById("chatOverlay")?.remove();
 }
 
 
@@ -1285,6 +1461,17 @@ elements.authModal.addEventListener("click", (event) => {
 window.addEventListener("beforeunload", () => {
   clearTimeout(reconnectTimer);
   stopHallTicker();
+  closeChatOverlay();
 });
 
+TransferSelect.init(
+  {
+    toggle: $("transferSelectToggle"),
+    menu: $("transferSelectMenu"),
+    list: $("transferSelectList"),
+    hidden: $("transferTo"),
+  },
+  () => send({ type: "list_users" }),
+  () => currentUser?.username,
+);
 connectGame();

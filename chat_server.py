@@ -33,7 +33,7 @@ REGISTER_IP_LIMIT = 10
 REGISTER_IP_WINDOW = 3600
 INVITE_UNUSED_LIMIT = 5
 SESSION_TTL = 30 * 24 * 60 * 60
-NEW_USER_COINS = 100.0
+NEW_USER_COINS = float(os.environ.get("NEW_USER_COINS", "1000"))
 BET_MIN_STAKE = 10.0
 BET_MAX_OPTIONS = 6
 BET_QUESTION_LIMIT = 60
@@ -118,9 +118,19 @@ def init_db():
                 balance REAL NOT NULL,
                 kind TEXT NOT NULL,
                 detail TEXT NOT NULL DEFAULT '',
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                ref TEXT NOT NULL DEFAULT ''
             )
             """
+        )
+        tx_columns = {row[1] for row in conn.execute("PRAGMA table_info(coin_transactions)")}
+        if "ref" not in tx_columns:
+            conn.execute(
+                "ALTER TABLE coin_transactions ADD COLUMN ref TEXT NOT NULL DEFAULT ''"
+            )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_coin_tx_ref "
+            "ON coin_transactions(username, ref)"
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_coin_tx_user "
@@ -198,10 +208,10 @@ def refund_game_escrows():
         logger.info("refunded %d game escrows on startup", len(rows))
 
 
-def record_coins(conn, username, amount, balance, kind, detail=""):
+def record_coins(conn, username, amount, balance, kind, detail="", ref=""):
     conn.execute(
-        "INSERT INTO coin_transactions (username, amount, balance, kind, detail, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO coin_transactions (username, amount, balance, kind, detail, created_at, ref) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             username,
             round(amount, 2),
@@ -209,11 +219,12 @@ def record_coins(conn, username, amount, balance, kind, detail=""):
             kind,
             str(detail or "")[:120],
             int(time.time()),
+            ref,
         ),
     )
 
 
-def adjust_coins(conn, username, delta, kind, detail=""):
+def adjust_coins(conn, username, delta, kind, detail="", ref=""):
     """在已打开的事务中调整用户金币并记录明细，返回新余额。"""
     row = conn.execute(
         "SELECT coins FROM users WHERE username = ?", (username,)
@@ -226,8 +237,57 @@ def adjust_coins(conn, username, delta, kind, detail=""):
     conn.execute(
         "UPDATE users SET coins = ? WHERE username = ?", (balance, username)
     )
-    record_coins(conn, username, delta, balance, kind, detail)
+    record_coins(conn, username, delta, balance, kind, detail, ref)
     return balance
+
+
+def user_balance(conn, username):
+    row = conn.execute(
+        "SELECT coins FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    return round(row[0] or 0.0, 2) if row else None
+
+
+def merge_ref_coins(conn, username, ref, delta, kind="", detail="",
+                    stake_kind="", stake_detail=""):
+    """把 ref 名下的流水合并为一条净额记录并返回当前余额。
+
+    delta 为 0 表示全额冲销（流局），只删除原条目不留痕。
+    stake_kind/stake_detail 用于兼容 ref 字段上线前的旧流水：
+    按 kind+detail 匹配的投注/买入条目一并删除。
+    """
+    balance = user_balance(conn, username)
+    conn.execute(
+        "DELETE FROM coin_transactions WHERE username = ? AND ref = ?",
+        (username, ref),
+    )
+    if stake_kind:
+        conn.execute(
+            "DELETE FROM coin_transactions WHERE username = ? AND ref = '' "
+            "AND kind = ? AND detail = ?",
+            (username, stake_kind, stake_detail),
+        )
+    if delta and balance is not None:
+        record_coins(conn, username, delta, balance, kind, detail, ref)
+    return balance
+
+
+def settle_room_coins(room, username, refund, detail):
+    """离桌/解散时结算该房间的流水：买入与退款合并为一条净额记录。
+
+    净额为零（如未开局的流局退款）时只删除扣款条目，不留痕。
+    """
+    with database() as conn, conn:
+        if refund > 0:
+            conn.execute(
+                "UPDATE users SET coins = round(coins + ?, 2) WHERE username = ?",
+                (refund, username),
+            )
+        merge_ref_coins(
+            conn, username, f"room:{room.id}:{username}",
+            round(refund - room.buy_in, 2), "game_result", detail,
+            stake_kind="game_buyin", stake_detail=f"游戏厅买入：{room.name}",
+        )
 
 
 def hash_password(password, salt=None):
@@ -858,7 +918,8 @@ async def handle_place_bet(websocket, state, data):
             if balance < BET_MIN_STAKE and amount < balance:
                 raise ValueError("金币不足 10 时只能全部投上")
             new_balance = adjust_coins(
-                conn, username, -amount, "bet_stake", f"竞猜投注：{bet['question']}"
+                conn, username, -amount, "bet_stake",
+                f"竞猜投注：{bet['question']}", ref=f"bet:{bet['id']}:{username}",
             )
             conn.execute(
                 "INSERT INTO bet_entries (bet_id, username, option_index, amount, created_at) "
@@ -896,8 +957,10 @@ async def cancel_active_bet(reason, message=None, refund_prefix="竞猜取消"):
         ).fetchall()
         for name, amount in rows:
             try:
-                adjust_coins(
-                    conn, name, amount, "bet_refund", f"{refund_prefix}：{bet['question']}"
+                merge_ref_coins(
+                    conn, name, f"bet:{bet['id']}:{name}", 0,
+                    stake_kind="bet_stake",
+                    stake_detail=f"竞猜投注：{bet['question']}",
                 )
             except KeyError:
                 continue
@@ -954,39 +1017,52 @@ async def handle_settle_bet(websocket, state, data):
             shares = [round(pot * amount / win_stake, 2) for _, amount in winners]
             shares[-1] = round(shares[-1] + pot - sum(shares), 2)
             for (name, amount), share in zip(winners, shares):
-                try:
-                    balance = adjust_coins(
-                        conn, name, amount + share, "bet_win", f"竞猜猜中：{question}"
-                    )
-                except KeyError:
-                    continue
+                ref = f"bet:{bet['id']}:{name}"
+                conn.execute(
+                    "UPDATE users SET coins = round(coins + ?, 2) WHERE username = ?",
+                    (round(amount + share, 2), name),
+                )
+                balance = merge_ref_coins(
+                    conn, name, ref, round(share, 2), "bet_result",
+                    f"竞猜猜中：{question}",
+                    stake_kind="bet_stake", stake_detail=f"竞猜投注：{question}",
+                )
                 results.append(
-                    {"username": name, "change": round(share, 2), "coins": balance}
+                    {
+                        "username": name,
+                        "change": round(share, 2),
+                        "coins": balance if balance is not None else 0.0,
+                    }
                 )
                 winner_texts.append(f"{display_name(name)} +{share:.2f}")
             for name, amount in losers:
-                row = conn.execute(
-                    "SELECT coins FROM users WHERE username = ?", (name,)
-                ).fetchone()
+                ref = f"bet:{bet['id']}:{name}"
+                balance = merge_ref_coins(
+                    conn, name, ref, -round(amount, 2), "bet_result",
+                    f"竞猜未中：{question}",
+                    stake_kind="bet_stake", stake_detail=f"竞猜投注：{question}",
+                )
                 results.append(
                     {
                         "username": name,
                         "change": round(-amount, 2),
-                        "coins": round(row[0] or 0.0, 2) if row else 0.0,
+                        "coins": balance if balance is not None else 0.0,
                     }
                 )
                 loser_texts.append(f"{display_name(name)} -{amount:.2f}")
         else:
             refunded = True
-            for name, amount in rows:
-                try:
-                    balance = adjust_coins(
-                        conn, name, amount, "bet_refund", f"竞猜退款：{question}"
-                    )
-                except KeyError:
-                    continue
+            for name, _, amount in rows:
+                balance = merge_ref_coins(
+                    conn, name, f"bet:{bet['id']}:{name}", 0,
+                    stake_kind="bet_stake", stake_detail=f"竞猜投注：{question}",
+                )
                 results.append(
-                    {"username": name, "change": round(amount, 2), "coins": balance}
+                    {
+                        "username": name,
+                        "change": round(amount, 2),
+                        "coins": balance if balance is not None else 0.0,
+                    }
                 )
         conn.execute(
             "UPDATE bets SET status = 'settled', correct_index = ?, settled_at = ? "
@@ -1077,9 +1153,13 @@ def attach_host(room):
     def sync_escrow(username, amount):
         set_escrow(username, room.id, amount)
 
+    async def on_dissolve_requested(reason):
+        await dissolve_room(room, reason)
+
     room.broadcast_payload = broadcast_payload
     room.broadcast_views = broadcast_views
     room.on_rooms_changed = on_rooms_changed
+    room.on_dissolve_requested = on_dissolve_requested
     room.display_name = display_name
     room.set_escrow = sync_escrow
 
@@ -1093,15 +1173,14 @@ async def broadcast_room_list():
 async def dissolve_room(room, reason):
     room.close()
     game_rooms.pop(room.id, None)
+    # 手牌进行中解散才是「流局」；打完后的正常解散按「结算」入账
+    detail = (
+        f"游戏厅流局：{room.name}" if room.in_hand()
+        else f"游戏厅结算：{room.name}"
+    )
+    for username, refund in room.pending_refunds().items():
+        settle_room_coins(room, username, refund, detail)
     with database() as conn, conn:
-        for username, refund in room.pending_refunds().items():
-            if refund > 0:
-                try:
-                    adjust_coins(
-                        conn, username, refund, "game_settle", f"游戏厅流局退款：{room.name}"
-                    )
-                except (KeyError, ValueError):
-                    continue
         conn.execute("DELETE FROM game_escrows WHERE room_id = ?", (room.id,))
     logger.info("game room %s dissolved: %s", room.id, reason)
     await room.broadcast_payload({"type": "room_closed", "reason": reason})
@@ -1114,15 +1193,7 @@ async def leave_room_internal(room, username):
         return
     mid_hand = room.note_leave(username)
     set_escrow(username, room.id, None)
-    refund = member["stack"]
-    if refund > 0:
-        with database() as conn, conn:
-            try:
-                adjust_coins(
-                    conn, username, refund, "game_settle", f"游戏厅离桌：{room.name}"
-                )
-            except (KeyError, ValueError):
-                pass
+    settle_room_coins(room, username, member["stack"], f"游戏厅离桌：{room.name}")
     logger.info("%s left game room %s", username, room.id)
     if not room.members:
         room.close()
@@ -1190,6 +1261,9 @@ async def handle_create_room(websocket, state, data):
             {"type": "game_error", "message": f"买入至少需要 {blind * 20:.0f} 金币（20 倍小盲注）"},
         )
         return
+    room_seq += 1
+    room_id = int(time.time() * 1000) % 1_000_000_000 + room_seq
+    room_name = name or f"{display_name(username)}的房间"
     try:
         with database() as conn, conn:
             balance = conn.execute(
@@ -1198,16 +1272,16 @@ async def handle_create_room(websocket, state, data):
             if balance < buy_in:
                 raise ValueError("金币不足，无法买入")
             adjust_coins(
-                conn, username, -buy_in, "game_buyin", f"游戏厅买入：{name}"
+                conn, username, -buy_in, "game_buyin", f"游戏厅买入：{room_name}",
+                ref=f"room:{room_id}:{username}",
             )
     except ValueError as error:
         await send_json(websocket, {"type": "game_error", "message": str(error)})
         return
-    room_seq += 1
     room = create_room(
         game,
-        room_id=int(time.time() * 1000) % 1_000_000_000 + room_seq,
-        name=name or f"{display_name(username)}的房间",
+        room_id=room_id,
+        name=room_name,
         owner=username,
         buy_in=buy_in,
         blind=blind,
@@ -1249,7 +1323,8 @@ async def handle_join_room(websocket, state, data):
             if balance < buy_in:
                 raise ValueError(f"金币不足，进入该房间需要买入 {buy_in:.2f} 金币")
             adjust_coins(
-                conn, username, -buy_in, "game_buyin", f"游戏厅买入：{room.name}"
+                conn, username, -buy_in, "game_buyin", f"游戏厅买入：{room.name}",
+                ref=f"room:{room.id}:{username}",
             )
     except ValueError as error:
         await send_json(websocket, {"type": "game_error", "message": str(error)})
@@ -1329,8 +1404,8 @@ async def handle_pause_game(websocket, state, data):
         await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
         return
     room = find_user_room(user["username"])
-    if not room or room.owner != user["username"] or room.status != "playing":
-        await send_json(websocket, {"type": "game_error", "message": "只有房主可以在游戏中管理牌局"})
+    if not room or room.owner != user["username"] or not room.in_hand():
+        await send_json(websocket, {"type": "game_error", "message": "只有房主可以在进行中的牌局里暂停"})
         return
     if rate_limited(state, "last_game_admin", 0.5):
         return
@@ -1345,6 +1420,31 @@ async def handle_pause_game(websocket, state, data):
         logger.info("game room %s resumed by %s", room.id, user["username"])
     await room.broadcast_views()
     await broadcast_room_list()
+
+
+async def handle_settle_vote(websocket, state, data):
+    """结算投票：过半数生效；票中可携带下一局盲注偏好。"""
+    user = state.get("user")
+    if not user:
+        return
+    room = find_user_room(user["username"])
+    if not room or room.status != "playing":
+        return
+    choice = str(data.get("choice") or "")
+    if choice not in ("next", "dissolve"):
+        return
+    blind = data.get("blind")
+    blind = blind if blind in GAME_BLIND_PRESETS else room.blind
+    if rate_limited(state, "last_settle_vote", 0.5):
+        return
+    try:
+        executed = await room.cast_vote(user["username"], choice, blind)
+    except ValueError as error:
+        await send_json(websocket, {"type": "game_error", "message": str(error)})
+        return
+    if executed == "dissolve":
+        return
+    await room.broadcast_views()
 
 
 async def handle_restart_game(websocket, state, data):
@@ -1363,6 +1463,54 @@ async def handle_restart_game(websocket, state, data):
         return
     logger.info("game room %s restarted by %s", room.id, user["username"])
     await room.restart()
+
+
+# 常用汉字拼音首字母的 GB2312 区位上界（覆盖全部 6763 个一级/二级汉字）
+_PINYIN_BOUNDS = (
+    (0xB0C5, "A"), (0xB2C1, "B"), (0xB4EE, "C"), (0xB6EA, "D"), (0xB7A2, "E"),
+    (0xB8C1, "F"), (0xB9FE, "G"), (0xBBF7, "H"), (0xBFA6, "J"), (0xC0AC, "K"),
+    (0xC2E8, "L"), (0xC4C3, "M"), (0xC5B6, "N"), (0xC5BE, "O"), (0xC6DA, "P"),
+    (0xC8BB, "Q"), (0xC8F6, "R"), (0xCBFA, "S"), (0xCDDA, "T"), (0xCEF4, "W"),
+    (0xD1B9, "X"), (0xD4D1, "Y"), (0xD7FA, "Z"),
+)
+
+
+def pinyin_initial(text):
+    """取文本首个可排序字符的字母：常用汉字查 GB2312 区位，英文取首字母。"""
+    for ch in text:
+        try:
+            code = ch.encode("gb2312")
+        except UnicodeEncodeError:
+            continue
+        if len(code) == 2:
+            value = (code[0] << 8) | code[1]
+            if 0xB0A1 <= value <= 0xD7F9:
+                for boundary, letter in _PINYIN_BOUNDS:
+                    if value < boundary:
+                        return letter
+                return "Z"
+        if ch.isascii():
+            return ch.upper()
+        return "#"
+    return "#"
+
+
+async def handle_list_users(websocket, state, data):
+    """转账目标候选：全部注册用户，按昵称（无昵称用用户名）首字母拼音排序。"""
+    with database() as conn:
+        rows = conn.execute(
+            "SELECT username, nickname, avatar FROM users ORDER BY username"
+        ).fetchall()
+    users = [
+        {"username": u, "nickname": n or "", "avatar": a or ""}
+        for u, n, a in rows
+    ]
+    users.sort(key=lambda u: (
+        pinyin_initial(u["nickname"] or u["username"]),
+        u["nickname"] or u["username"],
+        u["username"],
+    ))
+    await send_json(websocket, {"type": "user_list", "users": users})
 
 
 async def handle_room_chat(websocket, state, data):
@@ -1598,7 +1746,9 @@ handlers = {
     "poker_action": handle_poker_action,
     "pause_game": handle_pause_game,
     "restart_game": handle_restart_game,
+    "settle_vote": handle_settle_vote,
     "room_chat": handle_room_chat,
+    "list_users": handle_list_users,
 }
 
 

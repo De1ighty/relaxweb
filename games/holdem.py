@@ -16,7 +16,7 @@ from games.base import BaseRoom, register_room_type
 logger = logging.getLogger("live-chat.holdem")
 
 TURN_TIMEOUT = float(os.environ.get("HOLDEM_TURN_TIMEOUT", "45"))
-INTERMISSION = float(os.environ.get("HOLDEM_INTERMISSION", "8"))
+SETTLE_TIMEOUT = float(os.environ.get("HOLDEM_SETTLE_TIMEOUT", "90"))
 BLIND_PRESETS = (1, 2, 5, 10)
 
 HAND_NAMES = ["高牌", "一对", "两对", "三条", "顺子", "同花", "葫芦", "四条", "同花顺"]
@@ -117,10 +117,11 @@ class HoldemRoom(BaseRoom):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.game = None        # 一手牌的状态字典；None = 未开局/间歇
+        self.game = None        # 一手牌的状态字典；None = 未开局/结算投票中
         self.dealer = None
         self.hand_seq = 0
         self.pause_remaining = 0.0
+        self.votes = {}         # 结算投票：username -> {"choice", "blind"}
 
     # ---- 暂停/恢复 ----
     def on_paused(self):
@@ -133,8 +134,6 @@ class HoldemRoom(BaseRoom):
         if g and g.get("to_act"):
             g["deadline"] = time.time() + (self.pause_remaining or TURN_TIMEOUT)
             self.schedule_turn_timer()
-        elif self.status == "playing":
-            self.schedule_next_hand()
         self.pause_remaining = 0.0
 
     # ---- 视图 ----
@@ -174,12 +173,15 @@ class HoldemRoom(BaseRoom):
                 }
             )
         if g:
+            pot = round(sum(g["committed"].values()), 2)
+            if g.get("result"):
+                pot = g["result"].get("pot", pot)
             view.update(
                 {
                     "hand_no": g["hand_no"],
                     "stage": g["stage"],
                     "board": [{"r": r, "s": s} for r, s in g["board"]],
-                    "pot": round(sum(g["committed"].values()), 2),
+                    "pot": pot,
                     "current_bet": g["current_bet"],
                     "to_act": g["to_act"],
                     "turn_left": round(max(0, g["deadline"] - time.time()), 1)
@@ -194,16 +196,29 @@ class HoldemRoom(BaseRoom):
                 view["your_hole"] = [{"r": r, "s": s} for r, s in g["holes"][username]]
                 if g["to_act"] == username:
                     view["your_options"] = self.legal_actions(username)
+        if self.status == "playing" and not self.in_hand():
+            # 一手结束后进入结算投票阶段（摊牌态保留用于展示）
+            view["settlement"] = {
+                "votes": dict(self.votes),
+                "total": len(self.seating),
+                "can_next": self.can_continue(self.blind),
+                "blind": self.blind,
+            }
         return view
 
     # ---- 一手牌状态机 ----
     def in_hand(self):
-        return bool(self.game)
+        """是否有一手牌正在进行（摊牌/结算阶段不算）。"""
+        g = self.game
+        return bool(g) and g.get("stage") != "showdown"
 
     def note_leave(self, username):
         """离桌时把进行中的玩家标记为弃牌，返回是否处于一手牌中间。"""
         g = self.game
-        mid_hand = bool(g and username in g["order"] and username not in g["folded"])
+        mid_hand = bool(
+            g and g.get("stage") != "showdown"
+            and username in g["order"] and username not in g["folded"]
+        )
         if mid_hand:
             g["folded"].add(username)
         return mid_hand
@@ -252,14 +267,65 @@ class HoldemRoom(BaseRoom):
             action = "fold"
         await self.perform_action(username, action, auto=True)
 
-    def schedule_next_hand(self):
-        self.schedule("next", INTERMISSION, self.next_hand)
+    def enter_settlement(self):
+        """一手结束：清空上一手投入记录，进入结算投票，等待过半数决定。"""
+        self.votes = {}
+        self.schedule("settle", SETTLE_TIMEOUT, self.settle_timeout)
 
-    async def next_hand(self):
-        if not self.game:
+    def can_continue(self, blind):
+        """全员筹码都够发一轮盲注（2 倍大盲注）且人数足时才能再来一局。"""
+        need = round(blind * 2, 2)
+        return len(self.seating) >= 2 and all(
+            member["stack"] >= need for member in self.members.values()
+        )
+
+    async def settle_timeout(self):
+        if self.paused or self.in_hand() or self.status != "playing":
             return
-        self.game = None
-        await self.start_hand()
+        await self.execute_decision("next", self.blind)
+
+    async def cast_vote(self, username, choice, blind):
+        """记录一票；过半数（或全员已投）即执行，返回执行结果或 None。"""
+        if self.in_hand() or self.status != "playing":
+            return None
+        if choice == "next" and not self.can_continue(blind):
+            raise ValueError("有人筹码不足下一局门槛，只能结算并解散房间")
+        self.votes[username] = {
+            "choice": choice,
+            "blind": blind if choice == "next" else None,
+        }
+        live = {name: vote for name, vote in self.votes.items() if name in self.members}
+        total = len(self.seating)
+        next_votes = sum(1 for v in live.values() if v["choice"] == "next")
+        dissolve_votes = sum(1 for v in live.values() if v["choice"] == "dissolve")
+        executed = None
+        if next_votes > total / 2:
+            executed = "next"
+        elif dissolve_votes > total / 2:
+            executed = "dissolve"
+        elif all(name in live for name in self.seating):
+            executed = "next" if next_votes >= dissolve_votes else "dissolve"
+        if executed == "next":
+            preferred = [
+                v["blind"] for v in live.values()
+                if v["choice"] == "next" and v["blind"] in BLIND_PRESETS
+            ]
+            preferred.sort(key=preferred.count, reverse=True)
+            await self.execute_decision("next", preferred[0] if preferred else self.blind)
+        elif executed == "dissolve":
+            await self.execute_decision("dissolve", None)
+        return executed
+
+    async def execute_decision(self, choice, blind):
+        self.cancel_timer("settle")
+        if choice == "next":
+            self.blind = blind or self.blind
+            self.votes = {}
+            await self.start_hand()
+            await self.on_rooms_changed()
+        else:
+            if self.on_dissolve_requested:
+                await self.on_dissolve_requested("结算解散")
 
     async def start(self):
         """房主开局；筹码不足时抛 ValueError（消息可直接展示给玩家）。"""
@@ -304,10 +370,12 @@ class HoldemRoom(BaseRoom):
         return None
 
     async def start_hand(self):
+        self.cancel_timer("settle")
         eligible = self.members_with_chips()
         if len(eligible) < 2:
             self.status = "waiting"
             self.game = None
+            self.votes = {}
             await self.broadcast_views()
             await self.on_rooms_changed()
             return
@@ -473,6 +541,7 @@ class HoldemRoom(BaseRoom):
         g["stage"] = "showdown"
         g["to_act"] = None
         g["deadline"] = 0
+        g["committed"] = {}
         g["result"] = {
             "board": [{"r": r, "s": s} for r, s in g["board"]],
             "pot": pot,
@@ -500,7 +569,7 @@ class HoldemRoom(BaseRoom):
         )
         await self.broadcast_views()
         await self.on_rooms_changed()
-        self.schedule_next_hand()
+        self.enter_settlement()
 
     async def restart(self):
         """重新开始：本手已投入的筹码退回各家，随后重新发一手。"""
@@ -513,5 +582,6 @@ class HoldemRoom(BaseRoom):
             self.stacks_changed()
         self.game = None
         self.paused = False
+        self.votes = {}
         await self.broadcast_payload({"type": "game_restart"})
         await self.start_hand()
