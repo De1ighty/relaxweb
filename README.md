@@ -107,4 +107,4 @@ python3 live-test/uno_proto_test.py    # UNO 协议测试
 
 ## 许可
 
-尚未指定开源许可证；正式开源前请补一个 `LICENSE`（MIT / Apache-2.0 等）。
+[MIT](LICENSE) © 2026 LuHongYi
