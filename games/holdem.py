@@ -166,6 +166,7 @@ class HoldemRoom(BaseRoom):
                     "nickname": self.display_name(name),
                     "stack": member["stack"],
                     "bet": round(g["street_committed"].get(name, 0), 2) if g else 0,
+                    "hand_bet": round(g["committed"].get(name, 0), 2) if g else 0,
                     "folded": bool(g and name in g["folded"]),
                     "allin": bool(g and name in g["allin"]),
                     "in_hand": bool(g and name in g["order"]),
@@ -528,7 +529,8 @@ class HoldemRoom(BaseRoom):
     async def end_hand(self, reveal):
         self.cancel_timer("turn")
         g = self.game
-        pot = round(sum(g["committed"].values()), 2)
+        stakes = dict(g["committed"])
+        pot = round(sum(stakes.values()), 2)
         alive = [name for name in g["order"] if name not in g["folded"]]
         hands = {}
         if reveal:
@@ -543,6 +545,10 @@ class HoldemRoom(BaseRoom):
         g["to_act"] = None
         g["deadline"] = 0
         g["committed"] = {}
+        # 结算页要摊开所有人的手牌；牌型名只给没弃牌的人（公共牌不满 5 张时无意义）
+        shown = hands
+        if len(g["board"]) == 5:
+            shown = {name: best7(g["holes"][name] + g["board"]) for name in alive}
         g["result"] = {
             "board": [{"r": r, "s": s} for r, s in g["board"]],
             "pot": pot,
@@ -557,6 +563,18 @@ class HoldemRoom(BaseRoom):
             if reveal
             else [],
             "payouts": payouts,
+            "hands": [
+                {
+                    "username": name,
+                    "nickname": self.display_name(name),
+                    "cards": [{"r": r, "s": s} for r, s in g["holes"][name]],
+                    "hand_name": hand_name(shown[name]) if name in shown else "",
+                    "folded": name in g["folded"],
+                    "committed": round(stakes.get(name, 0), 2),
+                    "payout": round(payouts.get(name, 0), 2),
+                }
+                for name in g["order"]
+            ],
         }
         logger.info(
             "poker hand #%d done in room %s, pot %.2f, winners %s",

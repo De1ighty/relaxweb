@@ -80,6 +80,58 @@ def test_room_lifecycle():
     check("成员移除", left == {"stack": 90.0}, "开局后大盲注已提交")
 
 
+def test_holdem_settlement_payload():
+    """结算视图要能让前端摊开公共牌与每个人的手牌（含弃牌者）。"""
+
+    async def play_out(folder):
+        room = create_room("holdem", room_id=2, name="测试", owner="a", buy_in=100, blind=5)
+        for name in ("a", "b", "c"):
+            room.add_member(name, 100)
+
+        async def noop(*_args, **_kwargs):
+            return None
+
+        room.broadcast_views = noop
+        room.broadcast_payload = noop
+        room.on_rooms_changed = noop
+        await room.start()
+        first = room.view_for("a")["players"]
+        hand_bets = [p["hand_bet"] for p in first]
+        streets = []
+        guard = 0
+        while room.in_hand() and guard < 300:
+            guard += 1
+            streets.append(room.game["stage"])
+            who = room.game["to_act"]
+            if who == folder:
+                folder = None
+                await room.perform_action(who, "fold")
+                continue
+            opts = room.legal_actions(who)
+            await room.perform_action(who, "check" if opts["check"] else "call")
+        result = room.game["result"]
+        room.close()
+        return room, result, hand_bets, streets
+
+    room, result, hand_bets, _ = asyncio.run(play_out("a"))
+    hands = {h["username"]: h for h in result["hands"]}
+    check("结算含全部玩家手牌", sorted(hands) == ["a", "b", "c"], str(sorted(hands)))
+    check("结算手牌都是两张", all(len(h["cards"]) == 2 for h in hands.values()))
+    check("弃牌者仍在结算里且标记", hands["a"]["folded"] and not hands["b"]["folded"])
+    check("公共牌五张", len(result["board"]) == 5, str(len(result["board"])))
+    check("摊牌有牌型名", bool(hands["b"]["hand_name"]), str(hands["b"]["hand_name"]))
+    check("弃牌者无牌型名", hands["a"]["hand_name"] == "")
+    check("结算含每人投入", hands["b"]["committed"] > 0 and hands["a"]["committed"] == 0,
+          str({n: h["committed"] for n, h in hands.items()}))
+    check("底池守恒", round(sum(result["payouts"].values()), 2) == result["pot"],
+          f"{result['payouts']} pot={result['pot']}")
+    check("下注后座位可见本手投入", sum(hand_bets) == 15.0, str(hand_bets))
+
+    # 全员弃牌到一人：没有摊牌也要能看到手牌
+    room2, result2, _, _ = asyncio.run(play_out("a"))
+    check("弃牌结束也有手牌数据", len(result2["hands"]) == 3)
+
+
 def test_registry():
     check("注册表包含holdem", "holdem" in ROOM_TYPES)
     check("注册表包含uno", "uno" in ROOM_TYPES)
@@ -236,6 +288,7 @@ def test_uno_settlement():
 test_evaluate()
 test_side_pots()
 test_room_lifecycle()
+test_holdem_settlement_payload()
 test_registry()
 test_uno_deck_and_matches()
 test_uno_lifecycle()

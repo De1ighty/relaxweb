@@ -2452,6 +2452,28 @@ input {
     font-variant-numeric: tabular-nums;
 }
 
+.seat-bet.on {
+    padding: 0 7px;
+
+    border-radius: 999px;
+
+    background: #1fa971;
+
+    color: #fff;
+
+    box-shadow: 0 2px 6px rgba(31,169,113,.35);
+}
+
+.seat-total {
+    color: #86868b;
+
+    font-size: 10.5px;
+
+    font-weight: 650;
+
+    font-variant-numeric: tabular-nums;
+}
+
 .seat-status {
     font-size: 11px;
 
@@ -2662,6 +2684,170 @@ input {
 
 .reveal-cards .pcard .pc-suit {
     font-size: 10px;
+}
+
+/* 结算回顾：公共牌与所有人手牌 */
+
+.poker-review {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 8px;
+}
+
+.review-head {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    color: #4b5563;
+
+    font-size: 12.5px;
+
+    font-weight: 700;
+}
+
+.review-pot {
+    color: #b45309;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.review-board {
+    display: flex;
+
+    gap: 6px;
+
+    justify-content: center;
+
+    width: fit-content;
+
+    margin: 0 auto;
+
+    padding: 10px 14px;
+
+    border-radius: 12px;
+
+    background: linear-gradient(180deg, #2b8a63, #206a4b);
+}
+
+.review-board .pcard-slot {
+    width: 40px;
+
+    height: 56px;
+
+    border-radius: 6px;
+
+    border: 1.5px dashed rgba(255,255,255,.28);
+}
+
+.review-board .pcard {
+    box-shadow: 0 3px 8px rgba(0,0,0,.28);
+}
+
+.review-rows {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+}
+
+.review-row {
+    display: grid;
+
+    grid-template-columns: minmax(58px, 1fr) auto minmax(56px, auto) auto;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 8px 10px;
+
+    border-radius: 10px;
+
+    background: #f2f2f7;
+
+    font-size: 12.5px;
+}
+
+.review-row.winner {
+    background: #e8f7ed;
+
+    box-shadow: inset 0 0 0 1.5px rgba(26,158,69,.4);
+}
+
+.review-row.folded {
+    opacity: .55;
+}
+
+.review-who {
+    font-weight: 750;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+}
+
+.review-cards {
+    display: flex;
+
+    gap: 4px;
+}
+
+.review-cards .pcard {
+    width: 28px;
+
+    height: 38px;
+
+    border-radius: 5px;
+
+    box-shadow: 0 2px 5px rgba(0,0,0,.2);
+}
+
+.review-cards .pcard .pc-rank {
+    font-size: 13px;
+}
+
+.review-cards .pcard .pc-suit {
+    font-size: 11px;
+}
+
+.review-hand {
+    color: #6b7280;
+
+    font-size: 11.5px;
+
+    text-align: right;
+
+    white-space: nowrap;
+}
+
+.review-delta {
+    font-weight: 750;
+
+    font-variant-numeric: tabular-nums;
+
+    text-align: right;
+
+    white-space: nowrap;
+}
+
+.review-delta.win {
+    color: #1a9e45;
+}
+
+.review-delta.lose {
+    color: #c02a4a;
+}
+
+.review-delta.flat {
+    color: #86868b;
 }
 
 @media(max-width:650px) {
@@ -2960,6 +3146,26 @@ a.hall-stat {
 
     .seat-name {
         max-width: 100%;
+    }
+
+    .review-row {
+        grid-template-columns: minmax(52px, 1fr) auto minmax(48px, auto) auto;
+
+        gap: 6px;
+
+        padding: 7px 9px;
+
+        font-size: 12px;
+    }
+
+    .review-hand {
+        font-size: 11px;
+    }
+
+    .review-cards .pcard {
+        width: 26px;
+
+        height: 35px;
     }
 
     .poker-dock {
@@ -5060,6 +5266,11 @@ a.hall-stat {
         padding: 6px 4px 5px;
     }
 
+    .seat-bet,
+    .seat-total {
+        font-size: 10px;
+    }
+
     .poker-dock {
         margin-top: 8px;
 
@@ -5110,6 +5321,55 @@ a.hall-stat {
         max-height: 130px;
 
         overflow-y: auto;
+    }
+
+    .poker-table .poker-review {
+        max-height: 148px;
+
+        overflow-y: auto;
+    }
+
+    .review-board {
+        gap: 4px;
+
+        padding: 6px 8px;
+    }
+
+    .review-board .pcard,
+    .review-board .pcard-slot {
+        width: 30px;
+
+        height: 42px;
+    }
+
+    .review-board .pcard .pc-rank {
+        font-size: 14px;
+    }
+
+    .review-board .pcard .pc-suit {
+        font-size: 11px;
+    }
+
+    .review-row {
+        gap: 6px;
+
+        padding: 6px 8px;
+
+        font-size: 11.5px;
+    }
+
+    .review-cards .pcard {
+        width: 24px;
+
+        height: 32px;
+    }
+
+    .review-cards .pcard .pc-rank {
+        font-size: 11px;
+    }
+
+    .review-cards .pcard .pc-suit {
+        font-size: 9px;
     }
 
     .uno-seats {

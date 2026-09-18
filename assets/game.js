@@ -962,9 +962,19 @@ function seatNode(p) {
   const stack = document.createElement("div");
   stack.className = "seat-stack";
   stack.textContent = formatCoins(p.stack);
+  // 本轮下注：座位前压着的筹码，标明这一条街投入了多少
   const bet = document.createElement("div");
   bet.className = "seat-bet";
-  bet.textContent = p.bet ? `+${formatCoins(p.bet)}` : "";
+  if (p.bet > 0) {
+    bet.classList.add("on");
+    bet.textContent = p.folded ? `本轮 ${formatCoins(p.bet)}` : `本轮 +${formatCoins(p.bet)}`;
+  }
+  // 本手累计：跨街之后才显示，避免和「本轮」重复
+  const total = document.createElement("div");
+  total.className = "seat-total";
+  if ((p.hand_bet || 0) > (p.bet || 0)) {
+    total.textContent = `本手投入 ${formatCoins(p.hand_bet)}`;
+  }
   const status = document.createElement("div");
   status.className = "seat-status";
   if (p.folded) {
@@ -979,7 +989,7 @@ function seatNode(p) {
   } else {
     status.textContent = p.in_hand ? "" : "观战";
   }
-  seat.append(name, stack, bet, status);
+  seat.append(name, stack, bet, total, status);
   return seat;
 }
 
@@ -1068,37 +1078,83 @@ function actionBarNode(options) {
   return bar;
 }
 
-function resultNode(result) {
+/** 结算回顾：公共牌 + 每个人的手牌（含弃牌者）+ 本手输赢。 */
+function reviewNode(result, showBoard = true) {
   const box = document.createElement("div");
-  box.className = "poker-result";
-  for (const item of result.reveal || []) {
-    requestProfile(item.username);
-    const row = document.createElement("div");
-    row.className = "poker-result-row";
-    const left = document.createElement("span");
-    left.textContent = item.hand_name
-      ? `${displayNameOf(item.username)} · ${item.hand_name}`
-      : displayNameOf(item.username);
-    const cards = document.createElement("span");
-    cards.className = "reveal-cards";
-    for (const c of item.cards) cards.append(cardNode(c, { settled: true }));
-    row.append(left, cards);
-    box.append(row);
+  box.className = "poker-review";
+
+  if (showBoard) {
+    const head = document.createElement("div");
+    head.className = "review-head";
+    const label = document.createElement("span");
+    label.textContent = "公共牌";
+    const potChip = document.createElement("span");
+    potChip.className = "review-pot";
+    potChip.textContent = `底池 ${formatCoins(result.pot || 0)}`;
+    head.append(label, potChip);
+    box.append(head);
+
+    const board = document.createElement("div");
+    board.className = "review-board";
+    const boardCards = result.board || [];
+    for (let i = 0; i < 5; i += 1) {
+      if (i < boardCards.length) {
+        board.append(cardNode(boardCards[i], { settled: true }));
+      } else {
+        const slot = document.createElement("span");
+        slot.className = "pcard-slot";
+        board.append(slot);
+      }
+    }
+    box.append(board);
   }
-  for (const [username, amount] of Object.entries(result.payouts || {})) {
-    if (amount <= 0) continue;
-    requestProfile(username);
+
+  const rows = document.createElement("div");
+  rows.className = "review-rows";
+  for (const item of reviewRows(result)) {
+    const paid = Number(result.payouts?.[item.username] || 0);
+    const stake = Number(item.committed || 0);
+    const net = Math.round((paid - stake) * 100) / 100;
     const row = document.createElement("div");
-    row.className = "poker-result-row";
-    const left = document.createElement("span");
-    left.textContent = `${displayNameOf(username)} 收取底池`;
-    const right = document.createElement("span");
-    right.className = "win";
-    right.textContent = `+${formatCoins(amount)}`;
-    row.append(left, right);
-    box.append(row);
+    row.className = "review-row";
+    if (item.folded) row.classList.add("folded");
+    else if (net > 0) row.classList.add("winner");
+
+    const who = document.createElement("div");
+    who.className = "review-who";
+    who.textContent = item.nickname || displayNameOf(item.username);
+
+    const cards = document.createElement("div");
+    cards.className = "review-cards";
+    for (const c of item.cards || []) cards.append(cardNode(c, { settled: true }));
+
+    const handName = document.createElement("div");
+    handName.className = "review-hand";
+    handName.textContent = item.folded ? "已弃牌" : (item.hand_name || "未摊牌");
+
+    const delta = document.createElement("div");
+    delta.className = `review-delta ${net > 0 ? "win" : net < 0 ? "lose" : "flat"}`;
+    delta.textContent = `${net > 0 ? "+" : ""}${formatCoins(net)}`;
+
+    row.append(who, cards, handName, delta);
+    rows.append(row);
   }
+  box.append(rows);
   return box;
+}
+
+/** 优先用服务端的 hands 字段；老payload 退回到 reveal + payouts。 */
+function reviewRows(result) {
+  if (Array.isArray(result.hands) && result.hands.length) return result.hands;
+  const stakes = result.committed || {};
+  return (result.reveal || []).map((item) => ({
+    username: item.username,
+    nickname: displayNameOf(item.username),
+    cards: item.cards,
+    hand_name: item.hand_name,
+    folded: false,
+    committed: stakes[item.username] || 0,
+  }));
 }
 
 function cardNode(card, opts = {}) {
@@ -1128,9 +1184,15 @@ function renderSettlementView() {
   const resultCard = document.createElement("div");
   resultCard.className = "game-card-page";
   if (myRoom.result) {
-    resultCard.append(myRoom.game_type === "uno"
-      ? unoResultNode(myRoom.result)
-      : resultNode(myRoom.result));
+    if (myRoom.game_type === "uno") {
+      resultCard.append(unoResultNode(myRoom.result));
+    } else {
+      const reviewTitle = document.createElement("div");
+      reviewTitle.className = "hall-section-title";
+      reviewTitle.style.marginTop = "0";
+      reviewTitle.textContent = "本手回顾";
+      resultCard.append(reviewTitle, reviewNode(myRoom.result));
+    }
   } else {
     const note = document.createElement("div");
     note.className = "game-hint";
@@ -1204,7 +1266,7 @@ function renderSettlementView() {
     ? "过半数玩家投「再来一局」即开下一局；过半数投「解散」则按当前筹码退还所有人并关闭房间。"
     : isUno
       ? "有玩家筹码已输光，过半数投「解散」后房间将按当前筹码退还所有人。"
-      : "有玩家筹码不足下一局门槛（20 倍小盲注），过半数投「解散」后房间将按当前筹码退还所有人。";
+      : `有人筹码不足下一局大盲注（${formatCoins(myRoom.blind * 2)}），过半数投「解散」后房间将按当前筹码退还所有人。`;
   voteCard.append(hint);
   body.append(voteCard);
 
@@ -1271,7 +1333,7 @@ function renderPokerTable() {
   for (const p of myRoom.players) seats.append(seatNode(p));
   table.append(seats);
 
-  if (myRoom.result) table.append(resultNode(myRoom.result));
+  if (myRoom.result) table.append(reviewNode(myRoom.result, false));
 
   if (myRoom.paused) {
     const overlay = document.createElement("div");
