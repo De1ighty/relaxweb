@@ -62,6 +62,16 @@ export const state = {
   ratingEntries: [],
 };
 
+export const rewardsPanel = window.DailyRewards.create({
+  send,
+  onCoins(coins) {
+    if (!state.currentUser) return;
+    state.currentUser.coins = coins;
+    updateCoinChip();
+    if (elements.financeModal.style.display === "flex") send({ type: "get_finance" });
+  },
+});
+
 let manageMenuOpen = false;
 
 export function formatCoins(value) {
@@ -175,6 +185,7 @@ export function setManageMenu(open) {
 
 export function setSignedIn(user) {
   state.currentUser = user;
+  rewardsPanel.setUser(user);
   state.ratingEntries = [];
   elements.loginButton.hidden = Boolean(user);
   elements.coinChip.style.display = user ? "flex" : "none";

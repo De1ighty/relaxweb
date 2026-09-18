@@ -19,6 +19,7 @@ from config import get, get_int
 from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
 from games.rating import rating_change, rating_info
+from rewards import init_rewards, rewards_state, claim_checkin, draw_lottery
 
 
 HOST = str(get("servers.chat_host", env="LIVE_CHAT_HOST", default="0.0.0.0"))
@@ -115,6 +116,7 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN rating_score INTEGER NOT NULL DEFAULT 1000")
         if "rating_games" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN rating_games INTEGER NOT NULL DEFAULT 0")
+        init_rewards(conn)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS rating_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -729,6 +731,10 @@ async def handle_delete_account(websocket, state, data):
         )
         conn.execute("DELETE FROM rating_history WHERE user_id = "
                      "(SELECT id FROM users WHERE username = ?)", (user["username"],))
+        conn.execute("DELETE FROM daily_checkins WHERE user_id = "
+                     "(SELECT id FROM users WHERE username = ?)", (user["username"],))
+        conn.execute("DELETE FROM lottery_draws WHERE user_id = "
+                     "(SELECT id FROM users WHERE username = ?)", (user["username"],))
         conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
     state["user"] = None
     logger.info("account deleted: %s", user["username"])
@@ -809,6 +815,57 @@ async def handle_get_finance(websocket, state, data):
             ],
         },
     )
+
+
+async def publish_daily_rewards(username):
+    for socket, client_state in list(clients.items()):
+        user = client_state.get("user")
+        if user and user["username"] == username:
+            with database() as conn:
+                payload = rewards_state(conn, username, time.time())
+            user["coins"] = payload["coins"]
+            await send_json(socket, {"type": "daily_rewards", **payload})
+
+
+async def handle_rewards_action(websocket, state, data, action):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "rewards_error", "message": "请先登录"})
+        return
+    username = user["username"]
+    try:
+        with database() as conn, conn:
+            # 多标签页、多连接的签到/抽奖必须串行读改写。
+            if action != "get":
+                conn.execute("BEGIN IMMEDIATE")
+            now = time.time()
+            extra = {}
+            if action == "checkin":
+                extra["awarded"] = claim_checkin(conn, username, now)
+            elif action == "draw":
+                amount, replayed = draw_lottery(conn, username, data.get("request_id"), now, adjust_coins)
+                extra = {"amount": amount, "replayed": replayed, "request_id": data["request_id"]}
+            payload = rewards_state(conn, username, now)
+    except ValueError as error:
+        await send_json(websocket, {"type": "rewards_error", "message": str(error),
+                                    "request_id": data.get("request_id")})
+        return
+    kind = {"get": "daily_rewards", "checkin": "checkin_result", "draw": "lottery_result"}[action]
+    await send_json(websocket, {"type": kind, **payload, **extra})
+    if action != "get":
+        await publish_daily_rewards(username)
+
+
+async def handle_get_daily_rewards(websocket, state, data):
+    await handle_rewards_action(websocket, state, data, "get")
+
+
+async def handle_daily_checkin(websocket, state, data):
+    await handle_rewards_action(websocket, state, data, "checkin")
+
+
+async def handle_draw_lottery(websocket, state, data):
+    await handle_rewards_action(websocket, state, data, "draw")
 
 
 async def handle_transfer_coins(websocket, state, data):
@@ -1842,6 +1899,9 @@ handlers = {
     "create_invite": handle_create_invite,
     "chat": handle_chat,
     "get_finance": handle_get_finance,
+    "get_daily_rewards": handle_get_daily_rewards,
+    "daily_checkin": handle_daily_checkin,
+    "draw_lottery": handle_draw_lottery,
     "get_rating_history": handle_get_rating_history,
     "transfer_coins": handle_transfer_coins,
     "get_bet": handle_get_bet,
