@@ -10,6 +10,7 @@ import {
   openFinance, openLogin, setAuthMode, submitAuth, submitTransfer, switchFinanceTab,
 } from "./auth.js";
 import { closeChatOverlay } from "./room.js";
+import { confirmDialog } from "./dialog.js";
 // 以下模块靠导入时的副作用完成注册（大厅视图、房间视图、各游戏牌桌）
 import "./hall.js";
 import "./room.js";
@@ -44,22 +45,24 @@ elements.leaveRoomButton.addEventListener("click", leaveRoom);
 elements.manageButton.addEventListener("click", () => {
   setManageMenu(elements.manageMenu.hidden);
 });
-elements.manageDrawButton.addEventListener("click", () => {
+elements.manageDrawButton.addEventListener("click", async () => {
   setManageMenu(false);
-  if (confirm("确定流局？牌局结束，所有人按当前筹码退回金币。")) {
-    send({ type: "leave_room" });
-  }
+  const ok = await confirmDialog("牌局结束，所有人按当前筹码退回金币。", {
+    title: "确定流局？",
+    tone: "danger",
+  });
+  if (ok) send({ type: "leave_room" });
 });
 elements.managePauseButton.addEventListener("click", () => {
   setManageMenu(false);
   send({ type: "pause_game", paused: !state.myRoom.paused });
 });
-elements.manageRestartButton.addEventListener("click", () => {
+elements.manageRestartButton.addEventListener("click", async () => {
   setManageMenu(false);
   const detail = state.myRoom?.game_type === "uno"
-    ? "确定重新开始？将收回本局所有手牌并重新发牌。"
-    : "确定重新开始？本手已投注的筹码将退回各家，并重新发牌。";
-  if (confirm(detail)) {
+    ? "将收回本局所有手牌并重新发牌。"
+    : "本手已投注的筹码将退回各家，并重新发牌。";
+  if (await confirmDialog(detail, { title: "确定重新开始？" })) {
     send({ type: "restart_game" });
   }
 });

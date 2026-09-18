@@ -2,6 +2,7 @@
 
 import { openLogin } from "./auth.js";
 import { elements, formatCoins, renderGameView, send, state } from "./core.js";
+import { alertDialog } from "./dialog.js";
 import { onMessage, registerView } from "./registry.js";
 
 const GAME_TYPES = [
@@ -244,11 +245,11 @@ function renderCreate() {
   create.addEventListener("click", () => {
     const value = Math.round(Number(buyin.value) * 100) / 100;
     if (!Number.isFinite(value) || value <= 0) {
-      alert("请输入正确的买入金额");
+      void alertDialog("请输入正确的买入金额");
       return;
     }
     if (state.currentUser && value > state.currentUser.coins) {
-      alert("金币不足");
+      void alertDialog("金币不足");
       return;
     }
     send({

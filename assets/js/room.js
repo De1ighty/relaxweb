@@ -1,6 +1,7 @@
 /* 房间外壳：等待开局、房间聊天与座位气泡、结算投票页。 */
 
 import { elements, formatCoins, isRoomOwner, renderGameView, send, setRoomMode, state, stopHallTicker, updateCoinChip } from "./core.js";
+import { alertDialog } from "./dialog.js";
 import { fillBlindOptions, gameMetaById } from "./hall.js";
 import { gameView, onMessage, registerView } from "./registry.js";
 
@@ -361,7 +362,7 @@ onMessage("room_chat", (data) => {
   showSeatBubble(data.username, data.text);
 });
 
-onMessage("error", (data) => { alert(data.message); });
+onMessage("error", (data) => { void alertDialog(data.message); });
 
 onMessage("game_update", (data) => {
   if (state.myRoom && data.room_id !== state.myRoom.room_id) return;
@@ -380,10 +381,10 @@ onMessage("room_closed", (data) => {
   seatBubbles.clear();
   closeChatOverlay();
   send({ type: "get_finance" });
-  if (hadRoom && data.reason) alert(data.reason);
+  if (hadRoom && data.reason) void alertDialog(data.reason);
   renderGameView();
 });
 
-onMessage("game_error", (data) => { alert(data.message); });
+onMessage("game_error", (data) => { void alertDialog(data.message); });
 
 registerView("room", renderRoom);

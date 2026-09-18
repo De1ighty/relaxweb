@@ -1,6 +1,7 @@
 /* 登录注册与财务（金币明细、转账）。 */
 
 import { AUTH_TOKEN_KEY, elements, formatClock, formatCoins, rememberProfile, renderGameView, renderIdentity, send, setSignedIn, setUserMenu, state, transferSelect, updateCoinChip } from "./core.js";
+import { alertDialog } from "./dialog.js";
 import { onMessage } from "./registry.js";
 
 const coinKinds = {
@@ -43,7 +44,7 @@ export function submitAuth() {
   const username = elements.username.value.trim();
   const password = elements.password.value;
   if (!username || !password) {
-    alert("请输入用户名和密码");
+    void alertDialog("请输入用户名和密码");
     return;
   }
   send({
@@ -133,15 +134,15 @@ export function submitTransfer() {
   const to = elements.transferTo.value.trim();
   const amount = Number(elements.transferAmount.value);
   if (!to) {
-    alert("请选择转账对象");
+    void alertDialog("请选择转账对象");
     return;
   }
   if (to === state.currentUser.username) {
-    alert("不能转账给自己");
+    void alertDialog("不能转账给自己");
     return;
   }
   if (!Number.isFinite(amount) || amount <= 0) {
-    alert("请输入正确的转账金额");
+    void alertDialog("请输入正确的转账金额");
     return;
   }
   elements.transferFeedback.textContent = "";
@@ -154,7 +155,7 @@ export function submitTransfer() {
 ========================================================= */
 
 onMessage("register_success", () => {
-  alert("注册成功，请登录");
+  void alertDialog("注册成功，请登录");
   elements.password.value = "";
   setAuthMode("login");
 });
@@ -185,14 +186,14 @@ onMessage("profile", (data) => {
   if (state.myRoom?.result) renderGameView();
 });
 
-onMessage("profile_error", (data) => { alert(data.message); });
+onMessage("profile_error", (data) => { void alertDialog(data.message); });
 
 onMessage("auth_expired", () => {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   setSignedIn(null);
 });
 
-onMessage("auth_error", (data) => { alert(data.message); });
+onMessage("auth_error", (data) => { void alertDialog(data.message); });
 
 onMessage("finance", (data) => { renderFinance(data); });
 
@@ -205,7 +206,7 @@ onMessage("transfer_success", (data) => {
   send({ type: "get_finance" });
 });
 
-onMessage("coins_error", (data) => { alert(data.message); });
+onMessage("coins_error", (data) => { void alertDialog(data.message); });
 
 onMessage("coins", (data) => {
   if (state.currentUser && data.username === state.currentUser.username) {

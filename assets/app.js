@@ -333,9 +333,14 @@ function setUserMenu(open) {
   elements.userChip.setAttribute("aria-expanded", String(open));
 }
 
+/* 页面内提示/确认弹层（assets/js/dialog.js 由 dialog-global.js 挂到 window.LiveDialog）。
+   不用原生 alert/confirm：原生弹窗会阻塞浏览器主线程，自动化测试会一直卡在对话框上。 */
+const uiAlert = (message) => window.LiveDialog.alert(message);
+const uiConfirm = (message, options) => window.LiveDialog.confirm(message, options);
+
 function send(payload) {
   if (socket?.readyState !== WebSocket.OPEN) {
-    alert("聊天室尚未连接");
+    uiAlert("聊天室尚未连接");
     return false;
   }
   socket.send(JSON.stringify(payload));
@@ -392,7 +397,7 @@ const messageHandlers = {
     renderOnlineUsers(data.users || []);
   },
   register_success() {
-    alert("注册成功，请登录");
+    uiAlert("注册成功，请登录");
     elements.password.value = "";
     setAuthMode("login");
   },
@@ -422,27 +427,27 @@ const messageHandlers = {
   profile_updated() {
     elements.profileModal.style.display = "none";
   },
-  profile_error(data) { alert(data.message); },
+  profile_error(data) { uiAlert(data.message); },
   invite_list(data) {
     renderInviteList(data.codes || []);
   },
   invite_created() {
     send({ type: "list_invites" });
   },
-  invite_error(data) { alert(data.message); },
+  invite_error(data) { uiAlert(data.message); },
   account_deleted() {
     elements.deleteModal.style.display = "none";
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setSignedIn(null);
-    alert("账号已注销");
+    uiAlert("账号已注销");
   },
-  account_error(data) { alert(data.message); },
+  account_error(data) { uiAlert(data.message); },
   auth_expired() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setSignedIn(null);
   },
-  auth_error(data) { alert(data.message); },
-  error(data) { alert(data.message); },
+  auth_error(data) { uiAlert(data.message); },
+  error(data) { uiAlert(data.message); },
   user_list(data) { TransferSelect.setUsers(data.users || []); },
   finance(data) { renderFinance(data); },
   transfer_success(data) {
@@ -452,7 +457,7 @@ const messageHandlers = {
     elements.transferFeedback.textContent = "转账成功";
     send({ type: "get_finance" });
   },
-  coins_error(data) { alert(data.message); },
+  coins_error(data) { uiAlert(data.message); },
   coins(data) {
     if (currentUser && data.username === currentUser.username) {
       currentUser.coins = data.coins;
@@ -494,9 +499,9 @@ const messageHandlers = {
     renderBetChip();
     if (elements.betModal.style.display === "flex") renderBetModal();
   },
-  bet_error(data) { alert(data.message); },
+  bet_error(data) { uiAlert(data.message); },
   admin_coins_done(data) {
-    alert(`已将 ${data.username} 的金币设为 ${formatCoins(data.coins)}`);
+    uiAlert(`已将 ${data.username} 的金币设为 ${formatCoins(data.coins)}`);
   },
 };
 
@@ -587,7 +592,7 @@ function submitAuth() {
   const username = elements.username.value.trim();
   const password = elements.password.value;
   if (!username || !password) {
-    alert("请输入用户名和密码");
+    uiAlert("请输入用户名和密码");
     return;
   }
   send({
@@ -622,7 +627,7 @@ async function pickAvatar(file) {
   if (!file || !file.type.startsWith("image/")) return;
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) {
-    alert("图片读取失败");
+    uiAlert("图片读取失败");
     return;
   }
   const edge = Math.min(bitmap.width, bitmap.height);
@@ -636,7 +641,7 @@ async function pickAvatar(file) {
   );
   const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
   if (dataUrl.length > 180000) {
-    alert("图片太大，请换一张试试");
+    uiAlert("图片太大，请换一张试试");
     return;
   }
   pendingAvatar = dataUrl;
@@ -726,7 +731,7 @@ function openDeleteModal() {
 
 function submitDeleteAccount() {
   if (!elements.deletePassword.value) {
-    alert("请输入密码");
+    uiAlert("请输入密码");
     return;
   }
   send({ type: "delete_account", password: elements.deletePassword.value });
@@ -810,15 +815,15 @@ function submitTransfer() {
   const to = elements.transferTo.value.trim();
   const amount = Number(elements.transferAmount.value);
   if (!to) {
-    alert("请选择转账对象");
+    uiAlert("请选择转账对象");
     return;
   }
   if (to === currentUser.username) {
-    alert("不能转账给自己");
+    uiAlert("不能转账给自己");
     return;
   }
   if (!Number.isFinite(amount) || amount <= 0) {
-    alert("请输入正确的转账金额");
+    uiAlert("请输入正确的转账金额");
     return;
   }
   elements.transferFeedback.textContent = "";
@@ -970,17 +975,17 @@ function buildJoinForm(bet) {
     const balanceNow = Number(currentUser.coins || 0);
     let value = Number(joinDraft.amount);
     if (!Number.isFinite(value) || value <= 0) {
-      alert("请输入投注金币数量");
+      uiAlert("请输入投注金币数量");
       return;
     }
     value = Math.round(value * 100) / 100;
     if (balanceNow < BET_MIN_STAKE) value = balanceNow;
     if (value < BET_MIN_STAKE) {
-      alert(`最低投注 ${BET_MIN_STAKE} 金币`);
+      uiAlert(`最低投注 ${BET_MIN_STAKE} 金币`);
       return;
     }
     if (value > balanceNow) {
-      alert("金币不足");
+      uiAlert("金币不足");
       return;
     }
     send({ type: "place_bet", option_index: joinDraft.optionIndex, amount: value });
@@ -1019,8 +1024,8 @@ function buildSettlePanel(bet) {
     button.className = "bet-settle-button";
     button.type = "button";
     button.textContent = "设为答案";
-    button.addEventListener("click", () => {
-      if (confirm(`确定答案是「${text}」并结账？`)) {
+    button.addEventListener("click", async () => {
+      if (await uiConfirm(`正确答案是「${text}」，确认后立即按此结账。`, { title: "确定答案？" })) {
         send({ type: "settle_bet", correct_index: index });
       }
     });
@@ -1031,8 +1036,8 @@ function buildSettlePanel(bet) {
   draw.className = "bet-secondary";
   draw.type = "button";
   draw.textContent = "流局（退还全部投注）";
-  draw.addEventListener("click", () => {
-    if (confirm("确定流局？本轮竞猜作废，所有投注将原额退还。")) {
+  draw.addEventListener("click", async () => {
+    if (await uiConfirm("本轮竞猜作废，所有投注将原额退还。", { title: "确定流局？", tone: "danger" })) {
       send({ type: "cancel_bet" });
     }
   });
@@ -1091,11 +1096,11 @@ function renderCreateView(body) {
       .filter(Boolean);
     const text = question.value.trim();
     if (!text) {
-      alert("请输入竞猜问题");
+      uiAlert("请输入竞猜问题");
       return;
     }
     if (options.length < 2) {
-      alert("至少需要两个选项");
+      uiAlert("至少需要两个选项");
       return;
     }
     send({ type: "create_bet", question: text, options });

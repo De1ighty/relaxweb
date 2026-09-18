@@ -1,6 +1,7 @@
 /* 游戏厅前端核心：元素引用、共享状态、WebSocket 与消息分发、通用格式化、页面骨架切换。 */
 
 import { dispatchMessage, onMessage, renderView } from "./registry.js";
+import { alertDialog, confirmDialog } from "./dialog.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -94,7 +95,7 @@ export function requestProfile(username) {
 
 export function send(payload) {
   if (state.socket?.readyState !== WebSocket.OPEN) {
-    alert("游戏厅尚未连接");
+    void alertDialog("游戏厅尚未连接");
     return false;
   }
   state.socket.send(JSON.stringify(payload));
@@ -203,13 +204,13 @@ export function isRoomOwner() {
   return Boolean(state.currentUser) && state.myRoom.owner === state.currentUser.username;
 }
 
-function leaveConfirmText() {
+function leaveConfirm() {
   if (isRoomOwner()) {
     return state.myRoom.status === "playing"
-      ? "确定流局？牌局结束，所有人按当前筹码退回金币。"
-      : "解散房间并退还所有人的买入？";
+      ? { title: "确定流局？", message: "牌局结束，所有人按当前筹码退回金币。", tone: "danger" }
+      : { title: "解散房间？", message: "所有人的买入将原额退还。", tone: "danger" };
   }
-  return "退出房间并取回当前筹码？";
+  return { title: "退出房间", message: "退出后取回你当前的筹码。", tone: "default" };
 }
 
 export function setRoomMode() {
@@ -228,8 +229,9 @@ function clearRoomMode() {
   setManageMenu(false);
 }
 
-export function leaveRoom() {
-  if (confirm(leaveConfirmText())) send({ type: "leave_room" });
+export async function leaveRoom() {
+  const { title, message, tone } = leaveConfirm();
+  if (await confirmDialog(message, { title, tone })) send({ type: "leave_room" });
 }
 
 export function startHallTicker(fill, seconds) {
