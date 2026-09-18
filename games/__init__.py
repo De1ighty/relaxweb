@@ -6,5 +6,6 @@
 """
 from games.base import BaseRoom, ROOM_TYPES, create_room, register_room_type
 from games import holdem  # noqa: F401  导入即注册 holdem
+from games import uno  # noqa: F401  导入即注册 uno
 
 __all__ = ["BaseRoom", "ROOM_TYPES", "create_room", "register_room_type"]

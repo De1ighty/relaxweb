@@ -36,7 +36,21 @@ const GAME_TYPES = [
     icon: "♠",
     desc: "经典规则：盲注轮转、边池分配、全下自动跑马。金币买入，离桌自动结算。",
   },
+  {
+    id: "uno",
+    name: "UNO · 经典牌局",
+    icon: "🃏",
+    desc: "同色同数出牌，功能牌逆转战局。剩牌按张赔给赢家，先出完者通吃本局。",
+  },
 ];
+const UNO_COLORS = ["r", "y", "g", "b"];
+const UNO_COLOR_NAMES = { r: "红", y: "黄", g: "绿", b: "蓝" };
+const UNO_COLOR_TEXT = {
+  r: "#e02020", y: "#c77800", g: "#1d9e4f", b: "#1f6fd6", w: "#3a3a3c",
+};
+const UNO_VALUE_GLYPHS = {
+  skip: "⊘", rev: "⇄", d2: "+2", wild: "◎", wd4: "+4",
+};
 const coinKinds = {
   register: "注册奖励",
   admin: "管理员调整",
@@ -76,7 +90,6 @@ let currentGameId = null;
 let hallPage = null;
 const createDraft = { name: "", buyin: "100", blind: "5" };
 let roomChat = [];
-let roomChatOpen = false;
 let roomChatDraft = "";
 const seatBubbles = new Map();
 
@@ -528,6 +541,20 @@ function currentGameMeta() {
   return GAME_TYPES.find((g) => g.id === currentGameId) || GAME_TYPES[0];
 }
 
+function gameMetaById(id) {
+  return GAME_TYPES.find((g) => g.id === id) || GAME_TYPES[0];
+}
+
+function fillBlindOptions(select, gameId, selected) {
+  for (const b of [1, 2, 5, 10]) {
+    const opt = document.createElement("option");
+    opt.value = String(b);
+    opt.textContent = gameId === "uno" ? `每张赔付 ${b}` : `盲注 ${b}/${b * 2}`;
+    if (String(b) === String(selected)) opt.selected = true;
+    select.append(opt);
+  }
+}
+
 function backChip(label, onClick) {
   const back = document.createElement("button");
   back.className = "online-stat hall-back";
@@ -662,13 +689,7 @@ function renderCreate() {
   buyin.addEventListener("input", () => { createDraft.buyin = buyin.value; });
   const blind = document.createElement("select");
   blind.className = "login-input";
-  for (const b of [1, 2, 5, 10]) {
-    const opt = document.createElement("option");
-    opt.value = String(b);
-    opt.textContent = `盲注 ${b}/${b * 2}`;
-    if (String(b) === createDraft.blind) opt.selected = true;
-    blind.append(opt);
-  }
+  fillBlindOptions(blind, game.id, createDraft.blind);
   blind.addEventListener("change", () => { createDraft.blind = blind.value; });
   const create = document.createElement("button");
   create.className = "login-submit";
@@ -697,7 +718,9 @@ function renderCreate() {
 
   const note = document.createElement("div");
   note.className = "game-hint";
-  note.textContent = "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
+  note.textContent = game.id === "uno"
+    ? "买入至少为赔付单位的 20 倍。一手结束赢家按各家剩牌数（每张 × 底注）收注，离桌自动按筹码结算。"
+    : "买入至少为小盲注的 20 倍。开局后房主可随时流局，所有人按当前筹码退回金币。";
   page.append(note);
 }
 
@@ -740,21 +763,12 @@ function leaveRoom() {
 }
 
 function renderRoom() {
-  const typing = document.activeElement
-    && document.activeElement.id === "roomChatInput";
   setRoomMode();
   if (myRoom.status === "playing") {
     if (myRoom.settlement) renderSettlementView();
+    else if (myRoom.game_type === "uno") renderUnoTable();
     else renderPokerTable();
   } else renderRoomLobby();
-  if (typing) {
-    const input = document.getElementById("roomChatInput");
-    if (input) {
-      input.focus({ preventScroll: true });
-      const end = input.value.length;
-      input.setSelectionRange(end, end);
-    }
-  }
 }
 
 function roomChatRowNode(m) {
@@ -807,46 +821,16 @@ function sendRoomChat() {
   }
 }
 
-function chatPanelNode(open) {
-  const panel = document.createElement("div");
-  panel.className = `room-chat${open ? " open" : ""}`;
-  const head = document.createElement("button");
-  head.className = "room-chat-head";
-  head.type = "button";
-  head.textContent = `💬 房间聊天（${roomChat.length}）`;
-  head.addEventListener("click", () => {
-    roomChatOpen = !panel.classList.contains("open");
-    panel.classList.toggle("open", roomChatOpen);
-    if (roomChatOpen) scrollRoomChat();
-  });
-  const body = document.createElement("div");
-  body.className = "room-chat-body";
-  const list = document.createElement("div");
-  list.className = "room-chat-list";
-  list.id = "roomChatList";
-  list.replaceChildren(...roomChat.map((m) => roomChatRowNode(m)));
-  const composer = document.createElement("div");
-  composer.className = "room-chat-composer";
-  const input = document.createElement("input");
-  input.className = "chat-input";
-  input.id = "roomChatInput";
-  input.maxLength = 200;
-  input.placeholder = "说点什么…";
-  input.value = roomChatDraft;
-  input.autocomplete = "off";
-  input.addEventListener("input", () => { roomChatDraft = input.value; });
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.isComposing) sendRoomChat();
-  });
-  const sendBtn = document.createElement("button");
-  sendBtn.className = "send-button";
-  sendBtn.type = "button";
-  sendBtn.textContent = "发送";
-  sendBtn.addEventListener("click", sendRoomChat);
-  composer.append(input, sendBtn);
-  body.append(list, composer);
-  panel.append(head, body);
-  return panel;
+function chatOpenButton() {
+  const wrap = document.createElement("div");
+  wrap.className = "chat-open-row";
+  const btn = document.createElement("button");
+  btn.className = "dock-chat-toggle";
+  btn.type = "button";
+  btn.textContent = `💬 房间聊天（${roomChat.length}）`;
+  btn.addEventListener("click", openChatOverlay);
+  wrap.append(btn);
+  return wrap;
 }
 
 function showSeatBubble(username, text) {
@@ -865,7 +849,10 @@ function showSeatBubble(username, text) {
 }
 
 function seatNodeByIndex(index) {
-  return document.querySelector(`#gameMain .poker-seats .seat:nth-child(${index + 1})`);
+  const seatSelector = myRoom.game_type === "uno"
+    ? `#gameMain .uno-seats .uno-seat:nth-child(${index + 1})`
+    : `#gameMain .poker-seats .seat:nth-child(${index + 1})`;
+  return document.querySelector(seatSelector);
 }
 
 function applySeatBubble(username) {
@@ -891,16 +878,17 @@ function renderRoomLobby() {
   stopHallTicker();
   const body = elements.gameMain;
   body.replaceChildren();
+  const meta = gameMetaById(myRoom.game_type);
 
   const page = document.createElement("div");
   page.className = "game-card-page";
   body.append(page);
 
-  const meta = document.createElement("div");
-  meta.className = "game-hint";
-  meta.style.marginTop = "0";
-  meta.textContent = `德州扑克无限注 · 小盲注 ${myRoom.blind} · 买入 ${formatCoins(myRoom.buy_in)} · 房主 ${myRoom.owner_name}`;
-  page.append(meta);
+  const info = document.createElement("div");
+  info.className = "game-hint";
+  info.style.marginTop = "0";
+  info.textContent = `${meta.name} · ${myRoom.game_type === "uno" ? "每张赔付" : "小盲注"} ${myRoom.blind} · 买入 ${formatCoins(myRoom.buy_in)} · 房主 ${myRoom.owner_name}`;
+  page.append(info);
 
   const title = document.createElement("div");
   title.className = "hall-section-title";
@@ -948,10 +936,12 @@ function renderRoomLobby() {
   hint.className = "game-hint";
   hint.textContent = isRoomOwner()
     ? "满 2 名有筹码的玩家即可开局。开局后可在顶部「管理」中流局、暂停或重新开始。"
-    : "等待房主开局。中途退出会自动弃牌，已投入的筹码留在底池。";
+    : myRoom.game_type === "uno"
+      ? "等待房主开局。中途退出会自动离局，当前筹码原封退回。"
+      : "等待房主开局。中途退出会自动弃牌，已投入的筹码留在底池。";
   page.append(hint);
 
-  body.append(chatPanelNode(true));
+  body.append(chatOpenButton());
 }
 
 function seatNode(p) {
@@ -1137,8 +1127,11 @@ function renderSettlementView() {
 
   const resultCard = document.createElement("div");
   resultCard.className = "game-card-page";
-  if (myRoom.result) resultCard.append(resultNode(myRoom.result));
-  else {
+  if (myRoom.result) {
+    resultCard.append(myRoom.game_type === "uno"
+      ? unoResultNode(myRoom.result)
+      : resultNode(myRoom.result));
+  } else {
     const note = document.createElement("div");
     note.className = "game-hint";
     note.style.marginTop = "0";
@@ -1168,21 +1161,16 @@ function renderSettlementView() {
   voteCard.append(progress);
 
   const canNext = Boolean(settlement?.can_next);
+  const isUno = myRoom.game_type === "uno";
   const blindRow = document.createElement("div");
   blindRow.className = "settle-blind-row";
   const blindLabel = document.createElement("span");
   blindLabel.className = "settle-blind-label";
-  blindLabel.textContent = "下一局盲注";
+  blindLabel.textContent = isUno ? "下一局底注" : "下一局盲注";
   const blind = document.createElement("select");
   blind.className = "login-input";
   blind.id = "settleBlindSelect";
-  for (const b of [1, 2, 5, 10]) {
-    const opt = document.createElement("option");
-    opt.value = String(b);
-    opt.textContent = `盲注 ${b}/${b * 2}`;
-    if (b === (settlement?.blind || myRoom.blind)) opt.selected = true;
-    blind.append(opt);
-  }
+  fillBlindOptions(blind, myRoom.game_type, settlement?.blind || myRoom.blind);
   blind.disabled = !canNext;
   blindRow.append(blindLabel, blind);
   voteCard.append(blindRow);
@@ -1213,12 +1201,14 @@ function renderSettlementView() {
   const hint = document.createElement("div");
   hint.className = "game-hint";
   hint.textContent = canNext
-    ? "过半数玩家投「再来一局」即按新盲注开下一手；过半数投「解散」则按当前筹码退还所有人并关闭房间。"
-    : "有玩家筹码不足下一局门槛（20 倍小盲注），过半数投「解散」后房间将按当前筹码退还所有人。";
+    ? "过半数玩家投「再来一局」即开下一局；过半数投「解散」则按当前筹码退还所有人并关闭房间。"
+    : isUno
+      ? "有玩家筹码已输光，过半数投「解散」后房间将按当前筹码退还所有人。"
+      : "有玩家筹码不足下一局门槛（20 倍小盲注），过半数投「解散」后房间将按当前筹码退还所有人。";
   voteCard.append(hint);
   body.append(voteCard);
 
-  body.append(chatPanelNode(true));
+  body.append(chatOpenButton());
 }
 
 function renderPokerTable() {
@@ -1301,7 +1291,7 @@ function renderPokerTable() {
   const chatToggle = document.createElement("button");
   chatToggle.className = "dock-chat-toggle";
   chatToggle.type = "button";
-  chatToggle.textContent = "💬 聊天记录";
+  chatToggle.textContent = "💬 聊天";
   chatToggle.addEventListener("click", openChatOverlay);
   dockHead.append(label, chatToggle);
   dock.append(dockHead);
@@ -1321,9 +1311,6 @@ function renderPokerTable() {
   }
   lastHoleKey = holeKey;
   dock.append(myCards);
-
-  // 聊天输入整合在操作区上方，不随记录增多被挤出屏幕
-  dock.append(buildDockChatComposer());
 
   const isMyTurn = Boolean(currentUser) && myRoom.to_act === currentUser.username;
   const countdown = document.createElement("div");
@@ -1349,29 +1336,6 @@ function renderPokerTable() {
   for (const username of seatBubbles.keys()) applySeatBubble(username);
 }
 
-function buildDockChatComposer() {
-  const composer = document.createElement("div");
-  composer.className = "dock-chat-composer";
-  const input = document.createElement("input");
-  input.className = "chat-input";
-  input.id = "roomChatInput";
-  input.maxLength = 200;
-  input.placeholder = "说点什么…（对全桌可见）";
-  input.value = roomChatDraft;
-  input.autocomplete = "off";
-  input.addEventListener("input", () => { roomChatDraft = input.value; });
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.isComposing) sendRoomChat();
-  });
-  const sendBtn = document.createElement("button");
-  sendBtn.className = "send-button";
-  sendBtn.type = "button";
-  sendBtn.textContent = "发送";
-  sendBtn.addEventListener("click", sendRoomChat);
-  composer.append(input, sendBtn);
-  return composer;
-}
-
 function openChatOverlay() {
   closeChatOverlay();
   const overlay = document.createElement("div");
@@ -1390,13 +1354,388 @@ function openChatOverlay() {
   const list = document.createElement("div");
   list.className = "room-chat-list chat-overlay-list";
   list.replaceChildren(...roomChat.map((m) => roomChatRowNode(m)));
-  overlay.append(head, list);
+  // 聊天输入整合进二级菜单（浮层），桌面与手机横屏共用
+  const composer = document.createElement("div");
+  composer.className = "chat-overlay-composer";
+  const input = document.createElement("input");
+  input.className = "chat-input";
+  input.id = "roomChatInput";
+  input.maxLength = 200;
+  input.placeholder = "说点什么…（对全桌可见）";
+  input.value = roomChatDraft;
+  input.autocomplete = "off";
+  input.addEventListener("input", () => { roomChatDraft = input.value; });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) sendRoomChat();
+  });
+  const sendBtn = document.createElement("button");
+  sendBtn.className = "send-button";
+  sendBtn.type = "button";
+  sendBtn.textContent = "发送";
+  sendBtn.addEventListener("click", sendRoomChat);
+  composer.append(input, sendBtn);
+  overlay.append(head, list, composer);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeChatOverlay();
+  });
   document.body.append(overlay);
   list.scrollTop = list.scrollHeight;
+  input.focus({ preventScroll: true });
 }
 
 function closeChatOverlay() {
   document.getElementById("chatOverlay")?.remove();
+}
+
+
+/* =========================================================
+   UNO 牌桌
+========================================================= */
+
+let pendingWildCard = null;   // 已点选、等待选色的万能牌下标
+let unoActionLock = false;    // 出牌/摸牌后到下一帧视图前忽略重复点击
+
+function unoAct(payload) {
+  if (unoActionLock) return;
+  unoActionLock = true;
+  send({ type: "poker_action", ...payload });
+}
+
+function isMyTurn() {
+  return Boolean(currentUser) && myRoom.to_act === currentUser.username;
+}
+
+function unoMatches(card, active) {
+  if (!active) return false;
+  if (card.c === "w") return true;
+  return card.c === active.c || card.v === active.v;
+}
+
+function unoCardNode(card, opts = {}) {
+  const node = document.createElement("span");
+  node.className = `ucard${opts.back ? " back" : ` ${card.c}`}${opts.big ? " big" : ""}`;
+  if (opts.tint && UNO_COLOR_TEXT[opts.tint]) {
+    node.style.boxShadow = `0 0 0 3px ${UNO_COLOR_TEXT[opts.tint]}, 0 8px 18px rgba(0,0,0,.3)`;
+  }
+  if (opts.back) {
+    const logo = document.createElement("span");
+    logo.className = "uc-back-logo";
+    logo.textContent = "UNO";
+    node.append(logo);
+    return node;
+  }
+  const glyph = UNO_VALUE_GLYPHS[card.v] || card.v;
+  const top = document.createElement("span");
+  top.className = "uc-corner";
+  top.textContent = glyph;
+  const mid = document.createElement("span");
+  mid.className = "uc-mid";
+  mid.textContent = glyph;
+  const bottom = document.createElement("span");
+  bottom.className = "uc-corner uc-flip";
+  bottom.textContent = glyph;
+  node.append(top, mid, bottom);
+  return node;
+}
+
+function unoSeatNode(p) {
+  const seat = document.createElement("div");
+  seat.className = "uno-seat";
+  if (myRoom.status === "playing" && myRoom.to_act === p.username) {
+    seat.classList.add("active");
+  }
+  if (currentUser && p.username === currentUser.username) seat.classList.add("me");
+  const name = document.createElement("div");
+  name.className = "us-name";
+  name.textContent = p.nickname;
+  const info = document.createElement("div");
+  info.className = "us-info";
+  const stack = document.createElement("span");
+  stack.className = "us-stack";
+  stack.textContent = formatCoins(p.stack);
+  const count = document.createElement("span");
+  count.className = "us-count";
+  count.textContent = myRoom.status === "playing"
+    ? (p.in_hand ? `🂠 ${p.cards}` : "观战")
+    : `${formatCoins(p.stack)} 筹码`;
+  info.append(stack, count);
+  const uno = document.createElement("div");
+  uno.className = "us-uno";
+  uno.textContent = "UNO!";
+  if (p.in_hand && p.cards === 1) uno.classList.add("show");
+  seat.append(name, info, uno);
+  return seat;
+}
+
+function unoResultNode(result) {
+  const box = document.createElement("div");
+  box.className = "poker-result";
+  const total = Object.values(result.payouts || {}).reduce((sum, n) => sum + n, 0);
+  if (result.winner) {
+    requestProfile(result.winner);
+    const head = document.createElement("div");
+    head.className = "poker-result-row";
+    const left = document.createElement("span");
+    left.textContent = `🏆 ${displayNameOf(result.winner)} 先出完`;
+    const right = document.createElement("span");
+    right.className = "win";
+    right.textContent = total ? `+${formatCoins(total)}` : "";
+    head.append(left, right);
+    box.append(head);
+  }
+  for (const [username, amount] of Object.entries(result.payouts || {})) {
+    requestProfile(username);
+    const row = document.createElement("div");
+    row.className = "poker-result-row";
+    const left = document.createElement("span");
+    left.textContent = `${displayNameOf(username)} 剩 ${result.penalties?.[username] ?? "?"} 张`;
+    const right = document.createElement("span");
+    right.textContent = `-${formatCoins(amount)}`;
+    row.append(left, right);
+    box.append(row);
+  }
+  const reveal = document.createElement("div");
+  reveal.className = "uno-reveal";
+  for (const [username, cards] of Object.entries(result.cards || {})) {
+    requestProfile(username);
+    if (!cards.length) continue;
+    const line = document.createElement("div");
+    line.className = "uno-reveal-row";
+    const name = document.createElement("span");
+    name.className = "uno-reveal-name";
+    name.textContent = displayNameOf(username);
+    const cardsBox = document.createElement("span");
+    cardsBox.className = "uno-reveal-cards";
+    for (const card of cards) cardsBox.append(unoCardNode(card));
+    line.append(name, cardsBox);
+    reveal.append(line);
+  }
+  box.append(reveal);
+  return box;
+}
+
+function unoActionBarNode() {
+  const bar = document.createElement("div");
+  bar.className = "action-bar";
+  const options = myRoom.your_options || {};
+  const act = (payload) => unoAct(payload);
+
+  if (options.draw) {
+    const draw = document.createElement("button");
+    draw.className = "action-btn primary";
+    draw.type = "button";
+    draw.textContent = "摸一张";
+    draw.addEventListener("click", () => act({ action: "draw" }));
+    bar.append(draw);
+  }
+  if (options.pass) {
+    const pass = document.createElement("button");
+    pass.className = "action-btn danger";
+    pass.type = "button";
+    pass.textContent = "保留摸牌 · 跳过";
+    pass.addEventListener("click", () => {
+      pendingWildCard = null;
+      act({ action: "pass" });
+    });
+    bar.append(pass);
+  }
+  if (options.uno) {
+    const uno = document.createElement("button");
+    uno.className = "action-btn primary uno-btn";
+    uno.type = "button";
+    uno.textContent = "UNO!";
+    uno.addEventListener("click", () => act({ action: "uno" }));
+    bar.append(uno);
+  }
+
+  // 万能牌选色条：点选万能牌后出现
+  if (pendingWildCard !== null) {
+    const picker = document.createElement("div");
+    picker.className = "uno-color-picker";
+    const label = document.createElement("span");
+    label.className = "uno-color-label";
+    label.textContent = "选颜色：";
+    picker.append(label);
+    for (const color of UNO_COLORS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `uno-color-dot ${color}`;
+      btn.title = UNO_COLOR_NAMES[color];
+      btn.addEventListener("click", () => {
+        const index = pendingWildCard;
+        pendingWildCard = null;
+        act({ action: "play", card: index, color });
+      });
+      picker.append(btn);
+    }
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "uno-color-cancel";
+    cancel.textContent = "✕";
+    cancel.addEventListener("click", () => {
+      pendingWildCard = null;
+      renderGameView();
+    });
+    picker.append(cancel);
+    bar.append(picker);
+  }
+  return bar;
+}
+
+function renderUnoTable() {
+  const body = elements.gameMain;
+  unoActionLock = false;
+  body.replaceChildren();
+
+  const wrap = document.createElement("div");
+  wrap.className = "poker-page";
+  body.append(wrap);
+
+  const table = document.createElement("div");
+  table.className = "uno-table";
+
+  const topbar = document.createElement("div");
+  topbar.className = "poker-topbar";
+  const left = document.createElement("span");
+  left.textContent = `第 ${myRoom.hand_no || "-"} 局 · 每张赔付 ${myRoom.blind}`;
+  const right = document.createElement("span");
+  right.textContent = myRoom.paused
+    ? "⏸ 已暂停"
+    : `方向 ${myRoom.direction === -1 ? "↺" : "↻"}`;
+  topbar.append(left, right);
+  table.append(topbar);
+
+  const status = document.createElement("div");
+  status.className = "poker-status";
+  const la = myRoom.last_action;
+  status.textContent = la
+    ? `${la.nickname} ${la.text}`
+    : myRoom.to_act
+      ? `等待 ${displayNameOf(myRoom.to_act)} 出牌…`
+      : "发牌中…";
+  table.append(status);
+
+  const seats = document.createElement("div");
+  seats.className = "uno-seats";
+  for (const p of myRoom.players) seats.append(unoSeatNode(p));
+  table.append(seats);
+
+  const center = document.createElement("div");
+  center.className = "uno-center";
+  const active = myRoom.active;
+  if (active?.card) {
+    const myTurn = isMyTurn();
+    const drawPile = document.createElement("div");
+    drawPile.className = "uno-pile";
+    drawPile.append(unoCardNode(null, { big: true, back: true }));
+    const deckLeft = document.createElement("span");
+    deckLeft.className = "uno-deck-count";
+    deckLeft.textContent = `牌堆 ${myRoom.deck_left ?? 0}`;
+    drawPile.append(deckLeft);
+    if (myTurn && myRoom.your_options?.draw) {
+      drawPile.classList.add("clickable");
+      drawPile.addEventListener("click", () => {
+        unoAct({ action: "draw" });
+      });
+    }
+
+    const discard = document.createElement("div");
+    discard.className = "uno-discard";
+    discard.append(unoCardNode(active.card, {
+      big: true,
+      tint: active.card.c === "w" ? active.c : null,
+    }));
+
+    const strip = document.createElement("div");
+    strip.className = "uno-color-strip";
+    strip.style.background = UNO_COLOR_TEXT[active.c] || "#3a3a3c";
+    strip.textContent = UNO_COLOR_NAMES[active.c]
+      ? `当前颜色 ${UNO_COLOR_NAMES[active.c]}`
+      : "";
+    center.append(drawPile, discard, strip);
+  }
+  table.append(center);
+
+  if (myRoom.result) table.append(unoResultNode(myRoom.result));
+
+  if (myRoom.paused) {
+    const overlay = document.createElement("div");
+    overlay.className = "paused-overlay";
+    overlay.textContent = "⏸ 牌局已暂停，等待房主继续";
+    table.append(overlay);
+  }
+  wrap.append(table);
+
+  const dock = document.createElement("div");
+  dock.className = "poker-dock";
+  const dockHead = document.createElement("div");
+  dockHead.className = "dock-head";
+  const label = document.createElement("div");
+  label.className = "my-cards-label";
+  label.textContent = isMyTurn() ? "你的手牌 · 轮到你出牌" : "你的手牌";
+  const chatToggle = document.createElement("button");
+  chatToggle.className = "dock-chat-toggle";
+  chatToggle.type = "button";
+  chatToggle.textContent = "💬 聊天";
+  chatToggle.addEventListener("click", openChatOverlay);
+  dockHead.append(label, chatToggle);
+  dock.append(dockHead);
+
+  const myCards = document.createElement("div");
+  myCards.className = "uno-hand";
+  const hand = myRoom.your_hand || [];
+  const options = myRoom.your_options || {};
+  if (!hand.length) {
+    const waiting = document.createElement("span");
+    waiting.className = "my-cards-label";
+    waiting.textContent = "等待下一局发牌…";
+    myCards.append(waiting);
+  }
+  const drawnOnly = options.pass && myRoom.your_drawn != null;
+  hand.forEach((card, index) => {
+    const playable = isMyTurn() && !myRoom.paused
+      && (!drawnOnly || index === myRoom.your_drawn)
+      && unoMatches(card, myRoom.active);
+    const node = unoCardNode(card, {});
+    if (drawnOnly && index === myRoom.your_drawn) node.classList.add("drawn");
+    if (pendingWildCard === index) node.classList.add("picked");
+    if (playable) {
+      node.classList.add("playable");
+      node.addEventListener("click", () => {
+        if (card.c === "w") {
+          pendingWildCard = index;
+          renderGameView();
+          return;
+        }
+        pendingWildCard = null;
+        unoAct({ action: "play", card: index });
+      });
+    }
+    myCards.append(node);
+  });
+  dock.append(myCards);
+
+  const countdown = document.createElement("div");
+  countdown.className = "countdown";
+  const fill = document.createElement("div");
+  fill.className = "countdown-fill";
+  countdown.append(fill);
+  dock.append(countdown);
+
+  if (!myRoom.paused) {
+    if (isMyTurn() || options.uno || pendingWildCard !== null) {
+      dock.append(unoActionBarNode());
+      if (isMyTurn() && myRoom.turn_left > 0) startHallTicker(fill, myRoom.turn_left);
+    }
+  } else {
+    const pausedNote = document.createElement("div");
+    pausedNote.className = "last-action";
+    pausedNote.textContent = "牌局已暂停";
+    dock.append(pausedNote);
+  }
+  wrap.append(dock);
+
+  for (const username of seatBubbles.keys()) applySeatBubble(username);
 }
 
 
@@ -1444,7 +1783,10 @@ elements.managePauseButton.addEventListener("click", () => {
 });
 elements.manageRestartButton.addEventListener("click", () => {
   setManageMenu(false);
-  if (confirm("确定重新开始？本手已投注的筹码将退回各家，并重新发牌。")) {
+  const detail = myRoom?.game_type === "uno"
+    ? "确定重新开始？将收回本局所有手牌并重新发牌。"
+    : "确定重新开始？本手已投注的筹码将退回各家，并重新发牌。";
+  if (confirm(detail)) {
     send({ type: "restart_game" });
   }
 });

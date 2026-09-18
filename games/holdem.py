@@ -11,7 +11,7 @@ import random
 import time
 from itertools import combinations
 
-from games.base import BaseRoom, register_room_type
+from games.base import BaseRoom, parse_amount, register_room_type
 
 logger = logging.getLogger("live-chat.holdem")
 
@@ -427,10 +427,11 @@ class HoldemRoom(BaseRoom):
         self.schedule_turn_timer()
         await self.broadcast_views()
 
-    async def perform_action(self, username, action, raise_to=None, auto=False):
+    async def perform_action(self, username, action, data=None, auto=False):
         g = self.game
         if not g or self.paused or g.get("to_act") != username:
             return
+        raise_to = parse_amount((data or {}).get("raise_to"))
         options = self.legal_actions(username)
         nickname = self.display_name(username)
         text = ""

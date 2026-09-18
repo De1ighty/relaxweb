@@ -16,9 +16,21 @@ BaseRoom.schedule（内部为 loop.call_later + ensure_future）回到事件循�
 代码可以脱离网络独立测试。
 """
 import asyncio
+import math
 from collections import deque
 
 ROOM_TYPES = {}
+
+
+def parse_amount(value):
+    """宽松解析正金额；非法/非正值返回 None。引擎与宿主共用。"""
+    try:
+        amount = round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(amount) or amount <= 0:
+        return None
+    return amount
 
 
 def register_room_type(game_type):
@@ -66,6 +78,7 @@ class BaseRoom:
         self.broadcast_payload = None
         self.broadcast_views = None
         self.on_rooms_changed = None
+        self.on_dissolve_requested = None   # async (reason) -> None，宿主注入
         self.display_name = lambda username: username
         self.set_escrow = lambda username, amount: None
 

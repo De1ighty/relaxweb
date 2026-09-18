@@ -15,7 +15,7 @@ from contextlib import closing
 
 import websockets
 
-from games.base import ROOM_TYPES, create_room
+from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
 
 
@@ -644,15 +644,6 @@ def display_name(username):
     profile = get_profile(username)
     return profile["nickname"] or username
 
-
-def parse_amount(value):
-    try:
-        amount = round(float(value), 2)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(amount) or amount <= 0:
-        return None
-    return amount
 
 
 async def push_balance(username, coins):
@@ -1387,15 +1378,13 @@ async def handle_poker_action(websocket, state, data):
     user = state.get("user")
     if not user:
         return
-    if rate_limited(state, "last_poker_action", 0.3):
-        return
+    action = str(data.get("action", ""))
     room = find_user_room(user["username"])
     if not room or not room.in_hand():
         return
-    action = str(data.get("action", ""))
-    await room.perform_action(
-        user["username"], action, parse_amount(data.get("raise_to"))
-    )
+    # 不做限流：出牌/摸牌/补喊是毫秒级连招（UNO 摸到可出牌立刻出、
+    # 快节奏下转眼又轮到自己），且引擎按回合校验，垃圾动作无效且廉价
+    await room.perform_action(user["username"], action, data)
 
 
 async def handle_pause_game(websocket, state, data):
