@@ -103,6 +103,7 @@ function renderFinance(data) {
     const row = document.createElement("div");
     row.className = "finance-row";
     const info = document.createElement("div");
+    info.className = "finance-row-info";
     const kind = document.createElement("div");
     kind.className = "finance-row-kind";
     kind.textContent = coinKinds[tx.kind] || tx.kind;

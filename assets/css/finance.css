@@ -116,12 +116,20 @@
     background: #f5f5f7;
 }
 
+/* 左侧信息块要能收缩，明细的省略号才会生效 */
+.finance-row-info {
+    min-width: 0;
+}
+
 .finance-row-kind {
     font-size: 13px;
 
     font-weight: 600;
+
+    white-space: nowrap;
 }
 
+/* 明细不折行：桌面端窗口已加宽，超长时省略而不是换行出半行孤字 */
 .finance-row-detail {
     margin-top: 2px;
 
@@ -129,7 +137,11 @@
 
     font-size: 12px;
 
-    word-break: break-all;
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
 }
 
 .finance-row-amount {
@@ -158,6 +170,8 @@
     font-size: 11px;
 
     text-align: right;
+
+    white-space: nowrap;
 }
 
 .transfer-feedback {
@@ -170,4 +184,44 @@
     color: #1a9e45;
 
     font-size: 13px;
+}
+
+/* 桌面端：加宽财务窗口，明细一行放得下 */
+@media (min-width: 651px) {
+
+    #financeModal .login-card {
+        width: 520px;
+    }
+
+}
+
+/* 移动端：窗口受屏宽限制，改为同步缩小字号 */
+@media (max-width: 650px) {
+
+    #financeModal .finance-balance-value {
+        font-size: 21px;
+    }
+
+    #financeModal .finance-row {
+        gap: 8px;
+
+        padding: 9px 10px;
+    }
+
+    #financeModal .finance-row-kind {
+        font-size: 12px;
+    }
+
+    #financeModal .finance-row-detail {
+        font-size: 11px;
+    }
+
+    #financeModal .finance-row-amount {
+        font-size: 13px;
+    }
+
+    #financeModal .finance-row-balance {
+        font-size: 10px;
+    }
+
 }
