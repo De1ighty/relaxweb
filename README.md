@@ -97,6 +97,10 @@ python3 live-test/proto_test.py        # 聊天/账号/房间生命周期等 16 
 python3 live-test/uno_proto_test.py    # UNO 协议测试
 ```
 
+写 UI 自动化测试时注意：页面里所有提示/确认都是自绘弹层，不是原生弹窗，
+点 `#liveDialog` 里的 `.live-dialog-confirm` / `.live-dialog-cancel` 即可（也可按 Enter / Esc），
+不会出现阻塞主线程、让测试卡住的原生对话框。
+
 ## 部署
 
 见 [deploy/README.md](deploy/README.md)：systemd 单元安装、nginx 反代、推流命令。
