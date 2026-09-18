@@ -133,6 +133,12 @@ python3 deploy/serve.py        # http://localhost:8000
 页面里的 `window.LIVE_CONFIG` 由 `deploy/serve.py` 注入，只包含展示文案与端口，
 **不包含推流口令**；`config.json` 本身也不对外提供（静态服务只放行 `assets/` 下的静态资源）。
 
+## UNO 漏喊质疑
+
+玩家出牌后剩 1 张时，有 2 秒保护期点击「UNO!」。保护期结束仍未喊，其他在局玩家可点击该座位的「质疑漏喊 +2」，成功后对方罚摸两张，不改变当前出牌顺序。不会自动罚牌；补喊与质疑按服务器先收到的有效操作裁决，重复质疑不会重复罚牌。暂停会冻结保护期。此规则针对漏喊 UNO，不是对 +4 出牌合法性的质疑。
+
+桌面 UNO 使用围桌座位及常驻聊天室；方向箭头、出摸牌、反转、禁止与 +2/+4 动效由服务器公开事件驱动。系统开启减少动画时保留静态提示。
+
 ## 测试
 
 ```bash
@@ -144,6 +150,8 @@ git submodule update --init live-test  # 协议级联调脚本
 bash live-test/reset.sh                # 重置测试库、重建测试账号、重启服务
 python3 live-test/proto_test.py        # 聊天/账号/房间生命周期等 16 项协议测试
 python3 live-test/uno_proto_test.py    # UNO 协议测试
+python3 tests/test_uno_challenge.py    # 保护期/并发/暂停/功能牌事件
+python3 tests/test_uno_challenge_protocol.py # 本地真实 WebSocket 质疑联调
 ```
 
 写 UI 自动化测试时注意：页面里所有提示/确认都是自绘弹层，不是原生弹窗，

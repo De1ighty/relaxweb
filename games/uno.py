@@ -19,7 +19,7 @@ from games.base import BaseRoom, register_room_type
 logger = logging.getLogger("live-chat.uno")
 
 TURN_TIMEOUT = float(os.environ.get("UNO_TURN_TIMEOUT", "30"))
-UNO_WINDOW = float(os.environ.get("UNO_CALLOUT_TIMEOUT", "6"))
+UNO_WINDOW = 2.0  # 漏喊 UNO 的保护期；到期只开放质疑，不自动罚牌。
 SETTLE_TIMEOUT = float(os.environ.get("UNO_SETTLE_TIMEOUT", "90"))
 BLIND_PRESETS = (1, 2, 5, 10)
 
@@ -76,6 +76,7 @@ class UnoRoom(BaseRoom):
         self.starter = None     # 上一局的先手，用于轮转
         self.hand_seq = 0
         self.pause_remaining = 0.0
+        self.uno_pause_remaining = {}
         self.votes = {}         # 结算投票：username -> {"choice", "blind"}
 
     # ---- 暂停/恢复 ----
@@ -83,6 +84,8 @@ class UnoRoom(BaseRoom):
         g = self.game
         if g and g.get("deadline"):
             self.pause_remaining = max(1.0, g["deadline"] - time.time())
+        if g:
+            self.uno_pause_remaining = {name: max(0, deadline - time.time()) for name, deadline in g["uno_deadlines"].items()}
 
     def on_resumed(self):
         g = self.game
@@ -90,8 +93,9 @@ class UnoRoom(BaseRoom):
             g["deadline"] = time.time() + (self.pause_remaining or TURN_TIMEOUT)
             self.schedule_turn_timer()
         if g and g.get("uno_pending"):
-            # 喊 UNO 的窗口不长，恢复后直接重新计时
-            self.schedule("uno", UNO_WINDOW, self.uno_timeout)
+            g["uno_deadlines"] = {name: time.time() + self.uno_pause_remaining.get(name, 0) for name in g["uno_pending"]}
+            self.schedule_uno_timer()
+        self.uno_pause_remaining = {}
         self.pause_remaining = 0.0
 
     # ---- 视图 ----
@@ -127,6 +131,7 @@ class UnoRoom(BaseRoom):
                     "in_hand": in_hand,
                     "cards": len(g["hands"][name]) if in_hand else 0,
                     "uno": bool(g and name in g["uno_pending"]),
+                    "uno_left": self.uno_left(name) if g and name in g["uno_pending"] else 0,
                 }
             )
         if g:
@@ -141,6 +146,7 @@ class UnoRoom(BaseRoom):
                     if g["to_act"]
                     else 0,
                     "last_action": g.get("last_action"),
+                    "action_event": g.get("action_event"),
                     "result": g.get("result"),
                 }
             )
@@ -148,14 +154,15 @@ class UnoRoom(BaseRoom):
                 view["your_hand"] = list(g["hands"][username])
                 if g["drawn_state"] == username:
                     view["your_drawn"] = g["drawn_index"]
-                # 喊 UNO 不限回合：出到剩 1 张后随时要补喊
-                if g["to_act"] == username or username in g["uno_pending"]:
-                    view["your_options"] = {
-                        "draw": g["to_act"] == username
-                        and g["drawn_state"] != username,
-                        "pass": g["drawn_state"] == username,
-                        "uno": username in g["uno_pending"],
-                    }
+                # 补喊与质疑不受当前回合限制；服务器再次校验保护期。
+                view["your_options"] = {
+                    "draw": not self.paused and g["to_act"] == username and g["drawn_state"] != username,
+                    "pass": not self.paused and g["drawn_state"] == username,
+                    "uno": not self.paused and username in g["uno_pending"],
+                    "challenge": [name for name in g["order"] if name != username
+                                  and name in g["uno_pending"] and self.uno_left(name) <= 0]
+                                 if not self.paused and self.in_hand() else [],
+                }
         if self.status == "playing" and not self.in_hand():
             view["settlement"] = {
                 "votes": dict(self.votes),
@@ -180,7 +187,7 @@ class UnoRoom(BaseRoom):
         index = g["order"].index(username)
         g["order"].pop(index)
         g["hands"].pop(username, None)
-        g["uno_pending"].discard(username)
+        self.clear_uno(username)
         if g["drawn_state"] == username:
             g["drawn_state"] = None
             g["drawn_index"] = None
@@ -215,7 +222,7 @@ class UnoRoom(BaseRoom):
             g["hands"][username].append(card)
             got.append(card)
             if len(g["hands"][username]) != 1:
-                g["uno_pending"].discard(username)
+                self.clear_uno(username)
         return got
 
     def peek_next(self, step):
@@ -252,6 +259,11 @@ class UnoRoom(BaseRoom):
         if not g or self.paused or g.get("stage") == "showdown":
             return
         data = data or {}
+        if username not in g["order"]:
+            return
+        if action == "challenge_uno":
+            await self.challenge_uno(username, data.get("target"))
+            return
         if action == "uno":
             await self.call_uno(username)
             return
@@ -268,9 +280,8 @@ class UnoRoom(BaseRoom):
         g = self.game
         if not g or username not in g["uno_pending"]:
             return
-        g["uno_pending"].discard(username)
-        if not g["uno_pending"]:
-            self.cancel_timer("uno")
+        self.clear_uno(username)
+        self.record_event("uno", username)
         g["last_action"] = {
             "username": username,
             "nickname": self.display_name(username),
@@ -305,7 +316,10 @@ class UnoRoom(BaseRoom):
         g["value"] = card["v"]
         text = f"出 {card_label(card)}"
         step = 1
+        victim = None
+        drawn = []
         if card["v"] == "skip":
+            victim = self.peek_next(1)
             step = 2
             text += "，下家被跳过"
         elif card["v"] == "rev":
@@ -324,18 +338,20 @@ class UnoRoom(BaseRoom):
             text += f"，{self.display_name(victim)} 摸 {len(drawn)} 张并跳过，改 {COLOR_NAMES[g['color']]}"
         if card["c"] == "w" and card["v"] != "wd4":
             text += f"，改 {COLOR_NAMES[g['color']]}"
-        if not hand:
-            await self.end_hand(username, auto)
-            return
+        self.record_event("play", username, card=dict(card), target=victim, count=len(drawn), color=g["color"], direction=g["direction"])
         if len(hand) == 1:
             g["uno_pending"].add(username)
-            self.schedule("uno", UNO_WINDOW, self.uno_timeout)
+            g["uno_deadlines"][username] = time.time() + UNO_WINDOW
+            self.schedule_uno_timer()
             text += "（剩 1 张）"
         g["last_action"] = {
             "username": username,
             "nickname": nickname,
             "text": ("超时自动" if auto else "") + text,
         }
+        if not hand:
+            await self.end_hand(username, auto)
+            return
         logger.info("uno %s@%s: play %s", username, self.id, card_label(card))
         await self.advance(step)
 
@@ -344,6 +360,7 @@ class UnoRoom(BaseRoom):
         if g["drawn_state"] == username:
             return
         drawn = self.draw_cards(username, 1)
+        self.record_event("draw", username, target=username, count=len(drawn))
         g["last_action"] = {
             "username": username,
             "nickname": self.display_name(username),
@@ -372,24 +389,54 @@ class UnoRoom(BaseRoom):
         logger.info("uno %s@%s: pass", username, self.id)
         await self.advance(1)
 
-    async def uno_timeout(self):
+    def record_event(self, kind, username, **details):
+        """只广播公开动作，不暴露摸到的牌；序号用于前端重绘去重。"""
         g = self.game
-        if self.paused or not g or not g["uno_pending"]:
+        g["event_seq"] += 1
+        g["action_event"] = {"id": g["event_seq"], "kind": kind, "username": username, **details}
+
+    def uno_left(self, username):
+        if self.paused:
+            return self.uno_pause_remaining.get(username, 0)
+        return max(0, self.game["uno_deadlines"].get(username, 0) - time.time())
+
+    def clear_uno(self, username):
+        self.game["uno_pending"].discard(username)
+        self.game["uno_deadlines"].pop(username, None)
+        self.uno_pause_remaining.pop(username, None)
+        self.schedule_uno_timer()
+
+    def schedule_uno_timer(self):
+        self.cancel_timer("uno")
+        if self.paused or not self.in_hand():
             return
-        penalties = {}
-        for name in list(g["uno_pending"]):
-            if name in g["hands"]:
-                penalties[name] = len(self.draw_cards(name, 2))
-            g["uno_pending"].discard(name)
-        if not penalties:
+        remaining = [self.uno_left(name) for name in self.game["uno_pending"]]
+        future = [left for left in remaining if left > 0]
+        if future:
+            self.schedule("uno", min(future), self.uno_timeout)
+
+    async def uno_timeout(self):
+        # 保护期结束只广播可质疑状态，不替玩家自动质疑。
+        if self.paused or not self.in_hand():
             return
-        first = next(iter(penalties))
-        g["last_action"] = {
-            "username": first,
-            "nickname": self.display_name(first),
-            "text": f"没喊 UNO，罚摸 {penalties[first]} 张",
-        }
-        logger.info("uno room %s: callout penalty %s", self.id, penalties)
+        self.schedule_uno_timer()
+        await self.broadcast_views()
+
+    async def challenge_uno(self, username, target):
+        g = self.game
+        valid = (isinstance(target, str) and username != target
+                 and target in g["uno_pending"] and self.uno_left(target) <= 0
+                 and len(g["hands"].get(target, [])) == 1)
+        if valid:
+            # 在第一个 await 前消耗资格，补喊/重复质疑按服务端处理顺序裁决。
+            self.clear_uno(target)
+            drawn = self.draw_cards(target, 2)
+            self.record_event("challenge", username, target=target, count=len(drawn))
+            g["last_action"] = {
+                "username": username, "nickname": self.display_name(username),
+                "text": f"质疑 {self.display_name(target)} 漏喊 UNO，罚摸 {len(drawn)} 张",
+            }
+        # 过早/重复/已补喊：返回最新状态，客户端解除等待，不重复罚牌。
         await self.broadcast_views()
 
     # ---- 结束与结算投票（与德州扑克一致的宿主协议）----
@@ -460,7 +507,8 @@ class UnoRoom(BaseRoom):
         await self.start_hand()
 
     async def start_hand(self):
-        self.cancel_timer("settle")
+        self.cancel_timers()
+        self.uno_pause_remaining = {}
         eligible = self.members_with_chips()
         if len(eligible) < 2:
             self.status = "waiting"
@@ -500,6 +548,9 @@ class UnoRoom(BaseRoom):
             "drawn_state": None,
             "drawn_index": None,
             "uno_pending": set(),
+            "uno_deadlines": {},
+            "event_seq": 0,
+            "action_event": None,
             "last_action": None,
             "result": None,
         }
@@ -551,6 +602,8 @@ class UnoRoom(BaseRoom):
         g["deadline"] = 0
         g["drawn_state"] = None
         g["uno_pending"] = set()
+        g["uno_deadlines"] = {}
+        self.uno_pause_remaining = {}
         g["result"] = {
             "ratings": ratings,
             "hand_no": g["hand_no"],

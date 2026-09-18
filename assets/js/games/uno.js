@@ -1,6 +1,7 @@
 /* UNO 牌桌：手牌、出牌区、行动条与牌局回顾。 */
 
 import { displayNameOf, elements, formatCoins, ratingBadge, renderGameView, requestProfile, send, startHallTicker, state } from "../core.js";
+import { animateUnoEvent } from "./uno-effects.js";
 import { registerGame } from "../registry.js";
 import { openChatOverlay, reapplySeatBubbles } from "../room.js";
 
@@ -14,13 +15,20 @@ const UNO_VALUE_GLYPHS = {
 };
 
 let pendingWildCard = null;   // 已点选、等待选色的万能牌下标
+let pendingWildHand = "";
 let unoActionLock = false;    // 出牌/摸牌后到下一帧视图前忽略重复点击
 
 function unoAct(payload) {
   if (unoActionLock) return;
-  unoActionLock = true;
-  send({ type: "poker_action", ...payload });
+  unoActionLock = send({ type: "poker_action", ...payload });
+  if (unoActionLock) document.querySelectorAll(".uno-dock button, .uno-challenge").forEach((button) => { button.disabled = true; });
 }
+
+document.addEventListener("gameactionerror", () => {
+  if (state.myRoom?.game_type !== "uno") return;
+  unoActionLock = false;
+  renderGameView();
+});
 
 function isMyTurn() {
   return Boolean(state.currentUser) && state.myRoom.to_act === state.currentUser.username;
@@ -62,6 +70,7 @@ function unoCardNode(card, opts = {}) {
 function unoSeatNode(p) {
   const seat = document.createElement("div");
   seat.className = "uno-seat";
+  seat.dataset.username = p.username;
   if (state.myRoom.status === "playing" && state.myRoom.to_act === p.username) {
     seat.classList.add("active");
   }
@@ -82,9 +91,21 @@ function unoSeatNode(p) {
   info.append(stack, count);
   const uno = document.createElement("div");
   uno.className = "us-uno";
-  uno.textContent = "UNO!";
+  uno.textContent = p.uno ? "未喊 UNO" : "UNO!";
   if (p.in_hand && p.cards === 1) uno.classList.add("show");
   seat.append(name, ratingBadge(p.rating), info, uno);
+  if (p.uno) {
+    const challenge = document.createElement("button");
+    challenge.type = "button";
+    challenge.className = "uno-challenge";
+    const self = p.username === state.currentUser?.username;
+    const available = state.myRoom.your_options?.challenge?.includes(p.username);
+    challenge.disabled = state.myRoom.paused || (!self && !available);
+    challenge.textContent = self ? "立即喊 UNO!" : available ? "质疑漏喊 +2" : "2 秒保护期";
+    challenge.setAttribute("aria-label", self ? "立即喊 UNO" : `质疑 ${p.nickname} 漏喊 UNO，罚摸两张`);
+    challenge.addEventListener("click", () => unoAct(self ? { action: "uno" } : { action: "challenge_uno", target: p.username }));
+    seat.append(challenge);
+  }
   return seat;
 }
 
@@ -182,6 +203,7 @@ function unoActionBarNode() {
       btn.type = "button";
       btn.className = `uno-color-dot ${color}`;
       btn.title = UNO_COLOR_NAMES[color];
+      btn.setAttribute("aria-label", `改为${UNO_COLOR_NAMES[color]}色`);
       btn.addEventListener("click", () => {
         const index = pendingWildCard;
         pendingWildCard = null;
@@ -209,7 +231,7 @@ function renderUnoTable() {
   body.replaceChildren();
 
   const wrap = document.createElement("div");
-  wrap.className = "poker-page";
+  wrap.className = "poker-page uno-page";
   body.append(wrap);
 
   const table = document.createElement("div");
@@ -238,15 +260,38 @@ function renderUnoTable() {
 
   const seats = document.createElement("div");
   seats.className = "uno-seats";
-  for (const p of state.myRoom.players) seats.append(unoSeatNode(p));
+  const players = state.myRoom.players;
+  const myIndex = Math.max(0, players.findIndex((p) => p.username === state.currentUser?.username));
+  players.forEach((p, index) => {
+    const seat = unoSeatNode(p);
+    // direction=1 的服务端座序对应视觉顺时针；本人固定在下方。
+    const angle = ((index - myIndex + players.length) % players.length) * Math.PI * 2 / players.length;
+    seat.style.setProperty("--seat-x", `${50 - 41 * Math.sin(angle)}%`);
+    seat.style.setProperty("--seat-y", `${50 + 39 * Math.cos(angle)}%`);
+    seats.append(seat);
+  });
   table.append(seats);
+
+  const direction = document.createElement("div");
+  direction.className = `uno-direction${state.myRoom.direction === -1 ? " reverse" : ""}${state.myRoom.paused ? " paused" : ""}`;
+  const arrow = document.createElement("span");
+  arrow.className = "uno-direction-arrow";
+  arrow.textContent = state.myRoom.direction === -1 ? "↺" : "↻";
+  arrow.setAttribute("aria-hidden", "true");
+  const directionLabel = document.createElement("span");
+  directionLabel.textContent = state.myRoom.direction === -1 ? "逆时针" : "顺时针";
+  direction.append(arrow, directionLabel);
+  table.append(direction);
 
   const center = document.createElement("div");
   center.className = "uno-center";
   const active = state.myRoom.active;
   if (active?.card) {
     const myTurn = isMyTurn();
-    const drawPile = document.createElement("div");
+    const drawPile = document.createElement("button");
+    drawPile.type = "button";
+    drawPile.setAttribute("aria-label", "从牌堆摸一张");
+    drawPile.disabled = state.myRoom.paused || !myTurn || !state.myRoom.your_options?.draw;
     drawPile.className = "uno-pile";
     drawPile.append(unoCardNode(null, { big: true, back: true }));
     const deckLeft = document.createElement("span");
@@ -288,7 +333,8 @@ function renderUnoTable() {
   wrap.append(table);
 
   const dock = document.createElement("div");
-  dock.className = "poker-dock";
+  dock.className = "poker-dock uno-dock";
+  dock.classList.toggle("is-my-turn", isMyTurn() && !state.myRoom.paused);
   const dockHead = document.createElement("div");
   dockHead.className = "dock-head";
   const label = document.createElement("div");
@@ -306,6 +352,7 @@ function renderUnoTable() {
   myCards.className = "uno-hand";
   const hand = state.myRoom.your_hand || [];
   const options = state.myRoom.your_options || {};
+  if (pendingWildHand !== JSON.stringify(hand) || !isMyTurn() || !hand[pendingWildCard] || hand[pendingWildCard]?.c !== "w") pendingWildCard = null;
   if (!hand.length) {
     const waiting = document.createElement("span");
     waiting.className = "my-cards-label";
@@ -317,14 +364,20 @@ function renderUnoTable() {
     const playable = isMyTurn() && !state.myRoom.paused
       && (!drawnOnly || index === state.myRoom.your_drawn)
       && unoMatches(card, state.myRoom.active);
-    const node = unoCardNode(card, {});
-    if (drawnOnly && index === state.myRoom.your_drawn) node.classList.add("drawn");
-    if (pendingWildCard === index) node.classList.add("picked");
+    const node = document.createElement("button");
+    node.type = "button";
+    node.className = "uno-hand-card";
+    node.disabled = !playable;
+    node.setAttribute("aria-label", `${UNO_COLOR_NAMES[card.c] || "万能"} ${UNO_VALUE_GLYPHS[card.v] || card.v}`);
+    node.append(unoCardNode(card, {}));
+    if (drawnOnly && index === state.myRoom.your_drawn) node.firstElementChild.classList.add("drawn");
+    if (pendingWildCard === index) node.firstElementChild.classList.add("picked");
     if (playable) {
-      node.classList.add("playable");
+      node.firstElementChild.classList.add("playable");
       node.addEventListener("click", () => {
         if (card.c === "w") {
           pendingWildCard = index;
+          pendingWildHand = JSON.stringify(hand);
           renderGameView();
           return;
         }
@@ -357,6 +410,7 @@ function renderUnoTable() {
   wrap.append(dock);
 
   reapplySeatBubbles();
+  animateUnoEvent(unoCardNode);
 }
 
 
@@ -370,6 +424,10 @@ registerGame("uno", {
   waitingHint: "等待房主开局。中途退出会自动离局，当前筹码原封退回。",
   noNextHint: () => "有玩家筹码已输光，过半数投「解散」后房间将按当前筹码退还所有人。",
   renderTable: renderUnoTable,
-  renderReview: unoResultNode,
+  renderReview: (result) => {
+    const review = unoResultNode(result);
+    animateUnoEvent(unoCardNode);
+    return review;
+  },
   seatElement: (index) => document.querySelector(`#gameMain .uno-seats .uno-seat:nth-child(${index + 1})`),
 });

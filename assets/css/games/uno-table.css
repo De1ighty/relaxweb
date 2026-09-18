@@ -1,0 +1,99 @@
+/* UNO 专属交互及桌面覆盖，避免套用德扑的手牌网格。 */
+.uno-table { position: relative; }
+.uno-pile { padding: 0; border: 0; background: transparent; font: inherit; color: inherit; }
+.uno-pile:disabled { opacity: 1; }
+.uno-hand-card { flex: 0 0 auto; margin-left: -14px; padding: 0; border: 0; background: transparent; font: inherit; border-radius: 7px; }
+.uno-hand-card:first-child { margin-left: 0; }
+.uno-hand-card:disabled { opacity: 1; cursor: default; }
+.uno-hand-card > .ucard { margin-left: 0; }
+.uno-hand-card:focus-visible { outline: 3px solid #7256ef; outline-offset: 4px; z-index: 2; }
+.uno-hand-card:not(:disabled):hover { z-index: 2; }
+.uno-challenge { border: 0; border-radius: 6px; padding: 5px 7px; background: #ffe5ab; color: #70411c; font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
+.uno-challenge:disabled { background: #edf0f3; color: #737780; cursor: default; }
+.uno-direction { display: flex; justify-content: center; align-items: center; gap: 7px; color: #ffe6a8; font-size: 12px; font-weight: 750; margin: 4px auto 8px; }
+.uno-direction-arrow { display: inline-block; font-size: 30px; line-height: 1; animation: uno-orbit 4s linear infinite; }
+.uno-direction.reverse .uno-direction-arrow { animation-direction: reverse; }
+.uno-direction.paused .uno-direction-arrow { animation-play-state: paused; }
+.uno-flight { position: fixed !important; width: 46px !important; height: 64px !important; z-index: 180; pointer-events: none; margin: 0 !important; }
+.uno-effect-banner { position: absolute; z-index: 50; top: 42%; left: 50%; transform: translate(-50%, -50%); border-radius: 16px; padding: 14px 22px; background: #fff4cd; color: #704014; font-weight: 900; font-size: clamp(17px, 2vw, 26px); white-space: nowrap; pointer-events: none; box-shadow: 0 12px 36px #0005; animation: uno-impact 1.6s ease both; }
+.effect-d2, .effect-wd4, .effect-challenge { background: #ffe2e9; color: #be214b; }
+.effect-skip { background: #ffe9dd; color: #b8441b; }
+.effect-rev { background: #e7dcff; color: #6732be; }
+.effect-wild { border: 4px solid transparent; background: linear-gradient(white, white) padding-box, conic-gradient(#e02020, #f5a623, #1d9e4f, #1f6fd6, #e02020) border-box; }
+.uno-dock .countdown { visibility: visible; }
+@keyframes uno-orbit { to { transform: rotate(360deg); } }
+@keyframes uno-impact { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.5) rotate(-8deg); } 18%, 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.05); } }
+
+@media (min-width: 1024px) {
+    .uno-table {
+        height: max(440px, calc(100dvh - 350px));
+        padding: 0;
+        isolation: isolate;
+        background: radial-gradient(ellipse at center, #40314c, #231d30);
+        border: 1px solid #52445c;
+        border-radius: 22px;
+        box-shadow: 0 14px 36px #21132d20;
+    }
+    .uno-table::before {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        inset: 66px 7% 42px;
+        border: 10px solid #665062;
+        border-radius: 48%;
+        background: radial-gradient(ellipse, #965751, #623842);
+        box-shadow: 0 0 0 2px #251b2d, inset 0 0 0 2px #ffdbb72b, inset 0 8px 36px #32192555;
+    }
+    .uno-table .poker-topbar { position: absolute; inset: 18px 22px auto; margin: 0; }
+    .uno-table .poker-status { position: absolute; top: 66%; left: 25%; width: 50%; margin: 0; background: transparent; color: #f1dbd3; font-weight: 400; }
+    .uno-seats { position: absolute; inset: 50px 0 22px; margin: 0; display: block; pointer-events: none; }
+    .uno-seat {
+        position: absolute;
+        left: var(--seat-x);
+        top: var(--seat-y);
+        transform: translate(-50%, -50%);
+        width: clamp(96px, 9vw, 146px);
+        min-width: 0;
+        min-height: 70px;
+        padding: 8px 6px;
+        background: #fbf8fc;
+        box-shadow: 0 6px 16px #0002;
+        pointer-events: auto;
+        gap: 4px;
+    }
+    .uno-seat .us-name { max-width: 100%; font-size: 13px; }
+    .uno-seat .us-info { gap: 8px; font-size: 11px; }
+    .uno-seat .us-count { color: #6b367d; }
+    .uno-seat.me { background: #efe8ff; box-shadow: inset 0 0 0 2px #a58ad4; }
+    .uno-seat.active { box-shadow: 0 0 0 3px #ffd66b, 0 0 28px #ffd66b55; }
+    .uno-table .uno-center { position: absolute; left: 25%; top: 36%; width: 50%; padding: 0; gap: 28px; }
+    .uno-center .ucard.big { width: 70px; height: 98px; }
+    .uno-color-strip { flex-basis: 100%; max-width: 150px; margin: 0 calc(50% - 75px); text-align: center; }
+    .uno-direction { position: absolute; top: 22%; left: 30%; width: 40%; margin: 0; font-size: 16px; gap: 12px; }
+    .uno-direction-arrow { font-size: 46px; }
+    .uno-table .paused-overlay { position: absolute; top: 72%; left: 25%; width: 50%; margin: 0; padding: 7px; }
+    .uno-dock { display: flex; flex-direction: column; gap: 8px; min-height: 200px; padding: 14px 20px; }
+    .uno-dock .dock-head { justify-content: space-between; }
+    .uno-dock.is-my-turn .my-cards-label { color: #77419a; font-weight: 750; }
+    .uno-dock.is-my-turn { border-color: #a273c0; box-shadow: 0 0 0 2px #a273c022; }
+    .uno-dock .uno-hand { min-height: 102px; padding: 10px 4px 5px; margin: 0; }
+    .uno-hand-card { margin-left: -12px; }
+    .uno-hand-card .ucard { width: 60px; height: 84px; }
+    .uno-hand-card .uc-mid { width: 38px; height: 38px; font-size: 24px; }
+    .uno-hand-card:not(:disabled) { cursor: pointer; }
+    .uno-dock .countdown { flex: none; width: 100%; margin: 0; }
+    .uno-dock .action-bar { min-height: 40px; }
+    .uno-dock .uno-color-picker { width: auto; flex: 1; min-width: 270px; padding: 6px 10px; }
+    .uno-dock:not(.is-my-turn) .countdown { visibility: hidden; }
+}
+@media (min-width: 1024px) and (max-height: 850px) {
+    .uno-seat { padding: 6px 4px; gap: 2px; min-height: 62px; }
+    .uno-seat .us-name { font-size: 12px; }
+    .uno-challenge { padding: 4px; font-size: 10px; }
+    .uno-direction { top: 12px; font-size: 14px; }
+    .uno-direction-arrow { font-size: 34px; }
+    .uno-center .ucard.big { width: 58px; height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .uno-direction-arrow, .uno-effect-banner { animation: none; }
+}
