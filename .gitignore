@@ -11,3 +11,6 @@ __pycache__/
 *.backup
 *.save
 *.before-*
+
+# 本地联调与测试脚本：独立的 git 仓库（有自己的 .git 与提交历史）
+live-test/
