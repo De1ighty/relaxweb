@@ -119,7 +119,7 @@ export function openChatOverlay() {
   head.append(title, close);
   const list = document.createElement("div");
   list.className = "room-chat-list chat-overlay-list";
-  list.replaceChildren(...roomChat.map((m) => roomChatRowNode(m)));
+  list.replaceChildren(...state.roomChat.map((m) => roomChatRowNode(m)));
   // 聊天输入整合进二级菜单（浮层），桌面与手机横屏共用
   const composer = document.createElement("div");
   composer.className = "chat-overlay-composer";
