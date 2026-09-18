@@ -75,6 +75,13 @@ r <  0：Δ = round_half_up(max(-20, 20 × r))
 | 钻石 | 2000–2399 |
 | 大师 | 2400+ |
 
+游戏厅「我的段位 → 查看段位排行」可查看全站积分榜：按段位分从高到低展示前 100 位，
+同分并列（例如第 1、1、3 名），同分玩家按用户名稳定排列；自己的名次单独展示，榜外也可见。
+所有账号均参与，包括初始 1000 分、尚未结算牌局的玩家。排行榜打开时会随段位结算刷新，
+也可手动刷新。榜单只公开用户名、昵称、段位分和已结算局数，不公开金币余额或逐局明细。
+六个段位分别使用铜盾、银章、金星、铂金翼章、蓝色钻石、紫色王冠标志；排行页可查看全部标志与分数门槛，
+大厅、房间座位、结算和两个页面的账号菜单使用相同标志，并保留段位文字与分数。
+
 这是偏成长的收益积分：相同收益率不因注额大小改变得分，没有额外胜场奖励或对手分差修正，
 也不是零和的实力估计。参数设计参考 [Elo 的 K 系数控制单场影响](https://www.chess.com/terms/elo-rating-chess)
 这一思路，收益率公式与 2:1 比例是本项目自己的规则，并非 Elo/Glicko 算法。
@@ -170,7 +177,7 @@ python3 deploy/serve.py        # http://localhost:8000
 ```bash
 python3 tests/test_games.py            # 引擎纯逻辑（不需要起服务）
 python3 tests/test_frontend.py         # 前端模块静态检查（import/导出、state 前缀、禁用原生弹窗、页面资源）
-python3 tests/test_ratings.py          # 段位公式、迁移、逐局结算、幂等、离桌/退款与协议（需 websockets）
+python3 tests/test_ratings.py          # 段位公式、结算、迁移、幂等、排行榜/并列/前100与真实协议（需 websockets）
 python3 tests/test_rewards.py          # 签到日期/概率、累计机会、并发去重、扣次入账原子性
 python3 tests/test_rewards_protocol.py # 临时数据库 + 真实 WebSocket 签到/抽奖联调
 
@@ -187,7 +194,8 @@ python3 tests/test_uno_challenge_protocol.py # 本地真实 WebSocket 质疑联�
 不会出现阻塞主线程、让测试卡住的原生对话框。
 
 浏览器回归：启动 `python3 deploy/serve.py` 后，用安装了 Playwright 的 Node 环境运行
-`node tests/test_desktop.cjs`、`node tests/test_ratings.cjs` 和 `node tests/test_mobile_settlement.cjs`。
+`node tests/test_desktop.cjs`、`node tests/test_ratings.cjs`、`node tests/test_rating_leaderboard.cjs`
+和 `node tests/test_mobile_settlement.cjs`。
 手机结算回归使用触摸滑动和坐标点击，验证长结算页底部的继续/解散按钮可达。
 可通过 `NODE_PATH` 指定 Playwright 包路径、`CHROME_PATH` 指定 Chrome 可执行文件。
 
