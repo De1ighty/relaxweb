@@ -787,6 +787,8 @@ async def handle_delete_account(websocket, state, data):
                      "(SELECT id FROM users WHERE username = ?)", (user["username"],))
         conn.execute("DELETE FROM lottery_draws WHERE user_id = "
                      "(SELECT id FROM users WHERE username = ?)", (user["username"],))
+        for table in ("estate_actions", "estate_inventory", "estate_plots", "estate_profiles"):
+            conn.execute(f"DELETE FROM {table} WHERE username = ?", (user["username"],))
         conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
     state["user"] = None
     logger.info("account deleted: %s", user["username"])
@@ -979,9 +981,14 @@ async def handle_estate_action(websocket, state, data, action):
             snapshot = estate_state(conn, username, now)
     except (EstateError, ValueError, sqlite3.Error) as error:
         code = error.code if isinstance(error, EstateError) else "estate_failed"
-        logger.info("estate action rejected for %s: %s (%s)", username, error, code)
+        if isinstance(error, sqlite3.Error):
+            logger.exception("estate database failure for %s", username)
+            message = "庄园暂时忙碌，请稍后重试"
+        else:
+            logger.info("estate action rejected for %s: %s (%s)", username, error, code)
+            message = str(error)
         payload = {
-            "type": "estate_error", "code": code, "message": str(error),
+            "type": "estate_error", "code": code, "message": message,
             "request_id": request_id,
         }
         try:
