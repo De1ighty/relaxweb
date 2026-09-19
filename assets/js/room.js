@@ -6,6 +6,7 @@ import { gameView, onMessage, registerView } from "./registry.js";
 import { closeChatOverlay, resetRoomChat, openChatOverlay } from "./room-chat.js";
 import { closeHandResultOverlay, renderHandResultOverlay, renderSettlementView } from "./room-settlement.js";
 import { renderRoomLobby } from "./room-waiting.js";
+import { observeGameRoom, resetGameAudioRoom } from "./game-audio.js";
 
 export { closeChatOverlay };
 
@@ -38,6 +39,7 @@ export function renderRoom() {
 }
 
 onMessage("game_joined", (data) => {
+  observeGameRoom(null, data.room, { initial: true });
   state.myRoom = data.room;
   state.currentGameId = state.myRoom.game_type || state.currentGameId || "holdem";
   resetRoomChat();
@@ -56,6 +58,7 @@ onMessage("game_error", reportGameError);
 
 onMessage("game_update", (data) => {
   if (state.myRoom && data.room_id !== state.myRoom.room_id) return;
+  observeGameRoom(state.myRoom, data);
   state.myRoom = data;
   renderGameView();
 });
@@ -65,6 +68,7 @@ onMessage("game_restart", () => {});
 
 onMessage("room_closed", (data) => {
   const hadRoom = Boolean(state.myRoom);
+  resetGameAudioRoom();
   state.myRoom = null;
   resetRoomChat();
   closeChatOverlay();

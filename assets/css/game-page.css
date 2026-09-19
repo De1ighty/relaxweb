@@ -11,6 +11,74 @@ button {
     touch-action: manipulation;
 }
 
+.game-audio-open {
+    flex: none;
+    padding: 7px 10px;
+    color: #2f5347;
+    font-size: 13px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.room-audio-open {
+    flex: none;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: #f0f0f3;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.game-audio-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(19, 29, 25, .44);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.game-audio-modal[hidden] { display: none; }
+
+.game-audio-dialog {
+    width: min(360px, 100%);
+    padding: 20px;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .22);
+}
+
+.game-audio-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.game-audio-dialog-head h2 { margin: 0; font-size: 18px; }
+.game-audio-dialog-head button { width: 34px; height: 34px; border: 0; border-radius: 9px; background: #f0f0f3; font-size: 23px; cursor: pointer; }
+.game-audio-enabled-row { display: flex; align-items: center; gap: 10px; padding: 8px 0 16px; font-size: 15px; font-weight: 650; }
+.game-audio-enabled-row input { width: 19px; height: 19px; accent-color: #16865d; }
+.game-audio-volume-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; color: #4e5853; font-size: 14px; }
+.game-audio-volume-row output { color: #16865d; font-variant-numeric: tabular-nums; font-weight: 750; }
+.game-audio-volume-row input { grid-column: 1 / -1; width: 100%; accent-color: #16865d; }
+.game-audio-preview { width: 100%; min-height: 42px; margin-top: 18px; border: 0; border-radius: 11px; background: #16865d; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.game-audio-preview:disabled { opacity: .45; cursor: default; }
+
+@media(max-width: 650px) {
+    .game-header .left-header > .game-audio-open { display: flex; }
+    .game-audio-open { padding: 7px 9px; }
+    .game-audio-open .online-stat-name { display: none; }
+}
+
 a.hall-stat {
     text-decoration: none;
 

@@ -11,6 +11,7 @@ import {
 } from "./auth.js";
 import { closeChatOverlay } from "./room-chat.js";
 import { confirmDialog } from "./dialog.js";
+import { initializeGameAudio } from "./game-audio.js";
 // 以下模块靠导入时的副作用完成注册（大厅视图、房间视图、各游戏牌桌）
 import "./hall.js";
 import "./room.js";
@@ -19,6 +20,8 @@ import "./games/uno.js";
 import "./games/guandan.js";
 import "./games/mahjong.js";
 import "./estate/view.js";
+
+initializeGameAudio();
 
 elements.loginButton.addEventListener("click", openLogin);
 elements.authSubmit.addEventListener("click", submitAuth);

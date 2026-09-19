@@ -18,11 +18,7 @@ let hallBoardCount = 0;
 let lastHoleKey = "";
 const desktopPoker = window.matchMedia("(min-width: 1024px)");
 let attentionTimer = 0;
-let notifiedTurn = "";
 let titleBeforeTurn = null;
-let audioContext;
-let soundEnabled = false;
-try { soundEnabled = localStorage.getItem("pokerTurnSound") === "on"; } catch {}
 
 function clearAttention() {
   window.clearInterval(attentionTimer);
@@ -31,57 +27,18 @@ function clearAttention() {
 }
 document.addEventListener("gameviewchange", () => {
   clearAttention();
-  if (!state.myRoom || state.myRoom.to_act !== state.currentUser?.username) notifiedTurn = "";
 });
 desktopPoker.addEventListener("change", () => {
   clearAttention();
   if (state.myRoom?.game_type === "holdem") renderGameView();
 });
 
-async function playTurnSound(preview = false) {
-  if (!soundEnabled || !desktopPoker.matches) return;
-  try {
-    const Audio = window.AudioContext || window.webkitAudioContext;
-    if (!Audio) return;
-    audioContext ||= new Audio();
-    await audioContext.resume();
-    if (!soundEnabled || !desktopPoker.matches) return;
-    if (!preview && (!state.myRoom || state.myRoom.paused || state.myRoom.to_act !== state.currentUser?.username)) return;
-    for (const [delay, frequency] of [[0, 660], [0.16, 880]]) {
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      const start = audioContext.currentTime + delay;
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.09, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
-      oscillator.connect(gain).connect(audioContext.destination);
-      oscillator.start(start);
-      oscillator.stop(start + 0.2);
-    }
-  } catch { /* 音频不可用时仍保留视觉提醒。 */ }
-}
-
 function turnNotice(dock, myTurn) {
   const note = document.createElement("div");
   note.className = "desktop-turn-notice";
   note.setAttribute("role", "status");
   const text = document.createElement("span");
-  const sound = document.createElement("button");
-  sound.type = "button";
-  sound.className = "turn-sound";
-  const updateSound = () => {
-    sound.textContent = soundEnabled ? "提示音：开" : "提示音：关";
-    sound.setAttribute("aria-pressed", String(soundEnabled));
-  };
-  updateSound();
-  sound.addEventListener("click", () => {
-    soundEnabled = !soundEnabled;
-    try { localStorage.setItem("pokerTurnSound", soundEnabled ? "on" : "off"); } catch {}
-    updateSound();
-    if (soundEnabled) void playTurnSound(true);
-  });
-  note.append(text, sound);
+  note.append(text);
   dock.append(note);
   const active = myTurn && !state.myRoom.paused && Boolean(state.myRoom.your_options);
   dock.classList.toggle("is-my-turn", active);
@@ -107,8 +64,6 @@ function turnNotice(dock, myTurn) {
   titleBeforeTurn = document.title;
   document.title = `轮到你了 · ${titleBeforeTurn}`;
   attentionTimer = window.setInterval(tick, 250);
-  const key = JSON.stringify([state.myRoom.room_id, state.myRoom.hand_no, state.myRoom.stage, state.myRoom.last_action]);
-  if (notifiedTurn !== key) { notifiedTurn = key; void playTurnSound(); }
 }
 
 // 服务端拒绝动作时解除提交锁，玩家可修正并重试。

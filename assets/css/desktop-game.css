@@ -146,7 +146,6 @@
     .poker-dock .dock-head { grid-column: 1; grid-row: 1; justify-content: center; }
     .poker-dock .my-cards { grid-column: 1; grid-row: 2 / 4; align-self: center; margin: 0; }
     .desktop-turn-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; grid-column: 2; grid-row: 1; font-size: 14px; color: #68757c; }
-    .turn-sound { flex: none; padding: 5px 8px; border: 0; border-radius: 6px; background: #edf2f1; color: #50645d; font-size: 11px; cursor: pointer; }
     .poker-dock .countdown { grid-column: 2; grid-row: 2; height: 4px; margin: 8px 0; }
     .poker-dock:not(.is-my-turn) .countdown { visibility: hidden; }
     .poker-dock .action-bar { grid-column: 2; grid-row: 3; margin: 0; gap: 8px; align-items: center; }

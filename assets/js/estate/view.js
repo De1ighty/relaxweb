@@ -28,6 +28,7 @@ function renderEstate() {
       <div class="estate-hud-item"><small>金币</small><b data-estate-coins>--</b></div>
       <div class="estate-hud-item"><small>仓库</small><b data-estate-warehouse>--</b></div>
       <div class="estate-level"><b data-estate-level>Lv.1</b><span><i class="estate-xp-fill"></i></span></div>
+      <button class="estate-audio-open" id="estateAudioSettingsButton" type="button" aria-label="音效设置" title="音效设置">🔊</button>
     </div>
     <div class="estate-loading">正在走进庄园…</div>
     <div class="estate-interact-hint" hidden><kbd>E</kbd><span></span></div>

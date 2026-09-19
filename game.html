@@ -16,12 +16,12 @@
 <link rel="stylesheet" href="assets/css/bet.css?v=31">
 <link rel="stylesheet" href="assets/css/hall.css?v=31">
 <link rel="stylesheet" href="assets/css/games/poker.css?v=31">
-<link rel="stylesheet" href="assets/css/game-page.css?v=32">
-<link rel="stylesheet" href="assets/css/room.css?v=31">
+<link rel="stylesheet" href="assets/css/game-page.css?v=33">
+<link rel="stylesheet" href="assets/css/room.css?v=32">
 <link rel="stylesheet" href="assets/css/table.css?v=30">
 <link rel="stylesheet" href="assets/css/games/uno.css?v=31">
 <link rel="stylesheet" href="assets/css/dialog.css?v=30">
-<link rel="stylesheet" href="assets/css/estate.css?v=6">
+<link rel="stylesheet" href="assets/css/estate.css?v=7">
 
 <link rel="stylesheet" href="assets/css/desktop-game.css?v=30">
 <link rel="stylesheet" href="assets/css/rating.css?v=34">
@@ -64,6 +64,10 @@
         <span class="online-stat-number" id="onlineNumber">0</span>
         <span class="online-stat-name">在线</span>
     </div>
+
+    <button class="online-stat game-audio-open" id="hallAudioSettingsButton" type="button" aria-label="音效设置" title="音效设置">
+        <span aria-hidden="true">🔊</span><span class="online-stat-name">音效</span>
+    </button>
 
 </div>
 
@@ -156,6 +160,8 @@
         class="room-topbar-name"
         id="roomTopName"
     ></div>
+
+    <button class="room-audio-open" id="roomAudioSettingsButton" type="button" aria-label="音效设置" title="音效设置">🔊</button>
 
     <div
         class="room-manage"
@@ -431,9 +437,27 @@
 </div>
 
 
+<div class="game-audio-modal" id="gameAudioSettingsModal" hidden>
+    <section class="game-audio-dialog" role="dialog" aria-modal="true" aria-labelledby="gameAudioTitle">
+        <header class="game-audio-dialog-head">
+            <h2 id="gameAudioTitle">游戏音效</h2>
+            <button id="gameAudioCloseButton" type="button" aria-label="关闭音效设置">×</button>
+        </header>
+        <label class="game-audio-enabled-row">
+            <input id="gameAudioEnabled" type="checkbox">
+            <span>音效</span>
+        </label>
+        <label class="game-audio-volume-row" for="gameAudioVolume">
+            <span>音量</span><output id="gameAudioVolumeValue" for="gameAudioVolume">60%</output>
+            <input id="gameAudioVolume" type="range" min="0" max="100" step="1" aria-label="音效音量">
+        </label>
+        <button class="game-audio-preview" id="gameAudioPreviewButton" type="button">试听音效</button>
+    </section>
+</div>
+
 <script src="assets/transfer-select.js?v=31" defer></script>
 <script src="assets/rewards.js?v=33" defer></script>
-<script type="module" src="assets/js/main.js?v=39"></script>
+<script type="module" src="assets/js/main.js?v=40"></script>
 
 
 </body>

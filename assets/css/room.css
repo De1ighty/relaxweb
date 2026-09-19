@@ -300,6 +300,11 @@
 
 @media(max-width:650px) {
 
+    .room-topbar {
+        gap: 6px;
+        padding: 0 8px;
+    }
+
     .hall-grid {
         grid-template-columns: 1fr;
     }
@@ -313,6 +318,11 @@
         padding: 8px 10px;
 
         font-size: 12.5px;
+    }
+
+    .room-audio-open {
+        width: 32px;
+        height: 32px;
     }
 
     .room-topbar-name {

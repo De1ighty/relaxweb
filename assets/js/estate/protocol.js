@@ -3,6 +3,7 @@
 import { elements, send, state, updateCoinChip } from "../core.js";
 import { alertDialog } from "../dialog.js";
 import { onMessage } from "../registry.js";
+import { playGameSound } from "../game-audio.js";
 import { clearEstate, estateStore, setEstateSnapshot } from "./state.js";
 
 let sequence = 0;
@@ -34,12 +35,29 @@ export function estateRequest(type, payload = {}) {
 }
 
 onMessage("estate_state", (data) => {
+  const pendingAction = data.request_id ? estateStore.pending.get(data.request_id) : null;
   if (data.request_id) estateStore.pending.delete(data.request_id);
   if (data.request_id && waiters.has(data.request_id)) {
     waiters.get(data.request_id).resolve(data.result);
     waiters.delete(data.request_id);
   }
   setEstateSnapshot(data);
+  if (state.hallPage === "estate" && pendingAction && data.result && !data.result.replayed) {
+    const cue = ({
+      estate_plant: "plant",
+      estate_harvest: "harvest",
+      estate_finish_fishing: "fish",
+      estate_mine_cell: "mine",
+      estate_finish_mining: "mine",
+      estate_buy: "shop",
+      estate_sell: "shop",
+      estate_sell_all: "shop",
+      estate_buy_tool: "shop",
+      estate_upgrade_tool: "shop",
+      estate_repair_tool: "shop",
+    })[pendingAction.type];
+    if (cue) playGameSound(cue);
+  }
   if (state.currentUser) {
     state.currentUser.coins = data.coins;
     updateCoinChip();
