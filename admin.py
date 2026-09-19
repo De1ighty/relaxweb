@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""资产后端管理入口（命令行）。
+"""资产与运维后端管理入口（命令行）。
 
 数据库与 chat_server 一致：读 config.json 的 database.file，可用环境变量 LIVE_DB_FILE 覆盖：
   python3 admin.py <命令> [参数]
   LIVE_DB_FILE=/path/users.db python3 admin.py <命令> [参数]
 
-命令：
+金币命令：
   list [用户名]         查看全部用户金币概览 / 指定用户的金币与最近记录
   set <用户名> <数量>    直接设置金币数量（记一条「管理员调整」明细）
   add <用户名> <数量>    增加金币
@@ -14,15 +14,67 @@
   restore-all [-y]      一键还原所有用户：全员金币回默认值，清空全部金币记录
   clear-log [-y]        仅清空全部金币记录（不改变现有余额）
 
+用户命令：
+  delete <用户名> [-y]   物理删除用户及其全部数据（会话/金币/竞猜/庄园/段位/签到/抽奖）；
+                        该用户参与中的开放竞猜未结账时会拒绝删除，先结账或流局
+  edit <用户名> <字段> <值> [-y]
+                        修改用户字段，支持：
+                          nickname <昵称>            改昵称
+                          role <user|admin|streamer> 改角色
+                          password <新密码>          重置密码（至少 6 位）
+                          username <新用户名>        改名（同步迁移全部关联记录）
+
+运维命令（仅服务器上有 systemd + 免密 sudo 时可用，本机执行会提示不可用）：
+  status                服务器详细状态：服务/系统/数据库/在线/最近错误
+  restart [-y]          一键重启 live-chat / live-web / live-auth
+
 说明：还原/清空是物理删除记录、不写对账明细；set/add/sub 会记一条
 「管理员调整」明细。修改新玩家默认金币请改 config.json 的
 economy.new_user_coins（或环境变量 NEW_USER_COINS），改后需重启 live-chat 服务。
 """
+import os
+import shutil
+import subprocess
 import sys
+import time
 
-from chat_server import NEW_USER_COINS, adjust_coins, database, init_db
+from chat_server import (
+    NEW_USER_COINS,
+    adjust_coins,
+    database,
+    hash_password,
+    init_db,
+    valid_username,
+)
 
 PROG = "admin.py"
+SERVICES = ("live-chat", "live-web", "live-auth")
+ROLES = ("user", "admin", "streamer")
+EDIT_FIELDS = ("nickname", "role", "password", "username")
+# 这些表以 username 文本关联用户，改名时要一并迁移（user_id 关联的表不用动）
+USERNAME_REF_TABLES = (
+    "coin_transactions", "bet_entries", "bets", "game_escrows",
+    "invite_codes",  # created_by / used_by 两列
+    "estate_actions", "estate_fishing_sessions", "estate_mining_runs",
+    "estate_tools", "estate_inventory", "estate_plots", "estate_profiles",
+)
+DELETION_PLAN = (
+    ("auth_sessions", "user_id IN (SELECT id FROM users WHERE username = ?)"),
+    ("rating_history", "user_id IN (SELECT id FROM users WHERE username = ?)"),
+    ("daily_checkins", "user_id IN (SELECT id FROM users WHERE username = ?)"),
+    ("lottery_draws", "user_id IN (SELECT id FROM users WHERE username = ?)"),
+    ("bet_entries", "username = ?"),
+    ("coin_transactions", "username = ?"),
+    ("game_escrows", "username = ?"),
+    ("estate_actions", "username = ?"),
+    ("estate_fishing_sessions", "username = ?"),
+    ("estate_mining_runs", "username = ?"),
+    ("estate_tools", "username = ?"),
+    ("estate_inventory", "username = ?"),
+    ("estate_plots", "username = ?"),
+    ("estate_profiles", "username = ?"),
+    ("users", "username = ?"),
+)
 
 
 def fail(message):
@@ -35,6 +87,12 @@ def get_user(conn, username):
         "SELECT username, nickname, coins FROM users WHERE username = ?",
         (username,),
     ).fetchone()
+
+
+def table_exists(conn, table):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+    ).fetchone() is not None
 
 
 def money_arg(raw):
@@ -56,6 +114,21 @@ def confirm(prompt, assume_yes):
         return False
     return answer in ("y", "yes")
 
+
+def run_quiet(args, timeout=15):
+    """跑一条系统命令，返回 (成功, 去尾输出)；命令不存在或超时不算致命。"""
+    try:
+        proc = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False, ""
+    return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
+
+
+# =========================================================
+# 金币命令
+# =========================================================
 
 def cmd_list(username=None):
     with database() as conn:
@@ -151,6 +224,280 @@ def cmd_clear_log(assume_yes=False):
     print("完成：金币记录已清空（余额不变）")
 
 
+# =========================================================
+# 用户命令
+# =========================================================
+
+def open_bet_involving(conn, username):
+    """该用户参与中的开放竞猜（发起或投注），返回描述或 None。"""
+    bet = conn.execute(
+        "SELECT id, question, creator FROM bets WHERE status = 'open' "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if not bet:
+        return None
+    if bet[2] == username:
+        return f"竞猜 #{bet[0]}「{bet[1]}」由该用户发起"
+    joined = conn.execute(
+        "SELECT 1 FROM bet_entries WHERE bet_id = ? AND username = ?",
+        (bet[0], username),
+    ).fetchone()
+    if joined:
+        return f"竞猜 #{bet[0]}「{bet[1]}」有该用户的投注"
+    return None
+
+
+def cmd_delete(username, assume_yes=False):
+    init_db()
+    with database() as conn:
+        row = conn.execute(
+            "SELECT username, nickname, role, coins, created_at FROM users "
+            "WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if not row:
+            fail("用户不存在")
+        blocker = open_bet_involving(conn, username)
+        if blocker:
+            fail(f"{blocker}，请先结账或流局再删除")
+        counts = []
+        for table, where in DELETION_PLAN:
+            if not table_exists(conn, table):
+                continue
+            n = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE {where}", (username,)
+            ).fetchone()[0]
+            if n:
+                counts.append((table, n))
+    print(
+        f"将删除用户 {row[0]}（昵称 {row[1] or '-'}，角色 {row[2]}，"
+        f"金币 {row[3]:.2f}）："
+    )
+    for table, n in counts:
+        print(f"  {table}: {n} 条")
+    if not counts:
+        print("  （无关联数据）")
+    if not confirm("确认物理删除？删除后不可恢复。", assume_yes):
+        print("已取消")
+        return
+    with database() as conn, conn:
+        if not get_user(conn, username):
+            fail("用户不存在")
+        for table, where in DELETION_PLAN:
+            if table_exists(conn, table):
+                conn.execute(f"DELETE FROM {table} WHERE {where}", (username,))
+    print(f"完成：用户 {username} 及其全部数据已删除")
+
+
+def cmd_edit(username, field, value, assume_yes=False):
+    field = field.lower()
+    if field not in EDIT_FIELDS:
+        fail("支持的字段：" + " / ".join(EDIT_FIELDS))
+    init_db()
+    with database() as conn, conn:
+        if not get_user(conn, username):
+            fail("用户不存在")
+
+    if field == "nickname":
+        value = value.strip()
+        if not 0 < len(value) <= 20:
+            fail("昵称需为 1-20 个字符")
+        with database() as conn, conn:
+            conn.execute(
+                "UPDATE users SET nickname = ? WHERE username = ?",
+                (value, username),
+            )
+        print(f"完成：{username} 昵称改为「{value}」")
+        return
+
+    if field == "role":
+        if value not in ROLES:
+            fail("角色只能是：" + " / ".join(ROLES))
+        with database() as conn, conn:
+            conn.execute(
+                "UPDATE users SET role = ? WHERE username = ?", (value, username)
+            )
+        print(f"完成：{username} 角色改为 {value}")
+        return
+
+    if field == "password":
+        if not 6 <= len(value) <= 128:
+            fail("密码至少需要 6 位，最长 128 位")
+        password_hash, salt = hash_password(value)
+        with database() as conn, conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
+                (password_hash, salt, username),
+            )
+        print(f"完成：{username} 密码已重置")
+        return
+
+    # username 改名：全部以 username 文本关联的表都要迁移，一个事务完成
+    new_name = value.strip()
+    if new_name == username:
+        print(f"完成：{username} 名字无变化")
+        return
+    if not valid_username(new_name):
+        fail("用户名需为2-20位中文、英文、数字、_ 或 -")
+    with database() as conn:
+        clash = conn.execute(
+            "SELECT 1 FROM users WHERE username = ? COLLATE NOCASE", (new_name,)
+        ).fetchone()
+    if clash:
+        fail(f"用户名 {new_name} 已存在")
+    prompt = f"确认把 {username} 改名为 {new_name}？将同步迁移其全部关联记录"
+    if not confirm(prompt, assume_yes):
+        print("已取消")
+        return
+    with database() as conn, conn:
+        if not get_user(conn, username):
+            fail("用户不存在")
+        conn.execute(
+            "UPDATE users SET username = ? WHERE username = ?", (new_name, username)
+        )
+        moved = 0
+        for table in USERNAME_REF_TABLES:
+            if not table_exists(conn, table):
+                continue
+            columns = {info[1] for info in conn.execute(f"PRAGMA table_info({table})")}
+            for column in ("username", "creator", "created_by", "used_by"):
+                if column in columns:
+                    cur = conn.execute(
+                        f"UPDATE {table} SET {column} = ? WHERE {column} = ?",
+                        (new_name, username),
+                    )
+                    moved += cur.rowcount
+    print(f"完成：{username} 已改名为 {new_name}（迁移 {moved} 条关联记录）")
+
+
+# =========================================================
+# 运维命令
+# =========================================================
+
+def service_lines():
+    lines = []
+    for service in SERVICES:
+        ok, state = run_quiet(["systemctl", "is-active", service])
+        ok2, since = run_quiet(
+            ["systemctl", "show", service, "-p", "ActiveEnterTimestamp", "--value"]
+        )
+        if not ok and not state:
+            lines.append(f"  {service:<10} 不可用（本机无 systemd 或服务未安装）")
+            continue
+        lines.append(f"  {service:<10} {state or 'unknown'}   自 {since or '?'}")
+    return lines
+
+
+def online_count_line():
+    ok, out = run_quiet(
+        ["journalctl", "-u", "live-chat", "--since", "-30min", "--no-pager", "-q"]
+    )
+    if ok:
+        marks = [line for line in out.splitlines() if "online=" in line]
+        if marks:
+            return marks[-1].split(";", 1)[-1].strip() or marks[-1][-60:]
+    return None
+
+
+def cmd_status():
+    print("== 服务 ==")
+    for line in service_lines():
+        print(line)
+    online = online_count_line()
+    if online:
+        print(f"  最近在线：{online}")
+
+    print("\n== 系统 ==")
+    ok, out = run_quiet(["uptime", "-p"])
+    print(f"  运行时长：{out if ok else '未知'}")
+    load = ", ".join(f"{v:.2f}" for v in os.getloadavg())
+    print(f"  负载：{load}")
+    total, used, free = shutil.disk_usage(os.getcwd())
+    print(
+        f"  磁盘（应用目录）：已用 {used >> 30}G / 共 {total >> 30}G"
+        f"（剩 {free >> 30}G）"
+    )
+    try:
+        with open("/proc/meminfo", encoding="ascii") as handle:
+            info = {}
+            for line in handle:
+                key, _, rest = line.partition(":")
+                info[key] = int(rest.strip().split()[0])  # kB
+        mem_used = info["MemTotal"] - info["MemAvailable"]
+        print(
+            f"  内存：{mem_used // 1024}M 已用 / {info['MemTotal'] // 1024}M"
+            f"（可用 {info['MemAvailable'] // 1024}M）"
+        )
+    except (OSError, KeyError, ValueError, IndexError):
+        print("  内存：未知（非 Linux 环境）")
+
+    print("\n== 数据库 ==")
+    with database() as conn:
+        users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        coins = conn.execute("SELECT ROUND(SUM(coins), 2) FROM users").fetchone()[0]
+        print(f"  用户 {users} 名，金币总量 {coins or 0:.2f}")
+        bet = conn.execute(
+            "SELECT id, question, creator, created_at FROM bets "
+            "WHERE status = 'open' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if bet:
+            age = max(0, int(time.time()) - bet[3])
+            print(f"  进行中竞猜：#{bet[0]}「{bet[1]}」发起者 {bet[2]}（已 {age // 60} 分钟）")
+        else:
+            print("  进行中竞猜：无")
+        if table_exists(conn, "invite_codes"):
+            unused = conn.execute(
+                "SELECT COUNT(*) FROM invite_codes WHERE used_by IS NULL"
+            ).fetchone()[0]
+            print(f"  可用邀请码：{unused} 个")
+        if table_exists(conn, "estate_profiles"):
+            estates = conn.execute("SELECT COUNT(*) FROM estate_profiles").fetchone()[0]
+            print(f"  庄园档案：{estates} 份")
+
+    print("\n== 最近 24h 错误 ==")
+    found = False
+    for service in SERVICES:
+        ok, out = run_quiet(
+            ["journalctl", "-u", service, "-p", "err", "--since", "-24h",
+             "--no-pager", "-q"]
+        )
+        if ok and out:
+            found = True
+            for line in out.splitlines()[-5:]:
+                print(f"  {line}")
+    if not found:
+        print("  无")
+
+
+def cmd_restart(assume_yes=False):
+    ok, _ = run_quiet(["sudo", "-n", "true"], timeout=5)
+    if not ok:
+        fail("重启需要免密 sudo（admin 用户在服务器上运行即可）。"
+             "也可手动：sudo systemctl restart live-chat live-web live-auth")
+    if not confirm("确认重启 live-chat / live-web / live-auth？线上连接会短暂断开", assume_yes):
+        print("已取消")
+        return
+    ok, out = run_quiet(
+        ["sudo", "-n", "systemctl", "restart", *SERVICES], timeout=60
+    )
+    if not ok:
+        fail(f"重启命令失败：{out}")
+    time.sleep(1.5)
+    bad = []
+    for service in SERVICES:
+        ok, state = run_quiet(["systemctl", "is-active", service])
+        print(f"  {service:<10} {state or 'unknown'}")
+        if state != "active":
+            bad.append(service)
+    if bad:
+        fail("以下服务未恢复 active，请 journalctl -u " + bad[0] + " 排查")
+    print("完成：全部服务已重启并恢复 active")
+
+
+# =========================================================
+# 入口
+# =========================================================
+
 def main(argv):
     args = [a for a in argv if a != "-y"]
     assume_yes = len(args) != len(argv)
@@ -173,6 +520,14 @@ def main(argv):
         cmd_restore(None, assume_yes)
     elif command == "clear-log":
         cmd_clear_log(assume_yes)
+    elif command == "delete" and len(rest) == 1:
+        cmd_delete(rest[0], assume_yes)
+    elif command == "edit" and len(rest) == 3:
+        cmd_edit(rest[0], rest[1], rest[2], assume_yes)
+    elif command == "status":
+        cmd_status()
+    elif command == "restart":
+        cmd_restart(assume_yes)
     else:
         print(__doc__)
         sys.exit(1)

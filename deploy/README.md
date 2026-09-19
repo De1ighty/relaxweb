@@ -76,7 +76,18 @@ ffmpeg -re -i 你的视频源 -c:v libx264 -c:a aac \
 python3 manage_invite.py gen 5      # 生成 5 个邀请码
 ```
 
-金币调整用 `admin.py`（`list` / `set` / `add` / `sub` / `restore`），默认金币数量在 `config.json` 的 `economy.new_user_coins`。
+管理用 `admin.py`（在服务器应用目录以 admin 用户运行）：
+
+```bash
+python3 admin.py list                 # 用户与金币概览
+python3 admin.py set/add/sub <用户> <数量>
+python3 admin.py delete <用户> -y     # 物理删除用户及全部关联数据
+python3 admin.py edit <用户> <字段> <值>   # 字段：nickname / role / password / username
+python3 admin.py status               # 服务、系统、数据库、在线与最近错误
+python3 admin.py restart -y           # 一键重启 live-chat / live-web / live-auth（需免密 sudo）
+```
+
+默认金币数量在 `config.json` 的 `economy.new_user_coins`。
 
 ## 6. 更新部署
 
