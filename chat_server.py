@@ -20,7 +20,16 @@ from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
 from games.rating import TIERS, rating_change, rating_info
 from rewards import init_rewards, rewards_state, claim_checkin, draw_lottery
-from estate import init_estate
+from estate import (
+    EstateError,
+    buy as estate_buy,
+    estate_state,
+    harvest as estate_harvest,
+    init_estate,
+    plant as estate_plant,
+    sell as estate_sell,
+    sell_all as estate_sell_all,
+)
 
 
 HOST = str(get("servers.chat_host", env="LIVE_CHAT_HOST", default="0.0.0.0"))
@@ -909,6 +918,111 @@ async def handle_daily_checkin(websocket, state, data):
 
 async def handle_draw_lottery(websocket, state, data):
     await handle_rewards_action(websocket, state, data, "draw")
+
+
+async def publish_estate(username, snapshot, result=None, request_id=None):
+    """把庄园完整快照同步到同账号的所有连接。"""
+    payload = {
+        "type": "estate_state",
+        **snapshot,
+        "request_id": request_id,
+        "result": result,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    for socket, client_state in list(clients.items()):
+        user = client_state.get("user")
+        if user and user["username"] == username:
+            user["coins"] = snapshot["coins"]
+            await _ws_send(socket, encoded)
+
+
+async def handle_estate_action(websocket, state, data, action):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {
+            "type": "estate_error", "code": "auth_required",
+            "message": "请先登录", "request_id": data.get("request_id"),
+        })
+        return
+    username = user["username"]
+    request_id = data.get("request_id")
+    try:
+        with database() as conn, conn:
+            now = int(time.time())
+            result = None
+            if action != "get":
+                conn.execute("BEGIN IMMEDIATE")
+            if action == "buy":
+                result = estate_buy(
+                    conn, username, request_id, data.get("kind"),
+                    data.get("item_id"), data.get("quantity", 1), now,
+                    adjust_coins,
+                )
+            elif action == "plant":
+                result = estate_plant(
+                    conn, username, request_id, data.get("plot_id"),
+                    data.get("crop_id"), now,
+                )
+            elif action == "harvest":
+                result = estate_harvest(
+                    conn, username, request_id, data.get("plot_id"), now,
+                )
+            elif action == "sell":
+                result = estate_sell(
+                    conn, username, request_id, data.get("item_id"),
+                    data.get("quantity"), now, adjust_coins,
+                )
+            elif action == "sell_all":
+                result = estate_sell_all(
+                    conn, username, request_id, now, adjust_coins,
+                )
+            snapshot = estate_state(conn, username, now)
+    except (EstateError, ValueError, sqlite3.Error) as error:
+        code = error.code if isinstance(error, EstateError) else "estate_failed"
+        logger.info("estate action rejected for %s: %s (%s)", username, error, code)
+        payload = {
+            "type": "estate_error", "code": code, "message": str(error),
+            "request_id": request_id,
+        }
+        try:
+            with database() as conn:
+                payload["state"] = estate_state(conn, username, int(time.time()))
+        except (EstateError, sqlite3.Error):
+            pass
+        await send_json(websocket, payload)
+        return
+    if action == "get":
+        user["coins"] = snapshot["coins"]
+        await send_json(websocket, {
+            "type": "estate_state", **snapshot, "request_id": None,
+            "result": None,
+        })
+    else:
+        await publish_estate(username, snapshot, result, request_id)
+
+
+async def handle_get_estate(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "get")
+
+
+async def handle_estate_buy(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "buy")
+
+
+async def handle_estate_plant(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "plant")
+
+
+async def handle_estate_harvest(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "harvest")
+
+
+async def handle_estate_sell(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "sell")
+
+
+async def handle_estate_sell_all(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "sell_all")
 
 
 async def handle_transfer_coins(websocket, state, data):
@@ -2090,6 +2204,12 @@ handlers = {
     "get_daily_rewards": handle_get_daily_rewards,
     "daily_checkin": handle_daily_checkin,
     "draw_lottery": handle_draw_lottery,
+    "get_estate": handle_get_estate,
+    "estate_buy": handle_estate_buy,
+    "estate_plant": handle_estate_plant,
+    "estate_harvest": handle_estate_harvest,
+    "estate_sell": handle_estate_sell,
+    "estate_sell_all": handle_estate_sell_all,
     "get_rating_history": handle_get_rating_history,
     "get_rating_leaderboard": handle_get_rating_leaderboard,
     "transfer_coins": handle_transfer_coins,
