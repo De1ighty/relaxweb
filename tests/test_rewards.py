@@ -3,6 +3,7 @@
 import asyncio
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
@@ -221,7 +222,7 @@ class MigrationTests(unittest.TestCase):
     def test_existing_account_starts_with_zero_chances(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(server, "DB_FILE", str(Path(tmp) / "old.db")):
-                with sqlite3.connect(server.DB_FILE) as conn:
+                with closing(sqlite3.connect(server.DB_FILE)) as conn, conn:
                     conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, "
                                  "password_hash TEXT, salt TEXT, role TEXT, created_at INTEGER, coins REAL)")
                     conn.execute("INSERT INTO users VALUES (1, 'old', '', '', 'user', 0, 321)")

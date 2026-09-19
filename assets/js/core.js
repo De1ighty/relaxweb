@@ -209,6 +209,7 @@ export function setSignedIn(user) {
     state.hallPage = null;
     renderGameView();
   }
+  document.dispatchEvent(new CustomEvent("authstatechange", { detail: { user } }));
 }
 
 
@@ -232,6 +233,7 @@ export function renderGameView() {
   if (state.hallPage === "create" && state.currentGameId) renderView("create");
   else if (state.hallPage === "rooms" && state.currentGameId) renderView("rooms");
   else if (state.hallPage === "rankings") renderView("rankings");
+  else if (state.hallPage) renderView(state.hallPage);
   else renderView("hall");
 }
 

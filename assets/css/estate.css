@@ -1,0 +1,237 @@
+:root {
+  --estate-ink: #332b29;
+  --estate-cream: #fff5d9;
+  --estate-green: #39784a;
+  --estate-gold: #e8a93d;
+  --estate-shadow: #6b4931;
+}
+
+body.estate-active { overflow: hidden; background: #233b35; }
+body.estate-active .game-header { display: none; }
+body.estate-active .game-workspace,
+body.estate-active .game-container { width: 100%; max-width: none; height: 100dvh; min-height: 0; margin: 0; padding: 0; }
+
+.estate-root {
+  position: relative; width: 100%; height: 100dvh; overflow: hidden;
+  color: var(--estate-ink); background: #76b956;
+  font-family: "Microsoft YaHei", system-ui, sans-serif;
+}
+.estate-root::after {
+  content: ""; position: absolute; z-index: 2; inset: 0; pointer-events: none;
+  background: linear-gradient(#fff2 1px, transparent 1px), linear-gradient(90deg, #173b2710 1px, transparent 1px);
+  background-size: 4px 4px; mix-blend-mode: soft-light; opacity: .22;
+}
+.estate-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.estate-topbar {
+  position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top)); left: 50%;
+  transform: translateX(-50%); width: min(920px, calc(100% - 24px)); min-height: 64px;
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  background: linear-gradient(#fff8dc, #eed39a); border: 4px solid #714b31;
+  box-shadow: inset 0 0 0 2px #fff3c7, 0 5px 0 #382b29, 0 10px 24px #1d312844; border-radius: 10px;
+}
+.estate-back, .estate-button {
+  border: 2px solid #60422f; border-radius: 7px; color: #fff8dd; background: #558650;
+  box-shadow: inset 0 -3px #315b3c, 0 2px #473428; font-weight: 800; cursor: pointer;
+  padding: 10px 13px; transition: transform .1s, filter .1s;
+}
+.estate-back:hover, .estate-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.estate-button:disabled { cursor: not-allowed; filter: grayscale(.65); opacity: .55; transform: none; }
+.estate-brand { margin-right: auto; display: grid; line-height: 1; }
+.estate-brand span { font-family: Georgia, "Microsoft YaHei", serif; font-weight: 900; font-size: 21px; color: #74462c; text-shadow: 0 1px #fff1bc, 1px 2px #c6a064; }
+.estate-brand small { margin-top: 7px; color: #91734d; letter-spacing: 3px; }
+.estate-hud-item { min-width: 88px; display: grid; padding: 5px 10px; border-left: 2px dashed #b79760; }
+.estate-hud-item small { color: #806c4f; font-weight: 700; }
+.estate-hud-item b { color: #704526; font-size: 16px; }
+.estate-level { width: 105px; }
+.estate-level b { font-size: 13px; }
+.estate-level > span { display: block; height: 9px; margin-top: 5px; overflow: hidden; border: 2px solid #5f4632; border-radius: 6px; background: #bca879; }
+.estate-xp-fill { display: block; width: 0; height: 100%; background: #68ad53; transition: width .25s; }
+.estate-loading {
+  position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 12px 18px; color: #fff6d4; background: #3c654ee6; border: 3px solid #f2d392; border-radius: 8px; font-weight: 800;
+}
+.estate-interact-hint {
+  position: absolute; z-index: 4; bottom: 32px; left: 50%; transform: translateX(-50%);
+  padding: 8px 14px; color: #fff8db; background: #2b382eea; border: 2px solid #e9d291;
+  border-radius: 8px; font-weight: 800; pointer-events: none;
+}
+.estate-interact-hint kbd { display: inline-grid; place-items: center; min-width: 25px; height: 25px; margin-right: 8px; color: #412f23; background: #fff0bb; border: 2px solid #8e6a40; border-radius: 5px; }
+.estate-help { position: absolute; z-index: 3; left: 18px; bottom: 16px; padding: 7px 10px; color: #fff8db; background: #263b31bb; border-radius: 5px; font-size: 12px; }
+.estate-stick, .estate-action { display: none; }
+
+.estate-sheet {
+  position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; padding: 88px 16px 20px;
+  background: #1e292555; backdrop-filter: blur(2px);
+}
+.estate-sheet[hidden] { display: none; }
+.estate-sheet > section {
+  width: min(600px, 100%); max-height: min(680px, 100%); display: flex; flex-direction: column;
+  background-color: #fff4d2;
+  background-image: repeating-linear-gradient(0deg, transparent 0 23px, #bb8b4c0d 24px 25px);
+  border: 5px solid #6f4b31; border-radius: 12px;
+  box-shadow: inset 0 0 0 2px #f8d990, 0 7px 0 #352823, 0 18px 50px #17251d88; overflow: hidden;
+}
+.estate-sheet header { display: flex; align-items: center; padding: 13px 16px; background: linear-gradient(90deg, #d89e45, #f3d88d 52%, #dfa94e); border-bottom: 3px solid #825c36; box-shadow: inset 0 3px #ffe8a8; }
+.estate-sheet h2 { margin: 0; flex: 1; font-size: 21px; color: #5c3c29; text-shadow: 0 1px #fff0bd; }
+.estate-sheet-close { width: 36px; height: 36px; border: 2px solid #67432e; border-radius: 7px; background: #a9583f; color: white; font-size: 24px; line-height: 1; cursor: pointer; }
+.estate-sheet-body { padding: 15px; overflow: auto; overscroll-behavior: contain; }
+.estate-sheet-note { margin: 0 0 13px; padding: 10px 12px; color: #725d43; background: #f1dfad; border-left: 4px solid #c28b3d; border-radius: 4px; }
+.estate-item-card, .estate-inventory-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 11px;
+  background: linear-gradient(100deg, #fff9e9, #f6e6bc); border: 2px solid #c5a56d; border-radius: 8px; box-shadow: inset 0 2px #fffdf3, inset 0 -3px #ead6a8, 0 2px #7b5b3722;
+}
+.estate-item-icon { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; font-size: 30px; text-align: center; background: #e6cf93; border: 2px solid #9b7448; border-radius: 8px; box-shadow: inset 0 0 0 2px #f8e8b7, 0 2px #76533b; filter: drop-shadow(0 2px #a78055); }
+.estate-item-info { display: grid; flex: 1; min-width: 0; gap: 5px; overflow-wrap: anywhere; }
+.estate-item-info b { font-size: 17px; color: #5a3f2c; }
+.estate-item-info span, .estate-crop-hero small { color: #8b7558; font-size: 12px; }
+.estate-inventory-row > div { flex: 1; }
+.estate-tag { padding: 6px 9px; color: #65724d; background: #e2e4b1; border-radius: 5px; font-size: 12px; font-weight: 800; }
+.estate-sheet-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.estate-button-gold { background: #d99136; box-shadow: inset 0 -3px #a85828, 0 2px #473428; }
+.estate-crop-hero { display: flex; align-items: center; gap: 18px; margin-bottom: 15px; padding: 18px; background: #f3e0a8; border: 3px solid #b98842; border-radius: 9px; }
+.estate-crop-hero > span { font-size: 52px; }
+.estate-crop-hero > div { display: grid; gap: 6px; }
+.estate-crop-hero b { font-size: 22px; color: #604129; }
+.estate-tool-card { display: flex; align-items: center; gap: 10px; margin: 12px 0; padding: 13px; color: #fdf2ce; background: linear-gradient(135deg, #4e6b57, #314c43); border: 3px solid #6b4932; border-radius: 9px; box-shadow: inset 0 0 0 2px #92b17455, 0 3px #392c26; }
+.estate-tool-icon { display: grid; place-items: center; width: 54px; height: 54px; flex: 0 0 54px; font-size: 34px; background: #233f38; border: 3px solid #9cbb7c; border-radius: 9px; box-shadow: inset 0 0 0 2px #172f2b, 0 3px #26372d; filter: drop-shadow(0 3px #26372d); }
+.estate-tool-card .estate-item-info b { color: #fff2be; }
+.estate-tool-card .estate-item-info span { color: #d5e2bd; }
+
+.estate-minigame { position: absolute; z-index: 20; inset: 0; overflow: hidden; color: #fff5d4; background: #173f4c; touch-action: none; }
+.estate-minigame::after { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px #071d2199; }
+.estate-minigame canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.minigame-title { position: absolute; z-index: 2; top: max(20px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: grid; justify-items: center; min-width: min(420px, calc(100% - 130px)); padding: 10px 20px; color: #573a28; background: linear-gradient(#ffe6a8, #e6b963); border: 4px solid #70472f; border-radius: 9px; box-shadow: 0 5px #362a27, 0 12px 30px #152b2b88; }
+.minigame-title b { font-size: 21px; }
+.minigame-title span { margin-top: 4px; font-size: 12px; font-weight: 700; }
+.minigame-exit { position: absolute; z-index: 4; top: max(22px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); padding: 9px 12px; color: #fff0cf; background: #754d3cdd; border: 3px solid #3f302a; border-radius: 7px; font-weight: 800; cursor: pointer; }
+
+.fishing-meters { position: absolute; z-index: 3; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(460px, calc(100% - 210px)); display: grid; gap: 9px; padding: 12px; background: #173e45dd; border: 3px solid #dfc57f; border-radius: 9px; }
+.fishing-meters label { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 9px; font-size: 12px; font-weight: 900; }
+.fishing-meters i { height: 14px; overflow: hidden; background: #192e32; border: 2px solid #fff1b6; border-radius: 5px; }
+.fishing-meters i span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #65b958, #d8dd65); transition: width .08s linear; }
+.fishing-meters i.tension span { background: linear-gradient(90deg, #5fb6c8, #ffc15a, #ee5b4b); }
+.fishing-meters i.tension span[data-danger="true"] { animation: tension-pulse .28s infinite alternate; }
+.fishing-reel { position: absolute; z-index: 5; right: max(28px, env(safe-area-inset-right)); bottom: max(28px, env(safe-area-inset-bottom)); width: 126px; height: 126px; color: #fff4cf; background: #cf7443; border: 6px solid #5b392c; border-radius: 50%; box-shadow: inset 0 -12px #9b4638, 0 7px #302725; font-weight: 800; font-size: 14px; touch-action: none; }
+.fishing-reel b { font-size: 24px; }
+.fishing-reel.held { transform: translateY(5px); box-shadow: inset 0 -4px #9b4638, 0 2px #302725; filter: brightness(1.15); }
+.fishing-game.is-result .minigame-title, .fishing-game.is-result .fishing-meters, .fishing-game.is-result .fishing-reel, .fishing-game.is-result .minigame-exit { display: none; }
+.fishing-catch-card { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 28px)); display: grid; justify-items: center; gap: 12px; padding: 26px 28px 24px; color: #513927; background: linear-gradient(160deg, #fff3bf, #efc76f); border: 6px solid #68452f; border-radius: 18px; box-shadow: inset 0 0 0 3px #fff1bd, 0 9px 0 #302725, 0 24px 70px #102e3888; overflow: hidden; animation: catch-card-in .45s both; }
+.fishing-catch-card[hidden] { display: none; }
+.fishing-catch-rays { position: absolute; inset: -80%; background: repeating-conic-gradient(#fff7c755 0 9deg, transparent 9deg 20deg); animation: catch-rays 18s linear infinite; }
+.fishing-catch-rarity { position: relative; z-index: 1; min-height: 24px; color: #a2612f; font-weight: 900; letter-spacing: 3px; text-shadow: 0 1px #fff5c7; }
+.fishing-catch-portrait { position: relative; z-index: 1; width: 230px; height: 150px; filter: drop-shadow(0 9px #9c6d4055); }
+.fishing-catch-portrait > b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 86px; }
+.catch-body { position: absolute; left: 62px; top: 39px; width: 130px; height: 76px; border: 5px solid #214f60; border-radius: 55% 48% 50% 46%; background: linear-gradient(#7bd3c6 0 42%, #3e9fb0 43% 70%, #f1d58a 71%); box-shadow: inset 0 9px #b8eee0, inset 0 -8px #28788f; }
+.catch-body::before { content: ""; position: absolute; right: 22px; top: -25px; width: 35px; height: 36px; background: #52adad; clip-path: polygon(0 100%, 55% 0, 100% 100%); }
+.catch-body::after { content: ""; position: absolute; left: 52px; bottom: -25px; width: 35px; height: 34px; background: #e2bd6b; clip-path: polygon(0 0, 100% 0, 45% 100%); }
+.catch-body i { position: absolute; right: 20px; top: 21px; width: 10px; height: 10px; border: 4px solid #e8f5cf; border-radius: 50%; background: #1d3440; box-shadow: 0 0 0 2px #244b58; }
+.catch-tail { position: absolute; z-index: 0; left: 17px; top: 42px; width: 65px; height: 72px; background: #4ca4aa; clip-path: polygon(0 0, 100% 48%, 0 100%, 18% 50%); border-radius: 12px; }
+.fishing-catch-card:not(.is-caught) .catch-body, .fishing-catch-card:not(.is-caught) .catch-tail, .fishing-catch-card.is-collectible .catch-body, .fishing-catch-card.is-collectible .catch-tail { display: none; }
+.fishing-catch-card[data-rarity="4"] .catch-body, .fishing-catch-card[data-rarity="5"] .catch-body { filter: hue-rotate(55deg) saturate(1.25); box-shadow: inset 0 9px #e4dcff, inset 0 -8px #594799, 0 0 24px #d7a8ff; }
+.fishing-catch-card[data-rarity="6"] .catch-body, .fishing-catch-card[data-rarity="7"] .catch-body, .fishing-catch-card[data-rarity="8"] .catch-body { filter: hue-rotate(115deg) saturate(1.5); box-shadow: inset 0 9px #fff2af, inset 0 -8px #a34e54, 0 0 32px #ffe57c; }
+.fishing-catch-card h2, .fishing-catch-card p { position: relative; z-index: 1; margin: 0; text-align: center; }.fishing-catch-card h2 { font-size: 29px; text-shadow: 0 2px #fff0b2; }.fishing-catch-card p { color: #7c6243; font-weight: 800; }
+.fishing-result-actions { position: relative; z-index: 1; display: flex; justify-content: center; gap: 12px; margin-top: 5px; }
+
+.mining-game {
+  --mine-rock: #59555e; --mine-rock-dark: #292832; --mine-rock-light: #817b80; --mine-glow: #e8a052;
+  background-color: #211f29;
+  background-image: radial-gradient(circle at 15% 30%, #76706f55 0 2px, transparent 3px), radial-gradient(circle at 75% 68%, #0d111866 0 4px, transparent 5px), repeating-linear-gradient(135deg, transparent 0 48px, #ffffff08 49px 51px, transparent 52px 94px), radial-gradient(circle at 50% 8%, #71625a, #211f29 66%);
+  background-size: 83px 71px, 117px 101px, auto, auto;
+}
+.mine-depth-1 { --mine-rock: #586158; --mine-rock-dark: #29342d; --mine-rock-light: #7d8874; --mine-glow: #d9a35a; }
+.mine-depth-2 { --mine-rock: #685348; --mine-rock-dark: #342826; --mine-rock-light: #95705b; --mine-glow: #e67d49; }
+.mine-depth-3 { --mine-rock: #504b68; --mine-rock-dark: #27243a; --mine-rock-light: #77719a; --mine-glow: #ad7cff; }
+.mine-cave-glow { position: absolute; inset: 0; background: radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--mine-glow) 28%, transparent), transparent 23%), radial-gradient(circle at 88% 55%, color-mix(in srgb, var(--mine-glow) 22%, transparent), transparent 20%); animation: cave-glow 2s infinite alternate; }
+.mine-timbers { position: absolute; z-index: 1; inset: 72px 7% 5%; pointer-events: none; border-left: 20px solid #4a3027; border-right: 20px solid #4a3027; box-shadow: inset 7px 0 #815238, inset -7px 0 #815238; }
+.mine-timbers::before, .mine-timbers::after { content: ""; position: absolute; left: -27px; right: -27px; height: 22px; background: #53352a; border: 4px solid #2c2424; box-shadow: inset 0 6px #895b3b, 0 8px 20px #080a0d88; }
+.mine-timbers::before { top: 3%; }.mine-timbers::after { bottom: 2%; }
+.mine-timbers i { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #b68b55; box-shadow: inset 2px 2px #ead083; }
+.mine-timbers i:nth-child(1) { left: -20px; top: 5%; }.mine-timbers i:nth-child(2) { right: -20px; top: 5%; }.mine-timbers i:nth-child(3) { left: -20px; bottom: 3%; }
+.mine-status { position: absolute; z-index: 3; left: 50%; top: 96px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); display: flex; justify-content: space-between; padding: 9px 13px; color: #f9e5b5; background: #25232dcc; border: 2px solid #a28a6b; border-radius: 7px; }
+.mine-grid { position: absolute; z-index: 2; left: 50%; top: 55%; transform: translate(-50%, -50%); display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; width: min(520px, calc(100vw - 28px)); aspect-ratio: 1; padding: 12px; background: #26242c; border: 5px solid #6d5140; border-radius: 12px; box-shadow: inset 0 0 0 4px #17171d, inset 0 0 36px #08090d, 0 12px 40px #000a; }
+.mine-cell { position: relative; overflow: hidden; color: #ffdc80; background: linear-gradient(145deg, var(--mine-rock-light), var(--mine-rock) 43%, var(--mine-rock-dark)); border: 3px solid #211f27; border-radius: 9px 5px 8px 4px; box-shadow: inset 4px 4px #ffffff17, inset -5px -5px #11131a55, 0 3px 0 #15151b; font-size: clamp(17px, 4vw, 32px); font-weight: 900; cursor: pointer; text-shadow: 0 2px #17131b; }
+.mine-cell::before, .mine-cell::after { content: ""; position: absolute; height: 3px; background: #1e202788; transform: rotate(28deg); }
+.mine-cell::before { width: 52%; left: 8%; top: 30%; }.mine-cell::after { width: 38%; right: 9%; bottom: 28%; transform: rotate(-35deg); }
+.mine-cell i { position: absolute; width: 5px; height: 4px; transform: rotate(35deg); background: color-mix(in srgb, var(--mine-glow) 65%, #8f8b83); box-shadow: 0 0 5px color-mix(in srgb, var(--mine-glow) 45%, transparent); }
+.mine-cell i:nth-child(1) { left: 17%; top: 18%; }.mine-cell i:nth-child(2) { right: 20%; bottom: 18%; width: 3px; }.mine-cell i:nth-child(3) { right: 12%; top: 38%; width: 2px; height: 6px; }
+.mine-cell.vein-0 { box-shadow: inset 4px 4px #ffffff1f, inset -5px -5px #11131a66, 0 0 10px color-mix(in srgb, var(--mine-glow) 30%, transparent); }
+.mine-cell.vein-1::after { background: color-mix(in srgb, var(--mine-glow) 45%, #312d35); }
+.mine-cell.striking { animation: rock-shake .16s infinite; }
+.mine-cell.revealed { background: #252630; box-shadow: inset 0 0 14px #11131b; animation: rock-open .3s both; }
+.mine-cell.outcome-extra { color: #ffd767; background: #4c694f; }
+.mine-cell.outcome-amethyst, .mine-cell.outcome-star_gem { color: #e7b5ff; background: #4c3f5f; }
+.mine-cell.outcome-bomb { color: #ffcf72; background: #5d2926; box-shadow: inset 0 0 20px #1b1114, 0 0 22px #ff7b32; }
+.mine-blast { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; min-width: min(340px, calc(100% - 30px)); padding: 28px; color: #fff1c2; background: #3b2423ed; border: 5px solid #ffb24f; border-radius: 50% 42% 48% 44%; box-shadow: 0 0 0 10px #e24f3033, 0 0 70px #ff702c; text-align: center; animation: blast-pop .55s both; }
+.mine-blast[hidden] { display: none; }.mine-blast b { font-size: 42px; color: #ffd262; text-shadow: 3px 4px #9d3028; }.mine-blast span { font-weight: 900; }
+.mining-game.mine-explosion { animation: cave-shake .45s both; }.mining-game.mine-explosion::before { content: ""; position: absolute; z-index: 7; inset: 0; pointer-events: none; background: #fff2b8; animation: explosion-flash .6s both; }
+
+@keyframes tension-pulse { to { filter: brightness(1.7); } }
+@keyframes catch-card-in { from { transform: translate(-50%, -43%) scale(.78); opacity: 0; } }
+@keyframes catch-rays { to { transform: rotate(360deg); } }
+@keyframes cave-glow { to { opacity: .7; } }
+@keyframes rock-shake { 50% { transform: translateX(2px); } }
+@keyframes rock-open { from { transform: scale(.9); filter: brightness(2); } }
+@keyframes blast-pop { from { transform: translate(-50%, -50%) scale(.25) rotate(-8deg); opacity: 0; } 70% { transform: translate(-50%, -50%) scale(1.08) rotate(2deg); } }
+@keyframes explosion-flash { 0% { opacity: 1; } 30% { opacity: .85; } 100% { opacity: 0; } }
+@keyframes cave-shake { 20% { transform: translate(5px, -3px); } 40% { transform: translate(-6px, 4px); } 60% { transform: translate(4px, 2px); } 80% { transform: translate(-2px, -2px); } }
+
+@media (max-width: 720px), (pointer: coarse) {
+  .estate-topbar { top: max(6px, env(safe-area-inset-top)); width: calc(100% - 12px); min-height: 54px; gap: 6px; padding: 5px 7px; border-width: 3px; }
+  .estate-back { padding: 8px; font-size: 0; }
+  .estate-back::after { content: "←"; font-size: 20px; }
+  .estate-brand span { font-size: 16px; }
+  .estate-brand small { display: none; }
+  .estate-hud-item { min-width: 54px; padding: 3px 5px; }
+  .estate-hud-item small { font-size: 9px; }
+  .estate-hud-item b { font-size: 12px; }
+  .estate-level { width: 58px; }
+  .estate-help { display: none; }
+  .estate-interact-hint { bottom: 116px; font-size: 12px; }
+  .estate-interact-hint kbd { display: none; }
+  .estate-stick {
+    display: block; position: absolute; z-index: 6; left: max(22px, env(safe-area-inset-left)); bottom: max(22px, env(safe-area-inset-bottom));
+    width: 96px; height: 96px; border: 3px solid #fff1b999; border-radius: 50%; background: #29423899;
+    box-shadow: inset 0 0 0 8px #ffffff12; touch-action: none;
+  }
+  .estate-stick-nub { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; transform: translate(-50%, -50%); border: 3px solid #6a4b31; border-radius: 50%; background: #efd48cdd; }
+  .estate-action {
+    display: grid; place-items: center; position: absolute; z-index: 6; right: max(25px, env(safe-area-inset-right)); bottom: max(29px, env(safe-area-inset-bottom));
+    width: 78px; height: 78px; padding: 0; color: #fff7d7; background: #d7843fdd; border: 4px solid #673f2b; border-radius: 50%; box-shadow: inset 0 -7px #a34b31, 0 5px #382d27; touch-action: none;
+  }
+  .estate-action span { font-size: 24px; line-height: 1; }
+  .estate-action small { font-weight: 900; }
+  .estate-sheet { padding: 68px 8px 8px; align-items: end; }
+  .estate-sheet > section { max-height: 74dvh; border-width: 4px; }
+  .estate-item-card { align-items: center; gap: 7px; padding: 8px; }
+  .estate-tool-card { flex-wrap: wrap; padding: 9px; gap: 8px; }
+  .estate-tool-card .estate-item-info { flex-basis: calc(100% - 70px); }
+  .estate-tool-card .estate-button { flex: 1; padding: 9px 7px; font-size: 12px; white-space: nowrap; }
+  .estate-item-icon { width: 34px; font-size: 26px; }
+  .estate-item-card .estate-button { padding: 8px 7px; font-size: 11px; }
+  .minigame-title { min-width: 0; left: 8px; right: 90px; transform: none; padding: 8px; }
+  .minigame-title b { font-size: 17px; }
+  .minigame-exit { right: 8px; max-width: 82px; font-size: 11px; }
+  .fishing-meters { left: 10px; right: 105px; bottom: max(16px, env(safe-area-inset-bottom)); width: auto; transform: none; padding: 8px; }
+  .fishing-meters label { grid-template-columns: 64px 1fr; }
+  .fishing-reel { right: 14px; bottom: max(17px, env(safe-area-inset-bottom)); width: 82px; height: 82px; border-width: 4px; }
+  .fishing-reel b { font-size: 18px; }
+  .fishing-catch-card { gap: 7px; padding: 18px 12px 16px; border-width: 4px; }
+  .fishing-catch-portrait { width: 190px; height: 125px; transform: scale(.86); margin: -8px 0; }
+  .fishing-catch-card h2 { font-size: 23px; }
+  .fishing-catch-card p { font-size: 12px; }
+  .fishing-result-actions { width: 100%; gap: 7px; }
+  .fishing-result-actions .estate-button { flex: 1; padding: 10px 6px; font-size: 12px; }
+  .mine-status { top: 84px; font-size: 12px; }
+  .mine-grid { top: 53%; gap: 4px; padding: 7px; border-width: 4px; }
+  .mine-cell { border-width: 2px; }
+}
+
+@media (max-width: 430px) {
+  .estate-brand { display: none; }
+  .estate-topbar { justify-content: space-between; }
+  .estate-level { width: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mine-cave-glow, .mine-cell, .fishing-meters span, .fishing-catch-card, .fishing-catch-rays { animation: none !important; transition: none !important; }
+}

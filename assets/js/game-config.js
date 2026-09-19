@@ -2,6 +2,14 @@
 
 export const GAME_TYPES = [
   {
+    id: "estate",
+    mode: "solo",
+    view: "estate",
+    name: "小胖庄园",
+    icon: "🌾",
+    desc: "经营你的像素庄园：种田、钓鱼、挖矿，让每一枚金币慢慢生长。",
+  },
+  {
     id: "holdem",
     name: "德州扑克 · 无限注",
     icon: "♠",
@@ -35,7 +43,8 @@ export const GAME_TYPES = [
   },
 ];
 
-export const DEFAULT_GAME = GAME_TYPES[0];
+export const ROOM_GAME_TYPES = GAME_TYPES.filter((game) => game.mode !== "solo");
+export const DEFAULT_GAME = ROOM_GAME_TYPES[0];
 
 export function gameMetaById(id) {
   return GAME_TYPES.find((game) => game.id === id) || DEFAULT_GAME;
