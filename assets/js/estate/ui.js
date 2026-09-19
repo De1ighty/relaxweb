@@ -4,8 +4,6 @@ import { confirmDialog } from "../dialog.js";
 import { estateCommand, estateRequest, pendingEstateAction } from "./protocol.js";
 import { estateNow, estateStore } from "./state.js";
 
-const ICONS = { wheat: "🌾", carrot: "🥕", corn: "🌽", pumpkin: "🎃" };
-
 function button(label, action, className = "estate-button") {
   const node = document.createElement("button");
   node.type = "button"; node.className = className; node.textContent = label;
@@ -46,7 +44,7 @@ export function createEstateUI(root, activities = {}) {
 
   function cropCard(crop, actionLabel, action) {
     const card = document.createElement("div"); card.className = "estate-item-card";
-    const icon = document.createElement("span"); icon.className = "estate-item-icon"; icon.textContent = ICONS[crop.id] || "🌱";
+    const icon = document.createElement("span"); icon.className = "estate-item-icon"; icon.textContent = crop.icon || "🌱";
     const info = document.createElement("div"); info.className = "estate-item-info";
     const title = document.createElement("b"); title.textContent = crop.name;
     const meta = document.createElement("span"); meta.textContent = `成熟 ${timeLeft(crop.grow_seconds)} · 收购 ${crop.sell_price} 金币`;
@@ -57,9 +55,12 @@ export function createEstateUI(root, activities = {}) {
   function renderShop() {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     show("小胖种子铺");
-    const intro = document.createElement("p"); intro.className = "estate-sheet-note"; intro.textContent = "种子会占用仓库空间。价格与收购价固定，不会突然波动。";
+    const crops = Object.values(snapshot.catalog.crops).sort((a, b) => a.unlock_level - b.unlock_level || a.name.localeCompare(b.name, "zh-CN"));
+    const unlockedCount = crops.filter((crop) => snapshot.profile.level >= crop.unlock_level).length;
+    const intro = document.createElement("p"); intro.className = "estate-sheet-note";
+    intro.textContent = `共 ${crops.length} 种作物 · 当前已解锁 ${unlockedCount} 种。价格与收购价暂为测试数值，后续统一平衡。`;
     sheetBody.append(intro);
-    Object.values(snapshot.catalog.crops).forEach((crop) => {
+    crops.forEach((crop) => {
       const locked = snapshot.profile.level < crop.unlock_level;
       sheetBody.append(cropCard(crop, locked ? `${crop.unlock_level}级解锁` : `${crop.seed_price} 金币 · 买1颗`, () => {
         if (!locked) estateCommand("estate_buy", { kind: "seed", item_id: crop.id, quantity: 1 });
@@ -79,7 +80,11 @@ export function createEstateUI(root, activities = {}) {
       const name = document.createElement("div"); name.innerHTML = `<b>${item.name}</b><span> × ${item.quantity}</span>`;
       row.append(name);
       if (item.sellable) row.append(button(`出售1个 · +${item.sell_price}`, () => estateCommand("estate_sell", { item_id: item.id, quantity: 1 })));
-      else { const keep = document.createElement("span"); keep.className = "estate-tag"; keep.textContent = item.kind === "bait" ? "钓鱼用品" : "种植用品"; row.append(keep); }
+      else {
+        const keep = document.createElement("span"); keep.className = "estate-tag";
+        keep.textContent = item.kind === "bait" ? "钓鱼用品" : item.kind === "collectible" ? "稀有收藏" : "种植用品";
+        row.append(keep);
+      }
       sheetBody.append(row);
     }
     const actions = document.createElement("div"); actions.className = "estate-sheet-actions";
@@ -125,7 +130,7 @@ export function createEstateUI(root, activities = {}) {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     show("小胖湖钓场");
     const note = document.createElement("p"); note.className = "estate-sheet-note";
-    note.textContent = "按住收线会同时提高进度和张力；松开可以卸力。断线或逃脱也会消耗鱼饵与耐久。";
+    note.textContent = `湖中有 ${Object.keys(snapshot.catalog.fish).length} 种鱼类，还有 ${Object.keys(snapshot.catalog.fishing_treasures || {}).length} 种神秘收藏物。按住收线提高进度和张力，松开可以卸力。`;
     sheetBody.append(note);
     const rod = toolPanel("rod", "🎣");
     if (snapshot.fishing_session) {
@@ -192,7 +197,7 @@ export function createEstateUI(root, activities = {}) {
       const crop = snapshot.catalog.crops[plot.crop_id];
       const ready = Number(plot.ready_at) <= estateNow();
       const hero = document.createElement("div"); hero.className = "estate-crop-hero";
-      hero.innerHTML = `<span>${ICONS[crop.id]}</span><div><b>${crop.name}</b><small>${ready ? "已经成熟，可以收获啦！" : `距离成熟 ${timeLeft(plot.ready_at - estateNow())}`}</small></div>`;
+      hero.innerHTML = `<span>${crop.icon || "🌱"}</span><div><b>${crop.name}</b><small>${ready ? "已经成熟，可以收获啦！" : `距离成熟 ${timeLeft(plot.ready_at - estateNow())}`}</small></div>`;
       sheetBody.append(hero);
       const harvest = button(ready ? "收获" : "还在生长", () => estateCommand("estate_harvest", { plot_id: plot.index }), "estate-button estate-button-gold");
       harvest.disabled ||= !ready; sheetBody.append(harvest); return;

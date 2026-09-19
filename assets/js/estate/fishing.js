@@ -63,11 +63,12 @@ export function openFishingGame(root, session) {
     try {
       const result = await estateRequest("estate_finish_fishing", { session_id: session.session_id, trace });
       const caught = result.outcome === "caught";
+      const collectible = result.catch_kind === "collectible";
       layer.classList.add("is-result");
       layer.querySelector(".minigame-title").innerHTML = caught
-        ? `<b>捕获成功！</b><span>${result.fish_name} 已放入仓库 · 经验 +${result.xp_awarded}</span>`
+        ? `<b>${collectible ? "发现稀有收藏！" : "捕获成功！"}</b><span>${result.catch_name || result.fish_name} 已放入仓库 · 经验 +${result.xp_awarded}</span>`
         : `<b>${result.outcome === "snapped" ? "鱼线断了" : "鱼儿逃走了"}</b><span>鱼饵和耐久已经消耗，下次注意张力。</span>`;
-      reel.textContent = caught ? "🐟" : "🌊";
+      reel.textContent = caught ? (collectible ? "🎁" : "🐟") : "🌊";
       layer.querySelector(".minigame-exit").textContent = "返回庄园";
     } catch { layer.remove(); }
   }

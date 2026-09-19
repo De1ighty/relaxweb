@@ -55,7 +55,7 @@ function drawPlot(ctx, plot) {
   if (!plot.crop_id) return;
   const mature = Number(plot.ready_at) <= estateNow();
   const progress = mature ? 1 : Math.max(.12, (estateNow() - plot.planted_at) / (plot.ready_at - plot.planted_at));
-  const color = plot.crop_id === "carrot" ? "#f28b36" : plot.crop_id === "corn" ? "#f4cf46" : plot.crop_id === "pumpkin" ? "#ee7a2d" : "#e6cb63";
+  const color = estateStore.snapshot?.catalog?.crops?.[plot.crop_id]?.color || "#e6cb63";
   for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < 4; col += 1) {
       const px = x + 13 + col * 17; const py = y + 17 + row * 18;

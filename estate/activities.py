@@ -4,8 +4,8 @@ import random
 import secrets
 
 from estate.catalog import (
-    BAITS, FISH, MINERALS, MINING_LEVELS, TOOLS, bait_item, fish_item,
-    mineral_item, xp_for_next,
+    BAITS, FISH, FISHING_TREASURES, MINERALS, MINING_LEVELS, TOOLS,
+    bait_item, collectible_item, fish_item, mineral_item, xp_for_next,
 )
 from estate.service import (
     EstateError, _action, _change_inventory, _debit, _profile,
@@ -117,6 +117,28 @@ def _award_xp(conn, username, amount):
     return level
 
 
+def _pick_fishing_catch(rng, bait, rod):
+    """从服务端目录选择鱼或极稀有收藏物。"""
+    rarity_cap = 2 + bait["rarity_bonus"] + rod["level"]
+    treasure_rarity_cap = 4 + bait["rarity_bonus"] + rod["level"]
+    treasures = [
+        (key, value) for key, value in FISHING_TREASURES.items()
+        if value["required_rod_level"] <= rod["level"]
+        and value["rarity"] <= treasure_rarity_cap
+    ]
+    treasure_chance = .006 + bait["rarity_bonus"] * .012 + max(0, rod["level"] - 1) * .009
+    if treasures and rng.random() < treasure_chance:
+        treasure_id = rng.choices(
+            [key for key, _ in treasures],
+            weights=[value["weight"] for _, value in treasures], k=1,
+        )[0]
+        return f"treasure:{treasure_id}", FISHING_TREASURES[treasure_id]
+    allowed = [key for key, value in FISH.items() if value["rarity"] <= rarity_cap]
+    weights = [max(.35, 9 - FISH[key]["rarity"] * 1.45) for key in allowed]
+    fish_id = rng.choices(allowed, weights=weights, k=1)[0]
+    return fish_id, FISH[fish_id]
+
+
 def start_fishing(conn, username, request_id, bait_id, now):
     bait_id = str(bait_id or "")
 
@@ -136,13 +158,10 @@ def start_fishing(conn, username, request_id, bait_id, now):
         _change_inventory(conn, username, bait_item(bait_id), -1)
         conn.execute("UPDATE estate_tools SET durability=durability-1,updated_at=? "
                      "WHERE username=? AND tool_type='rod'", (int(now), username))
-        allowed = [key for key, value in FISH.items()
-                   if value["rarity"] <= 2 + bait["rarity_bonus"] + rod["level"]]
-        weights = [max(1, 8 - FISH[key]["rarity"] * 2) for key in allowed]
         seed = secrets.randbelow(2_000_000_000)
         rng = random.Random(seed)
-        fish_id = rng.choices(allowed, weights=weights, k=1)[0]
-        difficulty = FISH[fish_id]["difficulty"]
+        fish_id, catch = _pick_fishing_catch(rng, bait, rod)
+        difficulty = catch["difficulty"]
         pattern = [round(min(.95, max(.08, rng.random() * .55 + difficulty * .45)), 3)
                    for _ in range(36)]
         session_id = secrets.token_urlsafe(12)
@@ -206,11 +225,20 @@ def finish_fishing(conn, username, request_id, session_id, trace, now):
                   if int(now) > row[3] else simulate_fishing(trace, json.loads(row[2]), row[1]))
         payload = {**result, "action": "finish_fishing", "session_id": session_id}
         if result["outcome"] == "caught":
-            fish = FISH[row[0]]
-            _change_inventory(conn, username, fish_item(row[0]), 1)
-            payload.update({"fish_id": row[0], "fish_name": fish["name"],
-                            "quantity": 1, "xp_awarded": fish["xp"]})
-            payload["level"] = _award_xp(conn, username, fish["xp"])
+            if row[0].startswith("treasure:"):
+                catch_id = row[0].split(":", 1)[1]
+                catch = FISHING_TREASURES[catch_id]
+                item_id = collectible_item(catch_id)
+                payload.update({"catch_kind": "collectible", "collectible_id": catch_id})
+            else:
+                catch_id = row[0]
+                catch = FISH[catch_id]
+                item_id = fish_item(catch_id)
+                payload.update({"catch_kind": "fish", "fish_id": catch_id})
+            _change_inventory(conn, username, item_id, 1)
+            payload.update({"fish_name": catch["name"], "catch_name": catch["name"],
+                            "quantity": 1, "xp_awarded": catch["xp"]})
+            payload["level"] = _award_xp(conn, username, catch["xp"])
         conn.execute("UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-1) "
                      "WHERE username=?", (username,))
         conn.execute("UPDATE estate_fishing_sessions SET status='finished',result_json=? "

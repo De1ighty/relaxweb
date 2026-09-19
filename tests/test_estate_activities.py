@@ -4,14 +4,15 @@ import sqlite3
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from estate.activities import (
-    buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
+    _pick_fishing_catch, buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
     start_fishing, start_mining, upgrade_tool,
 )
-from estate.catalog import bait_item
+from estate.catalog import FISHING_TREASURES, bait_item
 from estate.schema import init_estate
 from estate.service import EstateError, buy, estate_state
 
@@ -99,6 +100,39 @@ class ActivityTests(unittest.TestCase):
         state = self.call(estate_state, "alice", NOW + 10)
         self.assertFalse(any(item["kind"] == "bait" for item in state["inventory"]))
         self.assertEqual(state["tools"]["rod"]["durability"], 19)
+
+    def test_best_gear_can_reach_rarest_collectible(self):
+        class TreasureRng:
+            @staticmethod
+            def random():
+                return 0
+
+            @staticmethod
+            def choices(items, weights, k):
+                return [items[-1]]
+
+        catch_id, catch = _pick_fishing_catch(
+            TreasureRng(), {"rarity_bonus": 1}, {"level": 3},
+        )
+        self.assertEqual(catch_id, "treasure:xiaopang_underwear")
+        self.assertEqual(catch["name"], "小胖的内裤")
+
+    def test_caught_collectible_is_kept_and_not_sellable(self):
+        self.call(buy_tool, "alice", "buy-rod-rare", "rod", NOW, adjust_coins)
+        self.call(buy, "alice", "buy-bait-rare", "bait", "worm", 1, NOW, adjust_coins)
+        rare = FISHING_TREASURES["xiaopang_underwear"]
+        with patch("estate.activities._pick_fishing_catch",
+                   return_value=("treasure:xiaopang_underwear", rare)):
+            started = self.call(start_fishing, "alice", "fish-start-rare", "worm", NOW)
+        result = self.call(
+            finish_fishing, "alice", "fish-done-rare", started["session_id"],
+            winning_trace(started["pattern"]), NOW + 25,
+        )
+        self.assertEqual(result["catch_kind"], "collectible")
+        self.assertEqual(result["catch_name"], "小胖的内裤")
+        item = next(i for i in self.call(estate_state, "alice", NOW + 25)["inventory"]
+                    if i["id"] == "collectible:xiaopang_underwear")
+        self.assertFalse(item["sellable"])
 
     def test_mining_is_hidden_idempotent_and_settles(self):
         self.call(buy_tool, "alice", "buy-pick-001", "pickaxe", NOW, adjust_coins)
