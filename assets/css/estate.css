@@ -16,13 +16,18 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
   color: var(--estate-ink); background: #76b956;
   font-family: "Microsoft YaHei", system-ui, sans-serif;
 }
+.estate-root::after {
+  content: ""; position: absolute; z-index: 2; inset: 0; pointer-events: none;
+  background: linear-gradient(#fff2 1px, transparent 1px), linear-gradient(90deg, #173b2710 1px, transparent 1px);
+  background-size: 4px 4px; mix-blend-mode: soft-light; opacity: .22;
+}
 .estate-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 .estate-topbar {
   position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top)); left: 50%;
   transform: translateX(-50%); width: min(920px, calc(100% - 24px)); min-height: 64px;
   display: flex; align-items: center; gap: 12px; padding: 8px 12px;
   background: linear-gradient(#fff8dc, #eed39a); border: 4px solid #714b31;
-  box-shadow: 0 5px 0 #382b29, 0 10px 24px #1d312844; border-radius: 10px;
+  box-shadow: inset 0 0 0 2px #fff3c7, 0 5px 0 #382b29, 0 10px 24px #1d312844; border-radius: 10px;
 }
 .estate-back, .estate-button {
   border: 2px solid #60422f; border-radius: 7px; color: #fff8dd; background: #558650;
@@ -32,7 +37,7 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
 .estate-back:hover, .estate-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .estate-button:disabled { cursor: not-allowed; filter: grayscale(.65); opacity: .55; transform: none; }
 .estate-brand { margin-right: auto; display: grid; line-height: 1; }
-.estate-brand span { font-family: Georgia, "Microsoft YaHei", serif; font-weight: 900; font-size: 21px; color: #74462c; }
+.estate-brand span { font-family: Georgia, "Microsoft YaHei", serif; font-weight: 900; font-size: 21px; color: #74462c; text-shadow: 0 1px #fff1bc, 1px 2px #c6a064; }
 .estate-brand small { margin-top: 7px; color: #91734d; letter-spacing: 3px; }
 .estate-hud-item { min-width: 88px; display: grid; padding: 5px 10px; border-left: 2px dashed #b79760; }
 .estate-hud-item small { color: #806c4f; font-weight: 700; }
@@ -61,19 +66,21 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
 .estate-sheet[hidden] { display: none; }
 .estate-sheet > section {
   width: min(600px, 100%); max-height: min(680px, 100%); display: flex; flex-direction: column;
-  background: #fff4d2; border: 5px solid #6f4b31; border-radius: 12px;
-  box-shadow: 0 7px 0 #352823, 0 18px 50px #17251d88; overflow: hidden;
+  background-color: #fff4d2;
+  background-image: repeating-linear-gradient(0deg, transparent 0 23px, #bb8b4c0d 24px 25px);
+  border: 5px solid #6f4b31; border-radius: 12px;
+  box-shadow: inset 0 0 0 2px #f8d990, 0 7px 0 #352823, 0 18px 50px #17251d88; overflow: hidden;
 }
-.estate-sheet header { display: flex; align-items: center; padding: 13px 16px; background: linear-gradient(90deg, #e9b95e, #f3d88d); border-bottom: 3px solid #825c36; }
-.estate-sheet h2 { margin: 0; flex: 1; font-size: 21px; color: #5c3c29; }
+.estate-sheet header { display: flex; align-items: center; padding: 13px 16px; background: linear-gradient(90deg, #d89e45, #f3d88d 52%, #dfa94e); border-bottom: 3px solid #825c36; box-shadow: inset 0 3px #ffe8a8; }
+.estate-sheet h2 { margin: 0; flex: 1; font-size: 21px; color: #5c3c29; text-shadow: 0 1px #fff0bd; }
 .estate-sheet-close { width: 36px; height: 36px; border: 2px solid #67432e; border-radius: 7px; background: #a9583f; color: white; font-size: 24px; line-height: 1; cursor: pointer; }
 .estate-sheet-body { padding: 15px; overflow: auto; overscroll-behavior: contain; }
 .estate-sheet-note { margin: 0 0 13px; padding: 10px 12px; color: #725d43; background: #f1dfad; border-left: 4px solid #c28b3d; border-radius: 4px; }
 .estate-item-card, .estate-inventory-row {
   display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 11px;
-  background: #fff9e9; border: 2px solid #c5a56d; border-radius: 8px; box-shadow: inset 0 -3px #ead6a8;
+  background: linear-gradient(100deg, #fff9e9, #f6e6bc); border: 2px solid #c5a56d; border-radius: 8px; box-shadow: inset 0 2px #fffdf3, inset 0 -3px #ead6a8, 0 2px #7b5b3722;
 }
-.estate-item-icon { width: 46px; font-size: 33px; text-align: center; filter: drop-shadow(0 2px #a78055); }
+.estate-item-icon { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; font-size: 30px; text-align: center; background: #e6cf93; border: 2px solid #9b7448; border-radius: 8px; box-shadow: inset 0 0 0 2px #f8e8b7, 0 2px #76533b; filter: drop-shadow(0 2px #a78055); }
 .estate-item-info { display: grid; flex: 1; gap: 5px; }
 .estate-item-info b { font-size: 17px; color: #5a3f2c; }
 .estate-item-info span, .estate-crop-hero small { color: #8b7558; font-size: 12px; }
@@ -85,6 +92,47 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
 .estate-crop-hero > span { font-size: 52px; }
 .estate-crop-hero > div { display: grid; gap: 6px; }
 .estate-crop-hero b { font-size: 22px; color: #604129; }
+.estate-tool-card { display: flex; align-items: center; gap: 10px; margin: 12px 0; padding: 13px; color: #fdf2ce; background: linear-gradient(135deg, #4e6b57, #314c43); border: 3px solid #6b4932; border-radius: 9px; box-shadow: inset 0 0 0 2px #92b17455, 0 3px #392c26; }
+.estate-tool-icon { display: grid; place-items: center; width: 54px; height: 54px; flex: 0 0 54px; font-size: 34px; background: #233f38; border: 3px solid #9cbb7c; border-radius: 9px; box-shadow: inset 0 0 0 2px #172f2b, 0 3px #26372d; filter: drop-shadow(0 3px #26372d); }
+.estate-tool-card .estate-item-info b { color: #fff2be; }
+.estate-tool-card .estate-item-info span { color: #d5e2bd; }
+
+.estate-minigame { position: absolute; z-index: 20; inset: 0; overflow: hidden; color: #fff5d4; background: #173f4c; touch-action: none; }
+.estate-minigame::after { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px #071d2199; }
+.estate-minigame canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.minigame-title { position: absolute; z-index: 2; top: max(20px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: grid; justify-items: center; min-width: min(420px, calc(100% - 130px)); padding: 10px 20px; color: #573a28; background: linear-gradient(#ffe6a8, #e6b963); border: 4px solid #70472f; border-radius: 9px; box-shadow: 0 5px #362a27, 0 12px 30px #152b2b88; }
+.minigame-title b { font-size: 21px; }
+.minigame-title span { margin-top: 4px; font-size: 12px; font-weight: 700; }
+.minigame-exit { position: absolute; z-index: 4; top: max(22px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right)); padding: 9px 12px; color: #fff0cf; background: #754d3cdd; border: 3px solid #3f302a; border-radius: 7px; font-weight: 800; cursor: pointer; }
+
+.fishing-meters { position: absolute; z-index: 3; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(460px, calc(100% - 210px)); display: grid; gap: 9px; padding: 12px; background: #173e45dd; border: 3px solid #dfc57f; border-radius: 9px; }
+.fishing-meters label { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 9px; font-size: 12px; font-weight: 900; }
+.fishing-meters i { height: 14px; overflow: hidden; background: #192e32; border: 2px solid #fff1b6; border-radius: 5px; }
+.fishing-meters i span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #65b958, #d8dd65); transition: width .08s linear; }
+.fishing-meters i.tension span { background: linear-gradient(90deg, #5fb6c8, #ffc15a, #ee5b4b); }
+.fishing-meters i.tension span[data-danger="true"] { animation: tension-pulse .28s infinite alternate; }
+.fishing-reel { position: absolute; z-index: 5; right: max(28px, env(safe-area-inset-right)); bottom: max(28px, env(safe-area-inset-bottom)); width: 126px; height: 126px; color: #fff4cf; background: #cf7443; border: 6px solid #5b392c; border-radius: 50%; box-shadow: inset 0 -12px #9b4638, 0 7px #302725; font-weight: 800; font-size: 14px; touch-action: none; }
+.fishing-reel b { font-size: 24px; }
+.fishing-reel.held { transform: translateY(5px); box-shadow: inset 0 -4px #9b4638, 0 2px #302725; filter: brightness(1.15); }
+
+.mining-game { background: radial-gradient(circle at 50% 10%, #6c5c54, #211f29 65%); }
+.mine-cave-glow { position: absolute; inset: 0; background: radial-gradient(circle at 12% 50%, #f3a44d44, transparent 23%), radial-gradient(circle at 88% 55%, #f3a44d33, transparent 20%); animation: cave-glow 2s infinite alternate; }
+.mine-status { position: absolute; z-index: 3; left: 50%; top: 96px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); display: flex; justify-content: space-between; padding: 9px 13px; color: #f9e5b5; background: #25232dcc; border: 2px solid #a28a6b; border-radius: 7px; }
+.mine-grid { position: absolute; z-index: 2; left: 50%; top: 55%; transform: translate(-50%, -50%); display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; width: min(520px, calc(100vw - 28px)); aspect-ratio: 1; padding: 12px; background: #302d36; border: 5px solid #75604e; border-radius: 12px; box-shadow: inset 0 0 30px #12121a, 0 12px 40px #0008; }
+.mine-cell { position: relative; overflow: hidden; color: #ffdc80; background: linear-gradient(135deg, #5e5961, #3e3c48); border: 3px solid #292832; border-radius: 7px; box-shadow: inset 4px 4px #777079, inset -4px -4px #312f39; font-size: clamp(17px, 4vw, 32px); font-weight: 900; cursor: pointer; }
+.mine-cell::before, .mine-cell::after { content: ""; position: absolute; height: 3px; background: #27283188; transform: rotate(28deg); }
+.mine-cell::before { width: 52%; left: 8%; top: 30%; }.mine-cell::after { width: 38%; right: 9%; bottom: 28%; transform: rotate(-35deg); }
+.mine-cell.vein-0 { box-shadow: inset 4px 4px #81726e, inset -4px -4px #312f39, 0 0 9px #d39b5b33; }
+.mine-cell.vein-1::after { background: #a8735d99; }
+.mine-cell.striking { animation: rock-shake .16s infinite; }
+.mine-cell.revealed { background: #252630; box-shadow: inset 0 0 14px #11131b; animation: rock-open .3s both; }
+.mine-cell.outcome-extra { color: #ffd767; background: #4c694f; }
+.mine-cell.outcome-amethyst, .mine-cell.outcome-star_gem { color: #e7b5ff; background: #4c3f5f; }
+
+@keyframes tension-pulse { to { filter: brightness(1.7); } }
+@keyframes cave-glow { to { opacity: .7; } }
+@keyframes rock-shake { 50% { transform: translateX(2px); } }
+@keyframes rock-open { from { transform: scale(.9); filter: brightness(2); } }
 
 @media (max-width: 720px), (pointer: coarse) {
   .estate-topbar { top: max(6px, env(safe-area-inset-top)); width: calc(100% - 12px); min-height: 54px; gap: 6px; padding: 5px 7px; border-width: 3px; }
@@ -116,10 +164,24 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
   .estate-item-card { align-items: center; gap: 7px; padding: 8px; }
   .estate-item-icon { width: 34px; font-size: 26px; }
   .estate-item-card .estate-button { padding: 8px 7px; font-size: 11px; }
+  .minigame-title { min-width: 0; left: 8px; right: 90px; transform: none; padding: 8px; }
+  .minigame-title b { font-size: 17px; }
+  .minigame-exit { right: 8px; max-width: 82px; font-size: 11px; }
+  .fishing-meters { left: 10px; right: 105px; bottom: max(16px, env(safe-area-inset-bottom)); width: auto; transform: none; padding: 8px; }
+  .fishing-meters label { grid-template-columns: 64px 1fr; }
+  .fishing-reel { right: 14px; bottom: max(17px, env(safe-area-inset-bottom)); width: 82px; height: 82px; border-width: 4px; }
+  .fishing-reel b { font-size: 18px; }
+  .mine-status { top: 84px; font-size: 12px; }
+  .mine-grid { top: 53%; gap: 4px; padding: 7px; border-width: 4px; }
+  .mine-cell { border-width: 2px; }
 }
 
 @media (max-width: 430px) {
   .estate-brand { display: none; }
   .estate-topbar { justify-content: space-between; }
   .estate-level { width: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mine-cave-glow, .mine-cell, .fishing-meters span { animation: none !important; transition: none !important; }
 }

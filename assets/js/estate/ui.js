@@ -1,7 +1,7 @@
 "use strict";
 
 import { confirmDialog } from "../dialog.js";
-import { estateCommand, pendingEstateAction } from "./protocol.js";
+import { estateCommand, estateRequest, pendingEstateAction } from "./protocol.js";
 import { estateNow, estateStore } from "./state.js";
 
 const ICONS = { wheat: "🌾", carrot: "🥕", corn: "🌽", pumpkin: "🎃" };
@@ -22,7 +22,7 @@ function timeLeft(seconds) {
   return hours ? `${hours}时 ${minutes}分` : `${minutes}:${String(secs).padStart(2, "0")}`;
 }
 
-export function createEstateUI(root) {
+export function createEstateUI(root, activities = {}) {
   const hudCoins = root.querySelector("[data-estate-coins]");
   const hudLevel = root.querySelector("[data-estate-level]");
   const hudWarehouse = root.querySelector("[data-estate-warehouse]");
@@ -56,7 +56,7 @@ export function createEstateUI(root) {
 
   function renderShop() {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
-    show("露露的种子铺");
+    show("小胖种子铺");
     const intro = document.createElement("p"); intro.className = "estate-sheet-note"; intro.textContent = "种子会占用仓库空间。价格与收购价固定，不会突然波动。";
     sheetBody.append(intro);
     Object.values(snapshot.catalog.crops).forEach((crop) => {
@@ -70,7 +70,7 @@ export function createEstateUI(root) {
 
   function renderWarehouse() {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
-    show("谷仓库存");
+    show("小胖谷仓");
     if (!snapshot.inventory.length) {
       const empty = document.createElement("p"); empty.className = "estate-sheet-note"; empty.textContent = "谷仓空空的，先去商店买种子吧。"; sheetBody.append(empty);
     }
@@ -79,12 +79,12 @@ export function createEstateUI(root) {
       const name = document.createElement("div"); name.innerHTML = `<b>${item.name}</b><span> × ${item.quantity}</span>`;
       row.append(name);
       if (item.sellable) row.append(button(`出售1个 · +${item.sell_price}`, () => estateCommand("estate_sell", { item_id: item.id, quantity: 1 })));
-      else { const keep = document.createElement("span"); keep.className = "estate-tag"; keep.textContent = "种植用品"; row.append(keep); }
+      else { const keep = document.createElement("span"); keep.className = "estate-tag"; keep.textContent = item.kind === "bait" ? "钓鱼用品" : "种植用品"; row.append(keep); }
       sheetBody.append(row);
     }
     const actions = document.createElement("div"); actions.className = "estate-sheet-actions";
-    actions.append(button("一键出售全部农产品", async () => {
-      if (await confirmDialog("种子会保留，只出售所有成熟农产品。", { title: "确认出售？" })) estateCommand("estate_sell_all");
+    actions.append(button("一键出售全部产品", async () => {
+      if (await confirmDialog("种子和鱼饵会保留，只出售作物、鱼和矿物。", { title: "确认出售？" })) estateCommand("estate_sell_all");
     }, "estate-button estate-button-gold"));
     const level = snapshot.profile.warehouse_level;
     const rule = snapshot.catalog.warehouse_levels[String(level)] || snapshot.catalog.warehouse_levels[level];
@@ -96,10 +96,87 @@ export function createEstateUI(root) {
     sheetBody.append(actions);
   }
 
+  function toolPanel(toolType, icon) {
+    const snapshot = estateStore.snapshot;
+    const owned = snapshot.tools[toolType];
+    const rules = snapshot.catalog.tools[toolType];
+    const currentRule = owned ? (rules[String(owned.level)] || rules[owned.level]) : (rules["1"] || rules[1]);
+    const card = document.createElement("div"); card.className = "estate-tool-card";
+    const visual = document.createElement("span"); visual.className = "estate-tool-icon"; visual.textContent = icon;
+    const info = document.createElement("div"); info.className = "estate-item-info";
+    const title = document.createElement("b"); title.textContent = owned ? owned.name : currentRule.name;
+    const meta = document.createElement("span"); meta.textContent = owned
+      ? `Lv.${owned.level} · 耐久 ${owned.durability}/${owned.max_durability}` : "尚未拥有";
+    info.append(title, meta); card.append(visual, info);
+    if (!owned) card.append(button(`${currentRule.price}金币购买`, () => estateCommand("estate_buy_tool", { tool_type: toolType })));
+    else {
+      if (owned.durability < owned.max_durability) card.append(button("修理", () => estateCommand("estate_repair_tool", { tool_type: toolType })));
+      if (currentRule.upgrade_price != null) {
+        const next = rules[String(owned.level + 1)] || rules[owned.level + 1];
+        const upgrade = button(`${currentRule.upgrade_price}金币升级`, () => estateCommand("estate_upgrade_tool", { tool_type: toolType }));
+        upgrade.disabled ||= snapshot.profile.level < next.unlock_level; card.append(upgrade);
+      }
+    }
+    sheetBody.append(card);
+    return owned;
+  }
+
+  function renderFishing() {
+    const snapshot = estateStore.snapshot; if (!snapshot) return;
+    show("小胖湖钓场");
+    const note = document.createElement("p"); note.className = "estate-sheet-note";
+    note.textContent = "按住收线会同时提高进度和张力；松开可以卸力。断线或逃脱也会消耗鱼饵与耐久。";
+    sheetBody.append(note);
+    const rod = toolPanel("rod", "🎣");
+    if (snapshot.fishing_session) {
+      sheetBody.append(button("继续未完成的钓鱼", () => {
+        const session = snapshot.fishing_session; closeSheet(); activities.fishing?.(session);
+      }, "estate-button estate-button-gold"));
+      return;
+    }
+    const baitCounts = new Map(snapshot.inventory.filter((item) => item.kind === "bait").map((item) => [item.bait_id, item.quantity]));
+    Object.values(snapshot.catalog.baits).forEach((bait) => {
+      const locked = snapshot.profile.level < bait.unlock_level; const amount = baitCounts.get(bait.id) || 0;
+      const row = document.createElement("div"); row.className = "estate-item-card";
+      const info = document.createElement("div"); info.className = "estate-item-info";
+      info.innerHTML = `<b>🪱 ${bait.name}</b><span>库存 ${amount} · 单价 ${bait.price}金币</span>`; row.append(info);
+      row.append(button("购买1个", () => estateCommand("estate_buy", { kind: "bait", item_id: bait.id, quantity: 1 })));
+      const start = button("开始钓鱼", async () => {
+        try { const session = await estateRequest("estate_start_fishing", { bait_id: bait.id }); closeSheet(); activities.fishing?.(session); } catch { /* 弹层由协议统一显示 */ }
+      }, "estate-button estate-button-gold");
+      start.disabled ||= locked || !rod || rod.durability < 1 || amount < 1; row.append(start); sheetBody.append(row);
+    });
+  }
+
+  function renderMining() {
+    const snapshot = estateStore.snapshot; if (!snapshot) return;
+    show("小胖矿洞");
+    const note = document.createElement("p"); note.className = "estate-sheet-note";
+    note.textContent = "每次下矿消耗一点矿镐耐久。敲击次数用尽后自动结算，也可以提前带着收获离开。";
+    sheetBody.append(note);
+    const pickaxe = toolPanel("pickaxe", "⛏️");
+    if (snapshot.mining_run) {
+      sheetBody.append(button("继续本次采矿", () => {
+        const run = snapshot.mining_run; closeSheet(); activities.mining?.(run);
+      }, "estate-button estate-button-gold"));
+      return;
+    }
+    Object.entries(snapshot.catalog.mining_levels).forEach(([level, mine]) => {
+      const unlocked = pickaxe && pickaxe.level >= Number(level) && snapshot.profile.level >= mine.unlock_level;
+      const row = document.createElement("div"); row.className = "estate-item-card";
+      const info = document.createElement("div"); info.className = "estate-item-info";
+      info.innerHTML = `<b>第${level}层 · ${mine.name}</b><span>庄园 ${mine.unlock_level} 级 · 矿镐 Lv.${level}</span>`; row.append(info);
+      const enter = button(unlocked ? "进入矿层" : "尚未解锁", async () => {
+        try { const run = await estateRequest("estate_start_mining", { mine_level: Number(level) }); closeSheet(); activities.mining?.(run); } catch { /* 弹层由协议统一显示 */ }
+      }, "estate-button estate-button-gold");
+      enter.disabled ||= !unlocked || pickaxe.durability < 1; row.append(enter); sheetBody.append(row);
+    });
+  }
+
   function renderPlot(plot) {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     active = { kind: "plot", index: plot.index };
-    show(`第 ${plot.index + 1} 块土地`);
+    show(`小胖农田 · 第 ${plot.index + 1} 块`);
     if (plot.locked) {
       const rule = snapshot.catalog.plot_unlocks[String(plot.index)] || snapshot.catalog.plot_unlocks[plot.index];
       const note = document.createElement("p"); note.className = "estate-sheet-note";
@@ -144,6 +221,8 @@ export function createEstateUI(root) {
     if (!sheet.hidden) {
       if (active?.kind === "shop") renderShop();
       else if (active?.kind === "warehouse") renderWarehouse();
+      else if (active?.kind === "fishing") renderFishing();
+      else if (active?.kind === "mining") renderMining();
       else if (active?.kind === "plot") {
         const plot = snapshot.plots.find((item) => item.index === active.index);
         if (plot) renderPlot(plot);
@@ -155,6 +234,8 @@ export function createEstateUI(root) {
     active = target.kind === "plot" ? { kind: "plot", index: target.plot.index } : { kind: target.kind };
     if (target.kind === "shop") renderShop();
     else if (target.kind === "warehouse") renderWarehouse();
+    else if (target.kind === "fishing") renderFishing();
+    else if (target.kind === "mining") renderMining();
     else if (target.kind === "plot") renderPlot(target.plot);
   }
 

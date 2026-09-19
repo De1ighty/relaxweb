@@ -24,7 +24,7 @@ class EstateFrontendTests(unittest.TestCase):
         page = self.read("game.html")
         self.assertIn('import "./estate/view.js"', main)
         self.assertIn('assets/css/estate.css?v=', page)
-        for name in ("state", "protocol", "input", "map", "ui", "view"):
+        for name in ("state", "protocol", "input", "art", "map", "ui", "fishing", "mining", "view"):
             self.assertTrue((ROOT / f"assets/js/estate/{name}.js").is_file())
 
     def test_desktop_and_mobile_controls_are_present(self):
@@ -44,6 +44,21 @@ class EstateFrontendTests(unittest.TestCase):
         self.assertIn("collides", world)
         for action in ("estate_buy", "estate_plant", "estate_harvest", "estate_sell", "estate_sell_all"):
             self.assertIn(action, ui)
+        for action in ("estate_buy_tool", "estate_start_fishing", "estate_start_mining"):
+            self.assertIn(action, ui)
+        self.assertIn("estate_finish_fishing", self.read("assets/js/estate/fishing.js"))
+        self.assertIn("estate_mine_cell", self.read("assets/js/estate/mining.js"))
+
+    def test_all_interactive_places_use_xiaopang_branding(self):
+        combined = "\n".join([
+            self.read("assets/js/estate/map.js"),
+            self.read("assets/js/estate/ui.js"),
+            self.read("assets/js/estate/fishing.js"),
+        ])
+        for name in ("小胖种子铺", "小胖谷仓", "小胖湖钓场", "小胖矿洞", "小胖农田"):
+            self.assertIn(name, combined)
+        for old_name in ("露露种子铺", "丰收谷仓", "星石矿洞", "月牙湖钓场", "谷仓库存"):
+            self.assertNotIn(old_name, combined)
 
     def test_javascript_parses(self):
         for path in (ROOT / "assets/js/estate").glob("*.js"):

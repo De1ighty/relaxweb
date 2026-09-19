@@ -98,6 +98,23 @@ def _capacity(profile):
 def estate_state(conn, username, now):
     now = int(now)
     ensure_estate(conn, username, now)
+    expired = conn.execute(
+        "SELECT COUNT(*) FROM estate_fishing_sessions "
+        "WHERE username=? AND status='active' AND expires_at<?", (username, now),
+    ).fetchone()[0]
+    if expired:
+        expired_result = json.dumps({"action": "finish_fishing", "outcome": "expired",
+                                     "progress": 0, "peak_tension": 0},
+                                    ensure_ascii=False)
+        conn.execute(
+            "UPDATE estate_fishing_sessions SET status='finished',result_json=? "
+            "WHERE username=? AND status='active' AND expires_at<?",
+            (expired_result, username, now),
+        )
+        conn.execute(
+            "UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-?) "
+            "WHERE username=?", (expired, username),
+        )
     profile = _profile(conn, username)
     used = _inventory_used(conn, username)
     balance = conn.execute(
@@ -141,6 +158,32 @@ def estate_state(conn, username, now):
                             "max_durability": rule.get("max_durability", durability),
                             "name": rule.get("name", tool_type)}
 
+    fishing_session = None
+    row = conn.execute(
+        "SELECT session_id,rod_level,fish_id,pattern_json,started_at,expires_at "
+        "FROM estate_fishing_sessions WHERE username=? AND status='active' "
+        "ORDER BY started_at DESC LIMIT 1", (username,),
+    ).fetchone()
+    if row:
+        fishing_session = {"session_id": row[0], "rod_level": row[1],
+                           "fish_name": "水下的鱼影", "pattern": json.loads(row[3]),
+                           "started_at": row[4], "expires_at": row[5],
+                           "duration_limit": 36}
+    mining_run = None
+    row = conn.execute(
+        "SELECT run_id,mine_level,strikes_left,revealed_json,loot_json,board_json "
+        "FROM estate_mining_runs WHERE username=? AND status='active' "
+        "ORDER BY started_at DESC LIMIT 1", (username,),
+    ).fetchone()
+    if row:
+        revealed = json.loads(row[3])
+        board = json.loads(row[5])
+        mining_run = {"run_id": row[0], "mine_level": row[1],
+                      "mine_name": public_catalog()["mining_levels"][row[1]]["name"],
+                      "strikes_left": row[2], "revealed": revealed,
+                      "revealed_cells": {str(index): board[index] for index in revealed},
+                      "loot": json.loads(row[4]), "size": 5}
+
     return {
         "version": profile["version"],
         "server_time": now,
@@ -156,6 +199,8 @@ def estate_state(conn, username, now):
         "plots": plots,
         "inventory": inventory,
         "tools": tools,
+        "fishing_session": fishing_session,
+        "mining_run": mining_run,
         "catalog": public_catalog(),
     }
 

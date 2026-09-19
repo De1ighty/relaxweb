@@ -1,12 +1,17 @@
 "use strict";
 
 import { estateNow, estateStore } from "./state.js";
+import {
+  PIXEL, drawBuilding, drawBush, drawCharacter, drawCrate, drawFence, drawGroundDetails,
+  drawSignpost, drawTree, drawWater, pixelRect,
+} from "./art.js";
 
 const WORLD = { width: 960, height: 600 };
 const BLOCKS = [
   { x: 32, y: 24, w: 250, h: 168 },
   { x: 675, y: 30, w: 245, h: 160 },
-  { x: 686, y: 400, w: 250, h: 176 },
+  { x: 24, y: 326, w: 230, h: 155 },
+  { x: 680, y: 302, w: 280, h: 298 },
   { x: 0, y: 0, w: 960, h: 18 },
 ];
 const PLOT_POSITIONS = [
@@ -14,50 +19,25 @@ const PLOT_POSITIONS = [
   [430, 204], [530, 204], [330, 300], [430, 300],
 ];
 const ZONES = [
-  { kind: "shop", label: "种子商店", x: 150, y: 205 },
-  { kind: "warehouse", label: "谷仓", x: 790, y: 208 },
+  { kind: "shop", label: "小胖种子铺", x: 150, y: 205 },
+  { kind: "warehouse", label: "小胖谷仓", x: 790, y: 208 },
+  { kind: "fishing", label: "小胖湖钓场", x: 650, y: 430 },
+  { kind: "mining", label: "小胖矿洞", x: 140, y: 500 },
 ];
-
-function pixelRect(ctx, x, y, w, h, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
-}
-
-function drawTree(ctx, x, y, tone = 0) {
-  pixelRect(ctx, x + 15, y + 30, 10, 25, "#69452b");
-  pixelRect(ctx, x + 7, y + 8, 28, 34, tone ? "#3e8c50" : "#347d45");
-  pixelRect(ctx, x, y + 18, 42, 20, tone ? "#55a85c" : "#489c55");
-  pixelRect(ctx, x + 9, y + 2, 24, 12, "#66bb65");
-  pixelRect(ctx, x + 7, y + 18, 7, 7, "#94d16e");
-}
-
-function drawBuilding(ctx, x, y, w, h, wall, roof, sign) {
-  pixelRect(ctx, x + 12, y + 70, w - 24, h - 70, "#493224");
-  pixelRect(ctx, x + 16, y + 66, w - 32, h - 74, wall);
-  pixelRect(ctx, x, y + 38, w, 34, roof);
-  pixelRect(ctx, x + 20, y + 16, w - 40, 32, roof);
-  pixelRect(ctx, x + 34, y + 4, w - 68, 18, "#f1d19b");
-  pixelRect(ctx, x + w / 2 - 20, y + h - 52, 40, 48, "#70472d");
-  pixelRect(ctx, x + 30, y + 86, 30, 24, "#9ee0ec");
-  pixelRect(ctx, x + w - 60, y + 86, 30, 24, "#9ee0ec");
-  ctx.fillStyle = "#513524"; ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText(sign, x + w / 2, y + 38);
-}
-
-function drawGround(ctx) {
-  pixelRect(ctx, 0, 0, WORLD.width, WORLD.height, "#91c95d");
-  for (let y = 0; y < WORLD.height; y += 24) {
-    for (let x = (y / 24) % 2 * 12; x < WORLD.width; x += 48) {
-      pixelRect(ctx, x, y, 3, 3, "#78b64c");
-    }
-  }
+function drawGround(ctx, tick) {
+  drawGroundDetails(ctx, WORLD.width, WORLD.height, tick);
   pixelRect(ctx, 286, 72, 346, 410, "#cdb16a");
   pixelRect(ctx, 300, 84, 318, 386, "#e3cb82");
-  pixelRect(ctx, 0, 470, 960, 42, "#dbbd75");
-  for (let x = 0; x < 960; x += 32) pixelRect(ctx, x, 488, 18, 4, "#c39e59");
-  pixelRect(ctx, 680, 390, 280, 210, "#5db7c0");
-  for (let y = 405; y < 590; y += 28) {
-    for (let x = 692; x < 950; x += 54) pixelRect(ctx, x, y, 24, 3, "#8ad8d1");
+  for (let y = 92; y < 466; y += 32) {
+    pixelRect(ctx, 306 + (y % 3) * 4, y, 16, 4, "#c6a761");
+    pixelRect(ctx, 586 - (y % 4) * 5, y + 8, 20, 3, "#f1dc98");
+  }
+  pixelRect(ctx, 0, 500, 680, 42, "#dbbd75");
+  pixelRect(ctx, 250, 450, 46, 92, "#dbbd75");
+  for (let x = 0; x < 680; x += 32) pixelRect(ctx, x, 518, 18, 4, "#c39e59");
+  drawWater(ctx, 690, 310, 270, 290, tick);
+  for (let y = 316; y < 585; y += 30) {
+    pixelRect(ctx, 678, y, 5, 17, "#5c9a49"); pixelRect(ctx, 684, y + 4, 3, 15, "#80b955");
   }
 }
 
@@ -79,9 +59,12 @@ function drawPlot(ctx, plot) {
   for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < 4; col += 1) {
       const px = x + 13 + col * 17; const py = y + 17 + row * 18;
-      pixelRect(ctx, px + 4, py, 3, 13, "#378446");
-      pixelRect(ctx, px, py + 4, 6, 5, "#56ad55");
-      if (progress > .48) pixelRect(ctx, px + 5, py - 3, mature ? 9 : 6, mature ? 10 : 7, color);
+      if (progress < .25) pixelRect(ctx, px + 4, py + 7, 4, 5, "#86b752");
+      else {
+        pixelRect(ctx, px + 4, py, 3, 13, "#378446");
+        pixelRect(ctx, px, py + 4, 6, 5, "#56ad55");
+        if (progress > .48) pixelRect(ctx, px + 5, py - 3, mature ? 9 : 6, mature ? 10 : 7, color);
+      }
     }
   }
   if (mature) {
@@ -112,7 +95,7 @@ function collides(x, y) {
 
 export function createEstateMap(canvas, input, onInteract, onTarget) {
   const ctx = canvas.getContext("2d");
-  const player = { x: 292, y: 420, facing: 1, walking: 0 };
+  const player = { x: 275, y: 440, facing: 1, walking: 0, lastMove: 0 };
   let frame = 0;
   let last = performance.now();
   let target = null;
@@ -132,27 +115,27 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
     const oy = Math.min(0, Math.max(canvas.height - WORLD.height * scale,
       canvas.height / 2 - player.y * scale));
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
-    drawGround(ctx);
-    drawBuilding(ctx, 34, 24, 242, 166, "#f3c77c", "#bb5740", "种子铺");
-    drawBuilding(ctx, 684, 28, 230, 164, "#e8b86a", "#8c4635", "谷 仓");
-    drawBuilding(ctx, 704, 414, 210, 154, "#99816b", "#555568", "矿洞 · 敬请期待");
-    for (let x = 8; x < 650; x += 74) drawTree(ctx, x, 520 + (x % 3) * 4, x % 2);
+    drawGround(ctx, performance.now());
+    drawBuilding(ctx, 34, 24, 242, 166, "#efbd70", "#b8503d", "小胖种子铺");
+    drawBuilding(ctx, 684, 28, 230, 164, "#dca75d", "#844237", "小胖谷仓");
+    drawBuilding(ctx, 24, 326, 230, 155, "#776d66", "#4d4655", "小胖矿洞", "#b9a7bd");
+    drawFence(ctx, 302, 72, 316);
+    drawFence(ctx, 302, 478, 316);
+    drawBush(ctx, 280, 28, true); drawBush(ctx, 622, 42); drawBush(ctx, 642, 164, true);
+    drawCrate(ctx, 652, 158); drawCrate(ctx, 658, 134);
+    drawSignpost(ctx, 604, 370, "小胖湖");
+    for (let x = 6; x < 650; x += 72) drawTree(ctx, x, 540 + (x % 3) * 3, x % 2, performance.now());
     (estateStore.snapshot?.plots || []).forEach((plot) => drawPlot(ctx, plot));
-    pixelRect(ctx, 620, 450, 50, 8, "#91653c");
-    pixelRect(ctx, 636, 432, 7, 30, "#6f4a2f");
-    ctx.fillStyle = "#e6f7e4"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("湖畔钓场 · 即将开放", 798, 382);
+    pixelRect(ctx, 625, 420, 75, 12, "#835431");
+    pixelRect(ctx, 645, 397, 8, 38, "#67452f");
+    pixelRect(ctx, 682, 397, 8, 38, "#67452f");
+    ctx.fillStyle = "#f5eed2"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("小胖湖钓场", 820, 292);
     if (target) {
       ctx.strokeStyle = "#fff4a8"; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
       ctx.strokeRect(target.x - 24, target.y - 24, 48, 48); ctx.setLineDash([]);
     }
-    const bob = Math.sin(player.walking) > 0 ? 1 : 0;
-    pixelRect(ctx, player.x - 8, player.y + 10, 16, 5, "rgba(32,48,35,.3)");
-    pixelRect(ctx, player.x - 7, player.y - 13 + bob, 14, 12, "#f2b37f");
-    pixelRect(ctx, player.x - 9, player.y - 17 + bob, 18, 7, "#6b3d29");
-    pixelRect(ctx, player.x - 9, player.y - 1 + bob, 18, 14, "#4d78b8");
-    pixelRect(ctx, player.x - 8, player.y + 12 + bob, 6, 8, "#463b42");
-    pixelRect(ctx, player.x + 2, player.y + 12 + bob, 6, 8, "#463b42");
+    drawCharacter(ctx, player, performance.now());
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -163,7 +146,7 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
     const dy = input.vector.y / length * 125 * dt;
     if (dx && !collides(player.x + dx, player.y)) player.x += dx;
     if (dy && !collides(player.x, player.y + dy)) player.y += dy;
-    if (dx || dy) { player.walking += dt * 12; if (dx) player.facing = Math.sign(dx); }
+    if (dx || dy) { player.walking += dt * 12; player.lastMove = now; if (dx) player.facing = Math.sign(dx); }
     const nextTarget = nearTarget(player, estateStore.snapshot);
     if (nextTarget?.kind !== target?.kind || nextTarget?.plot?.index !== target?.plot?.index) {
       target = nextTarget; onTarget(target);
