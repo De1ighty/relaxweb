@@ -41,6 +41,60 @@
     font-size: 12px;
 }
 
+.bet-close-status {
+    margin: -6px 0 12px;
+
+    color: #b25000;
+
+    font-size: 12px;
+
+    font-weight: 600;
+}
+
+.bet-close-status.closed {
+    color: #86868b;
+}
+
+.bet-closed-note {
+    margin-bottom: 12px;
+
+    padding: 10px 12px;
+
+    border-radius: 10px;
+
+    background: #f5f5f7;
+
+    color: #55555c;
+
+    font-size: 13px;
+
+    line-height: 1.6;
+}
+
+.bet-close-row {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    margin-top: 10px;
+}
+
+.bet-close-row .login-input {
+    margin-top: 0;
+
+    width: auto;
+}
+
+.bet-close-label {
+    color: #86868b;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+}
+
 .bet-option-list {
     display: flex;
 

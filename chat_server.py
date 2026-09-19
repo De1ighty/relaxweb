@@ -41,6 +41,7 @@ BET_MIN_STAKE = 10.0
 BET_MAX_OPTIONS = 6
 BET_QUESTION_LIMIT = 60
 BET_OPTION_LIMIT = 20
+BET_CLOSE_MAX_MINUTES = 1440
 FINANCE_HISTORY_LIMIT = 60
 TRANSFER_COOLDOWN = 2.0
 GAME_MAX_PLAYERS = 9
@@ -172,10 +173,19 @@ def init_db():
                 status TEXT NOT NULL DEFAULT 'open',
                 correct_index INTEGER,
                 created_at INTEGER NOT NULL,
-                settled_at INTEGER
+                settled_at INTEGER,
+                close_delay INTEGER NOT NULL DEFAULT 0,
+                closed_at INTEGER
             )
             """
         )
+        bet_columns = {row[1] for row in conn.execute("PRAGMA table_info(bets)")}
+        if "close_delay" not in bet_columns:
+            conn.execute(
+                "ALTER TABLE bets ADD COLUMN close_delay INTEGER NOT NULL DEFAULT 0"
+            )
+        if "closed_at" not in bet_columns:
+            conn.execute("ALTER TABLE bets ADD COLUMN closed_at INTEGER")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS bet_entries (
@@ -950,8 +960,8 @@ async def handle_transfer_coins(websocket, state, data):
 def load_open_bet():
     with database() as conn:
         row = conn.execute(
-            "SELECT id, question, options, creator, created_at FROM bets "
-            "WHERE status = 'open' ORDER BY id DESC LIMIT 1"
+            "SELECT id, question, options, creator, created_at, close_delay, closed_at "
+            "FROM bets WHERE status = 'open' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if not row:
             return None
@@ -966,11 +976,60 @@ def load_open_bet():
         "options": json.loads(row[2]),
         "creator": row[3],
         "created_at": row[4],
+        "close_delay": row[5] or 0,
+        "closed_at": row[6],
         "entries": [
             {"username": name, "option_index": index, "amount": round(amount, 2)}
             for name, index, amount in entries
         ],
     }
+
+
+def bet_closes_at(bet):
+    delay = int(bet.get("close_delay") or 0)
+    if delay <= 0:
+        return None
+    return bet["created_at"] + delay * 60
+
+
+def bet_closed(bet, now=None):
+    if not bet:
+        return False
+    if bet.get("closed_at"):
+        return True
+    deadline = bet_closes_at(bet)
+    if deadline is None:
+        return False
+    return (int(time.time()) if now is None else now) >= deadline
+
+
+async def close_betting(bet, reason="到时封盘"):
+    """封盘：停止接受新投注，已投注的保持不变，等发起者结账。"""
+    if bet.get("closed_at"):
+        return
+    closed_at = int(time.time())
+    with database() as conn, conn:
+        conn.execute(
+            "UPDATE bets SET closed_at = ? WHERE id = ?", (closed_at, bet["id"])
+        )
+    bet["closed_at"] = closed_at
+    logger.info("bet closed (%s): %s", reason, bet["question"])
+    await broadcast({"type": "bet_update", "bet": bet_public_state(bet)})
+    await broadcast_system(f"🔒 竞猜已封盘：{bet['question']}｜等待发起者结账")
+
+
+async def bet_close_watcher():
+    """每秒检查一次进行中的竞猜是否到了封盘时间（也覆盖重启后补封盘）。"""
+    while True:
+        await asyncio.sleep(1)
+        bet = active_bet
+        if bet and not bet.get("closed_at"):
+            deadline = bet_closes_at(bet)
+            if deadline is not None and time.time() >= deadline:
+                try:
+                    await close_betting(bet, "到时自动封盘")
+                except Exception:
+                    logger.exception("auto close bet failed")
 
 
 def bet_public_state(bet):
@@ -991,6 +1050,9 @@ def bet_public_state(bet):
         "entries": bet["entries"],
         "totals": totals,
         "pot": round(sum(totals), 2),
+        "close_delay": int(bet.get("close_delay") or 0),
+        "closed_at": bet.get("closed_at"),
+        "closes_at": bet_closes_at(bet),
     }
 
 
@@ -1042,12 +1104,18 @@ async def handle_create_bet(websocket, state, data):
             {"type": "bet_error", "message": f"选项最多 {BET_MAX_OPTIONS} 个"},
         )
         return
+    try:
+        close_minutes = int(data.get("close_minutes") or 0)
+    except (TypeError, ValueError):
+        close_minutes = 0
+    close_minutes = max(0, min(close_minutes, BET_CLOSE_MAX_MINUTES))
     now = int(time.time())
     with database() as conn, conn:
         cursor = conn.execute(
-            "INSERT INTO bets (question, options, creator, status, created_at) "
-            "VALUES (?, ?, ?, 'open', ?)",
-            (question, json.dumps(options, ensure_ascii=False), user["username"], now),
+            "INSERT INTO bets (question, options, creator, status, created_at, close_delay) "
+            "VALUES (?, ?, ?, 'open', ?, ?)",
+            (question, json.dumps(options, ensure_ascii=False), user["username"], now,
+             close_minutes),
         )
         bet_id = cursor.lastrowid
     active_bet = {
@@ -1056,13 +1124,21 @@ async def handle_create_bet(websocket, state, data):
         "options": options,
         "creator": user["username"],
         "created_at": now,
+        "close_delay": close_minutes,
+        "closed_at": None,
         "entries": [],
     }
-    logger.info("bet created by %s: %s", user["username"], question)
+    logger.info(
+        "bet created by %s: %s (close in %d min)",
+        user["username"], question, close_minutes,
+    )
     await send_json(websocket, {"type": "bet_created"})
     await broadcast({"type": "bet_update", "bet": bet_public_state(active_bet)})
+    closing_note = (
+        f"，{close_minutes} 分钟后自动封盘" if close_minutes else ""
+    )
     await broadcast_system(
-        f"🎲 {display_name(user['username'])} 发起了竞猜：{question}"
+        f"🎲 {display_name(user['username'])} 发起了竞猜：{question}{closing_note}"
     )
 
 
@@ -1077,6 +1153,9 @@ async def handle_place_bet(websocket, state, data):
     bet = active_bet
     if not bet:
         await send_json(websocket, {"type": "bet_error", "message": "当前没有进行中的竞猜"})
+        return
+    if bet_closed(bet):
+        await send_json(websocket, {"type": "bet_error", "message": "竞猜已封盘，无法参与"})
         return
     try:
         option_index = int(data.get("option_index"))
@@ -1300,6 +1379,24 @@ async def handle_cancel_bet(websocket, state, data):
         message=f"🎲 竞猜流局：{bet['question']}｜投注已全部退还",
         refund_prefix="竞猜流局",
     )
+
+
+async def handle_close_bet(websocket, state, data):
+    user = state.get("user")
+    if not user:
+        await send_json(websocket, {"type": "auth_error", "message": "请先登录"})
+        return
+    if rate_limited(state, "last_bet_action", 2.0):
+        await send_json(websocket, {"type": "bet_error", "message": "操作太频繁，请稍后再试"})
+        return
+    bet = active_bet
+    if not bet:
+        await send_json(websocket, {"type": "bet_error", "message": "当前没有进行中的竞猜"})
+        return
+    if user["username"] != bet["creator"]:
+        await send_json(websocket, {"type": "bet_error", "message": "只有发起者可以封盘"})
+        return
+    await close_betting(bet, "发起者提前封盘")
 
 
 # =========================================================
@@ -1999,6 +2096,7 @@ handlers = {
     "place_bet": handle_place_bet,
     "settle_bet": handle_settle_bet,
     "cancel_bet": handle_cancel_bet,
+    "close_bet": handle_close_bet,
     "admin_set_coins": handle_admin_set_coins,
     "list_rooms": handle_list_rooms,
     "get_room": handle_get_room,
@@ -2082,7 +2180,11 @@ async def main():
         ping_timeout=20,
         close_timeout=5,
     ):
-        await asyncio.Future()
+        watcher = asyncio.create_task(bet_close_watcher())
+        try:
+            await asyncio.Future()
+        finally:
+            watcher.cancel()
 
 
 if __name__ == "__main__":

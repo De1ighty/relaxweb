@@ -106,6 +106,7 @@ let chatHeightObserver = null;
 let betCache = null;
 let lastSettled = null;
 let joinDraft = { optionIndex: 0, amount: "" };
+let betCountdownTimer = 0;
 
 const rewardsPanel = window.DailyRewards.create({
   send,
@@ -865,10 +866,45 @@ function submitTransfer() {
    竞猜
 ========================================================= */
 
+function betClosed(bet) {
+  if (!bet) return false;
+  if (bet.closed_at) return true;
+  return Boolean(bet.closes_at && Date.now() / 1000 >= bet.closes_at);
+}
+
+function betCloseText(bet) {
+  if (!bet || !bet.closes_at) return "";
+  if (betClosed(bet)) return "已封盘";
+  const remain = Math.max(0, Math.ceil(bet.closes_at - Date.now() / 1000));
+  const minutes = Math.floor(remain / 60);
+  const seconds = remain % 60;
+  return `距封盘 ${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function stopBetCountdown() {
+  if (betCountdownTimer) {
+    clearInterval(betCountdownTimer);
+    betCountdownTimer = 0;
+  }
+}
+
+function syncBetCountdown() {
+  stopBetCountdown();
+  if (!betCache || !betCache.closes_at || betCache.closed_at) return;
+  betCountdownTimer = setInterval(() => {
+    const node = document.getElementById("betCloseStatus");
+    if (!node) return;
+    const text = betCloseText(betCache);
+    node.textContent = text;
+    if (text === "已封盘") stopBetCountdown();
+  }, 1000);
+}
+
 function renderBetChip() {
   elements.betStat.classList.toggle("active", Boolean(betCache));
-  elements.betStatTitle.textContent = betCache ? betCache.question : "竞猜";
-  elements.betStat.title = betCache ? `竞猜：${betCache.question}` : "竞猜";
+  const closedTag = betClosed(betCache) ? "（已封盘）" : "";
+  elements.betStatTitle.textContent = betCache ? betCache.question + closedTag : "竞猜";
+  elements.betStat.title = betCache ? `竞猜：${betCache.question}${closedTag}` : "竞猜";
   elements.menuBetButton.classList.toggle("active-option", Boolean(betCache));
 }
 
@@ -882,6 +918,7 @@ function setBetState(bet) {
   if (betCache) lastSettled = null;
   renderBetChip();
   if (elements.betModal.style.display === "flex") renderBetModal();
+  syncBetCountdown();
 }
 
 function openBetModal() {
@@ -892,6 +929,7 @@ function openBetModal() {
   elements.betModal.style.display = "flex";
   renderBetModal();
   send({ type: "get_bet" });
+  syncBetCountdown();
 }
 
 function betEntryLine(entry) {
@@ -907,6 +945,15 @@ function buildBetInfo(bet) {
   meta.className = "bet-meta";
   meta.textContent = `发起者 ${displayNameOf(bet.creator)} · 奖池 ${formatCoins(bet.pot)} 金币 · ${bet.entries.length} 人参与`;
   box.append(title, meta);
+  if (bet.closes_at || bet.closed_at) {
+    const closeStatus = document.createElement("div");
+    closeStatus.id = "betCloseStatus";
+    closeStatus.className = `bet-close-status${betClosed(bet) ? " closed" : ""}`;
+    closeStatus.textContent = betClosed(bet)
+      ? "🔒 已封盘，等待发起者结账"
+      : `🔒 ${betCloseText(bet)}`;
+    box.append(closeStatus);
+  }
   const optionList = document.createElement("div");
   optionList.className = "bet-option-list";
   bet.options.forEach((text, index) => {
@@ -939,6 +986,14 @@ function buildJoinForm(bet) {
   const box = document.createElement("div");
   const label = document.createElement("div");
   label.className = "bet-section-title";
+  if (betClosed(bet)) {
+    label.textContent = "参与竞猜";
+    const note = document.createElement("div");
+    note.className = "bet-closed-note";
+    note.textContent = "🔒 本期竞猜已封盘，无法参与，等待发起者结账";
+    box.append(label, note);
+    return box;
+  }
   label.textContent = "参与竞猜";
   box.append(label);
 
@@ -1062,6 +1117,23 @@ function buildSettlePanel(bet) {
     row.append(name, button);
     box.append(row);
   });
+  if (betClosed(bet)) {
+    const closed = document.createElement("div");
+    closed.className = "bet-closed-note";
+    closed.textContent = "🔒 已封盘：不再接受新投注，可直接选答案结账。";
+    box.append(closed);
+  } else {
+    const closeNow = document.createElement("button");
+    closeNow.className = "bet-secondary";
+    closeNow.type = "button";
+    closeNow.textContent = "立即封盘（不再接受新投注）";
+    closeNow.addEventListener("click", async () => {
+      if (await uiConfirm("封盘后未参与的人无法再投注，已投注的不受影响。", { title: "确定封盘？" })) {
+        send({ type: "close_bet" });
+      }
+    });
+    box.append(closeNow);
+  }
   const draw = document.createElement("button");
   draw.className = "bet-secondary";
   draw.type = "button";
@@ -1116,6 +1188,22 @@ function renderCreateView(body) {
   addButton.addEventListener("click", () => addOption(""));
   body.append(addButton);
 
+  const closeRow = document.createElement("div");
+  closeRow.className = "bet-close-row";
+  const closeLabel = document.createElement("span");
+  closeLabel.className = "bet-close-label";
+  closeLabel.textContent = "自动封盘";
+  const closeSelect = document.createElement("select");
+  closeSelect.className = "login-input";
+  for (const minutes of [0, 1, 2, 3, 5, 10, 15, 30, 60]) {
+    const option = document.createElement("option");
+    option.value = String(minutes);
+    option.textContent = minutes ? `${minutes} 分钟后` : "不封盘";
+    closeSelect.append(option);
+  }
+  closeRow.append(closeLabel, closeSelect);
+  body.append(closeRow);
+
   const submit = document.createElement("button");
   submit.className = "login-submit";
   submit.type = "button";
@@ -1133,13 +1221,18 @@ function renderCreateView(body) {
       uiAlert("至少需要两个选项");
       return;
     }
-    send({ type: "create_bet", question: text, options });
+    send({
+      type: "create_bet",
+      question: text,
+      options,
+      close_minutes: Number(closeSelect.value) || 0,
+    });
   });
   body.append(submit);
 
   const hint = document.createElement("div");
   hint.className = "bet-hint";
-  hint.textContent = "默认选项为「能 / 不能」，可继续添加更多选项（单选）。";
+  hint.textContent = "默认选项为「能 / 不能」，可继续添加更多选项（单选）。设置自动封盘后，到点不再接受新投注，已投注的不受影响。";
   body.append(hint);
   question.focus();
 }
@@ -1421,9 +1514,13 @@ elements.menuBetButton.addEventListener("click", () => {
 });
 elements.betClose.addEventListener("click", () => {
   elements.betModal.style.display = "none";
+  stopBetCountdown();
 });
 elements.betModal.addEventListener("click", (event) => {
-  if (event.target === elements.betModal) elements.betModal.style.display = "none";
+  if (event.target === elements.betModal) {
+    elements.betModal.style.display = "none";
+    stopBetCountdown();
+  }
 });
 elements.financeButton.addEventListener("click", openFinance);
 elements.financeClose.addEventListener("click", () => {
