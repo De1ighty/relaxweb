@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -347,7 +348,7 @@ class MigrationTests(unittest.TestCase):
     def test_existing_accounts_receive_default_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(server, "DB_FILE", str(Path(tmp) / "old.db")):
-                with sqlite3.connect(server.DB_FILE) as conn:
+                with closing(sqlite3.connect(server.DB_FILE)) as conn, conn:
                     conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, "
                                  "password_hash TEXT, salt TEXT, role TEXT, created_at INTEGER)")
                     conn.execute("INSERT INTO users VALUES (1, 'old', '', '', 'user', 0)")

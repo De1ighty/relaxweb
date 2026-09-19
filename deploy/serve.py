@@ -13,6 +13,7 @@ import http.server
 import io
 import json
 import os
+import posixpath
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -63,7 +64,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=ROOT, **kwargs)
 
     def translate_path(self, path):
-        clean = os.path.normpath(
+        clean = posixpath.normpath(
             unquote(path.split("?", 1)[0].split("#", 1)[0])
         )
         if clean in ("", "/", ".", os.sep, "/index.html"):
