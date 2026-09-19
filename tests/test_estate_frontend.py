@@ -13,10 +13,15 @@ class EstateFrontendTests(unittest.TestCase):
         return (ROOT / relative).read_text(encoding="utf-8")
 
     def test_solo_hall_route_is_metadata_driven(self):
+        config = self.read("assets/js/game-config.js")
         hall = self.read("assets/js/hall.js")
-        self.assertIn('id: "estate"', hall)
-        self.assertIn('mode: "solo"', hall)
-        self.assertIn('game.mode === "solo" ? game.id : "rooms"', hall)
+        core = self.read("assets/js/core.js")
+        self.assertIn('id: "estate"', config)
+        self.assertIn('mode: "solo"', config)
+        self.assertIn('view: "estate"', config)
+        self.assertIn("ROOM_GAME_TYPES", config)
+        self.assertIn('game.mode === "solo" ? game.view : "rooms"', hall)
+        self.assertIn('renderView(state.hallPage)', core)
         self.assertNotIn('game.id === "estate"', hall)
 
     def test_entry_reaches_all_estate_modules_and_style(self):
@@ -24,8 +29,19 @@ class EstateFrontendTests(unittest.TestCase):
         page = self.read("game.html")
         self.assertIn('import "./estate/view.js"', main)
         self.assertIn('assets/css/estate.css?v=', page)
-        for name in ("state", "protocol", "input", "art", "map", "ui", "fishing", "mining", "view"):
+        for name in ("state", "protocol", "input", "art", "sprites", "map", "ui", "fishing", "mining", "view"):
             self.assertTrue((ROOT / f"assets/js/estate/{name}.js").is_file())
+
+    def test_cc0_pixel_atlases_are_local_and_documented(self):
+        attribution = self.read("assets/estate/ATTRIBUTION.md")
+        sprites = self.read("assets/js/estate/sprites.js")
+        for name in ("tiny-farm", "tiny-town"):
+            self.assertTrue((ROOT / f"assets/estate/kenney/{name}.png").is_file())
+            self.assertIn(f"kenney/{name}.png", attribution)
+            self.assertIn(f"assets/estate/kenney/{name}.png", sprites)
+        self.assertIn("CC0", attribution)
+        self.assertTrue((ROOT / "assets/estate/kenney/License-tiny-farm.txt").is_file())
+        self.assertTrue((ROOT / "assets/estate/kenney/License-tiny-town.txt").is_file())
 
     def test_desktop_and_mobile_controls_are_present(self):
         source = self.read("assets/js/estate/input.js")

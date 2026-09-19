@@ -4,7 +4,7 @@ import { openLogin } from "./auth.js";
 import { elements, formatCoins, renderGameView, send, state } from "./core.js";
 import { onMessage, registerView } from "./registry.js";
 import { ratingCard } from "./rating.js";
-import { DEFAULT_GAME, GAME_TYPES, gameMetaById } from "./game-config.js";
+import { DEFAULT_GAME, GAME_TYPES, ROOM_GAME_TYPES, gameMetaById } from "./game-config.js";
 import "./create-room.js";
 
 export { fillBlindOptions, gameMetaById } from "./game-config.js";
@@ -41,8 +41,9 @@ function renderEntry() {
 }
 
 function selectGame(gameId) {
-  state.currentGameId = gameId;
-  state.hallPage = "rooms";
+  const game = gameMetaById(gameId);
+  state.currentGameId = game.id;
+  state.hallPage = game.mode === "solo" ? game.view : "rooms";
   renderGameView();
 }
 
@@ -70,7 +71,7 @@ function renderHall() {
     info.append(name, desc);
     const go = document.createElement("div");
     go.className = "hall-game-go";
-    go.textContent = "查看房间 →";
+    go.textContent = game.mode === "solo" ? "进入庄园 →" : "查看房间 →";
     card.append(icon, info, go);
     grid.append(card);
   }
@@ -224,7 +225,7 @@ function renderGameRooms() {
   navTitle.className = "rooms-nav-title";
   navTitle.textContent = "游戏";
   nav.append(navTitle);
-  for (const game of GAME_TYPES) {
+  for (const game of ROOM_GAME_TYPES) {
     const item = button(`${game.icon} ${game.name.split(" · ")[0]}`, `rooms-game-link${game.id === activeGame.id ? " active" : ""}`, () => {
       state.currentGameId = game.id;
       renderGameView();

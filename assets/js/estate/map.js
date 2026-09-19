@@ -5,6 +5,7 @@ import {
   PIXEL, drawBuilding, drawBush, drawCharacter, drawCrate, drawFence, drawGroundDetails,
   drawSignpost, drawTree, drawWater, pixelRect,
 } from "./art.js";
+import { drawSprite, stableSprite } from "./sprites.js";
 
 const WORLD = { width: 960, height: 600 };
 const BLOCKS = [
@@ -39,6 +40,16 @@ function drawGround(ctx, tick) {
   for (let y = 316; y < 585; y += 30) {
     pixelRect(ctx, 678, y, 5, 17, "#5c9a49"); pixelRect(ctx, 684, y + 4, 3, 15, "#80b955");
   }
+  // Tiny Town tiles add crisp, hand-drawn texture while the procedural layer remains
+  // as a resilient fallback during loading or when an asset is unavailable.
+  for (let x = 0; x < WORLD.width; x += 48) {
+    drawSprite(ctx, "town", 12, x, 492, 3);
+    drawSprite(ctx, "town", 24, x, 540, 3);
+  }
+  for (let y = 72; y < 480; y += 48) {
+    drawSprite(ctx, "town", 13, 282, y, 3);
+    drawSprite(ctx, "town", 25, 618, y, 3);
+  }
 }
 
 function drawPlot(ctx, plot) {
@@ -56,6 +67,8 @@ function drawPlot(ctx, plot) {
   const mature = Number(plot.ready_at) <= estateNow();
   const progress = mature ? 1 : Math.max(.12, (estateNow() - plot.planted_at) / (plot.ready_at - plot.planted_at));
   const color = estateStore.snapshot?.catalog?.crops?.[plot.crop_id]?.color || "#e6cb63";
+  const cropSprites = [4, 5, 6, 8, 17, 18, 20, 29, 30, 32, 41, 42, 44, 53, 54, 56, 65, 66, 68, 80, 81, 83];
+  const cropSprite = stableSprite(plot.crop_id, cropSprites);
   for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < 4; col += 1) {
       const px = x + 13 + col * 17; const py = y + 17 + row * 18;
@@ -65,6 +78,7 @@ function drawPlot(ctx, plot) {
         pixelRect(ctx, px, py + 4, 6, 5, "#56ad55");
         if (progress > .48) pixelRect(ctx, px + 5, py - 3, mature ? 9 : 6, mature ? 10 : 7, color);
       }
+      if (progress > .42) drawSprite(ctx, "farm", cropSprite, px - 3, py - 7, mature ? 1.05 : .85);
     }
   }
   if (mature) {
@@ -123,8 +137,21 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
     drawFence(ctx, 302, 478, 316);
     drawBush(ctx, 280, 28, true); drawBush(ctx, 622, 42); drawBush(ctx, 642, 164, true);
     drawCrate(ctx, 652, 158); drawCrate(ctx, 658, 134);
+    drawSprite(ctx, "farm", 74, 55, 150, 2.5);
+    drawSprite(ctx, "farm", 90, 218, 145, 2.5);
+    drawSprite(ctx, "farm", 98, 707, 144, 2.5);
+    drawSprite(ctx, "farm", 123, 752, 145, 2.5);
+    drawSprite(ctx, "town", 115, 52, 430, 3);
+    drawSprite(ctx, "town", 116, 93, 430, 3);
+    drawSprite(ctx, "town", 117, 184, 430, 3, { flipX: true });
     drawSignpost(ctx, 604, 370, "小胖湖");
-    for (let x = 6; x < 650; x += 72) drawTree(ctx, x, 540 + (x % 3) * 3, x % 2, performance.now());
+    for (let x = 6; x < 650; x += 72) {
+      drawTree(ctx, x, 540 + (x % 3) * 3, x % 2, performance.now());
+      drawSprite(ctx, "town", stableSprite(x, [3, 4, 5, 8, 9, 10]), x - 4, 526, 4);
+    }
+    [[292, 30, 29], [317, 43, 2], [638, 64, 16], [650, 214, 93], [278, 500, 94]].forEach(([x, y, sprite]) => {
+      drawSprite(ctx, "town", sprite, x, y, 2.5);
+    });
     (estateStore.snapshot?.plots || []).forEach((plot) => drawPlot(ctx, plot));
     pixelRect(ctx, 625, 420, 75, 12, "#835431");
     pixelRect(ctx, 645, 397, 8, 38, "#67452f");
