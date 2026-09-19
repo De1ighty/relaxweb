@@ -31,7 +31,7 @@ function clearAttention() {
 }
 document.addEventListener("gameviewchange", () => {
   clearAttention();
-  if (!state.myRoom || state.myRoom.settlement || state.myRoom.to_act !== state.currentUser?.username) notifiedTurn = "";
+  if (!state.myRoom || state.myRoom.to_act !== state.currentUser?.username) notifiedTurn = "";
 });
 desktopPoker.addEventListener("change", () => {
   clearAttention();
@@ -490,8 +490,10 @@ registerGame("holdem", {
   blindLabel: "下一局盲注",
   waitingHint: "等待房主开局。中途退出会自动弃牌，已投入的筹码留在底池。",
   noNextHint: () =>
-    `有人筹码不足下一局大盲注（${formatCoins(state.myRoom.blind * 2)}），过半数投「解散」后房间将按当前筹码退还所有人。`,
+    `再来一局需每人再买入 ${formatCoins(state.myRoom.buy_in)}，余额不足者将离桌；`
+    + "过半数投「解散」则按当前筹码退还所有人并关闭房间。",
   renderTable: renderPokerTable,
+  renderHandResult: (result) => reviewNode(result),
   renderReview: (result) => {
     const wrap = document.createElement("div");
     const title = document.createElement("div");
