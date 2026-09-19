@@ -1,0 +1,125 @@
+:root {
+  --estate-ink: #332b29;
+  --estate-cream: #fff5d9;
+  --estate-green: #39784a;
+  --estate-gold: #e8a93d;
+  --estate-shadow: #6b4931;
+}
+
+body.estate-active { overflow: hidden; background: #233b35; }
+body.estate-active .game-header { display: none; }
+body.estate-active .game-workspace,
+body.estate-active .game-container { width: 100%; max-width: none; height: 100dvh; min-height: 0; margin: 0; padding: 0; }
+
+.estate-root {
+  position: relative; width: 100%; height: 100dvh; overflow: hidden;
+  color: var(--estate-ink); background: #76b956;
+  font-family: "Microsoft YaHei", system-ui, sans-serif;
+}
+.estate-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.estate-topbar {
+  position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top)); left: 50%;
+  transform: translateX(-50%); width: min(920px, calc(100% - 24px)); min-height: 64px;
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  background: linear-gradient(#fff8dc, #eed39a); border: 4px solid #714b31;
+  box-shadow: 0 5px 0 #382b29, 0 10px 24px #1d312844; border-radius: 10px;
+}
+.estate-back, .estate-button {
+  border: 2px solid #60422f; border-radius: 7px; color: #fff8dd; background: #558650;
+  box-shadow: inset 0 -3px #315b3c, 0 2px #473428; font-weight: 800; cursor: pointer;
+  padding: 10px 13px; transition: transform .1s, filter .1s;
+}
+.estate-back:hover, .estate-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.estate-button:disabled { cursor: not-allowed; filter: grayscale(.65); opacity: .55; transform: none; }
+.estate-brand { margin-right: auto; display: grid; line-height: 1; }
+.estate-brand span { font-family: Georgia, "Microsoft YaHei", serif; font-weight: 900; font-size: 21px; color: #74462c; }
+.estate-brand small { margin-top: 7px; color: #91734d; letter-spacing: 3px; }
+.estate-hud-item { min-width: 88px; display: grid; padding: 5px 10px; border-left: 2px dashed #b79760; }
+.estate-hud-item small { color: #806c4f; font-weight: 700; }
+.estate-hud-item b { color: #704526; font-size: 16px; }
+.estate-level { width: 105px; }
+.estate-level b { font-size: 13px; }
+.estate-level > span { display: block; height: 9px; margin-top: 5px; overflow: hidden; border: 2px solid #5f4632; border-radius: 6px; background: #bca879; }
+.estate-xp-fill { display: block; width: 0; height: 100%; background: #68ad53; transition: width .25s; }
+.estate-loading {
+  position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 12px 18px; color: #fff6d4; background: #3c654ee6; border: 3px solid #f2d392; border-radius: 8px; font-weight: 800;
+}
+.estate-interact-hint {
+  position: absolute; z-index: 4; bottom: 32px; left: 50%; transform: translateX(-50%);
+  padding: 8px 14px; color: #fff8db; background: #2b382eea; border: 2px solid #e9d291;
+  border-radius: 8px; font-weight: 800; pointer-events: none;
+}
+.estate-interact-hint kbd { display: inline-grid; place-items: center; min-width: 25px; height: 25px; margin-right: 8px; color: #412f23; background: #fff0bb; border: 2px solid #8e6a40; border-radius: 5px; }
+.estate-help { position: absolute; z-index: 3; left: 18px; bottom: 16px; padding: 7px 10px; color: #fff8db; background: #263b31bb; border-radius: 5px; font-size: 12px; }
+.estate-stick, .estate-action { display: none; }
+
+.estate-sheet {
+  position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; padding: 88px 16px 20px;
+  background: #1e292555; backdrop-filter: blur(2px);
+}
+.estate-sheet[hidden] { display: none; }
+.estate-sheet > section {
+  width: min(600px, 100%); max-height: min(680px, 100%); display: flex; flex-direction: column;
+  background: #fff4d2; border: 5px solid #6f4b31; border-radius: 12px;
+  box-shadow: 0 7px 0 #352823, 0 18px 50px #17251d88; overflow: hidden;
+}
+.estate-sheet header { display: flex; align-items: center; padding: 13px 16px; background: linear-gradient(90deg, #e9b95e, #f3d88d); border-bottom: 3px solid #825c36; }
+.estate-sheet h2 { margin: 0; flex: 1; font-size: 21px; color: #5c3c29; }
+.estate-sheet-close { width: 36px; height: 36px; border: 2px solid #67432e; border-radius: 7px; background: #a9583f; color: white; font-size: 24px; line-height: 1; cursor: pointer; }
+.estate-sheet-body { padding: 15px; overflow: auto; overscroll-behavior: contain; }
+.estate-sheet-note { margin: 0 0 13px; padding: 10px 12px; color: #725d43; background: #f1dfad; border-left: 4px solid #c28b3d; border-radius: 4px; }
+.estate-item-card, .estate-inventory-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 11px;
+  background: #fff9e9; border: 2px solid #c5a56d; border-radius: 8px; box-shadow: inset 0 -3px #ead6a8;
+}
+.estate-item-icon { width: 46px; font-size: 33px; text-align: center; filter: drop-shadow(0 2px #a78055); }
+.estate-item-info { display: grid; flex: 1; gap: 5px; }
+.estate-item-info b { font-size: 17px; color: #5a3f2c; }
+.estate-item-info span, .estate-crop-hero small { color: #8b7558; font-size: 12px; }
+.estate-inventory-row > div { flex: 1; }
+.estate-tag { padding: 6px 9px; color: #65724d; background: #e2e4b1; border-radius: 5px; font-size: 12px; font-weight: 800; }
+.estate-sheet-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.estate-button-gold { background: #d99136; box-shadow: inset 0 -3px #a85828, 0 2px #473428; }
+.estate-crop-hero { display: flex; align-items: center; gap: 18px; margin-bottom: 15px; padding: 18px; background: #f3e0a8; border: 3px solid #b98842; border-radius: 9px; }
+.estate-crop-hero > span { font-size: 52px; }
+.estate-crop-hero > div { display: grid; gap: 6px; }
+.estate-crop-hero b { font-size: 22px; color: #604129; }
+
+@media (max-width: 720px), (pointer: coarse) {
+  .estate-topbar { top: max(6px, env(safe-area-inset-top)); width: calc(100% - 12px); min-height: 54px; gap: 6px; padding: 5px 7px; border-width: 3px; }
+  .estate-back { padding: 8px; font-size: 0; }
+  .estate-back::after { content: "←"; font-size: 20px; }
+  .estate-brand span { font-size: 16px; }
+  .estate-brand small { display: none; }
+  .estate-hud-item { min-width: 54px; padding: 3px 5px; }
+  .estate-hud-item small { font-size: 9px; }
+  .estate-hud-item b { font-size: 12px; }
+  .estate-level { width: 58px; }
+  .estate-help { display: none; }
+  .estate-interact-hint { bottom: 116px; font-size: 12px; }
+  .estate-interact-hint kbd { display: none; }
+  .estate-stick {
+    display: block; position: absolute; z-index: 6; left: max(22px, env(safe-area-inset-left)); bottom: max(22px, env(safe-area-inset-bottom));
+    width: 96px; height: 96px; border: 3px solid #fff1b999; border-radius: 50%; background: #29423899;
+    box-shadow: inset 0 0 0 8px #ffffff12; touch-action: none;
+  }
+  .estate-stick-nub { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; transform: translate(-50%, -50%); border: 3px solid #6a4b31; border-radius: 50%; background: #efd48cdd; }
+  .estate-action {
+    display: grid; place-items: center; position: absolute; z-index: 6; right: max(25px, env(safe-area-inset-right)); bottom: max(29px, env(safe-area-inset-bottom));
+    width: 78px; height: 78px; padding: 0; color: #fff7d7; background: #d7843fdd; border: 4px solid #673f2b; border-radius: 50%; box-shadow: inset 0 -7px #a34b31, 0 5px #382d27; touch-action: none;
+  }
+  .estate-action span { font-size: 24px; line-height: 1; }
+  .estate-action small { font-weight: 900; }
+  .estate-sheet { padding: 68px 8px 8px; align-items: end; }
+  .estate-sheet > section { max-height: 74dvh; border-width: 4px; }
+  .estate-item-card { align-items: center; gap: 7px; padding: 8px; }
+  .estate-item-icon { width: 34px; font-size: 26px; }
+  .estate-item-card .estate-button { padding: 8px 7px; font-size: 11px; }
+}
+
+@media (max-width: 430px) {
+  .estate-brand { display: none; }
+  .estate-topbar { justify-content: space-between; }
+  .estate-level { width: 52px; }
+}

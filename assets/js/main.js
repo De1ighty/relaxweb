@@ -18,6 +18,7 @@ import "./games/holdem.js";
 import "./games/uno.js";
 import "./games/guandan.js";
 import "./games/mahjong.js";
+import "./estate/view.js";
 
 elements.loginButton.addEventListener("click", openLogin);
 elements.authSubmit.addEventListener("click", submitAuth);
