@@ -115,24 +115,46 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
 .fishing-reel b { font-size: 24px; }
 .fishing-reel.held { transform: translateY(5px); box-shadow: inset 0 -4px #9b4638, 0 2px #302725; filter: brightness(1.15); }
 
-.mining-game { background: radial-gradient(circle at 50% 10%, #6c5c54, #211f29 65%); }
-.mine-cave-glow { position: absolute; inset: 0; background: radial-gradient(circle at 12% 50%, #f3a44d44, transparent 23%), radial-gradient(circle at 88% 55%, #f3a44d33, transparent 20%); animation: cave-glow 2s infinite alternate; }
+.mining-game {
+  --mine-rock: #59555e; --mine-rock-dark: #292832; --mine-rock-light: #817b80; --mine-glow: #e8a052;
+  background-color: #211f29;
+  background-image: radial-gradient(circle at 15% 30%, #76706f55 0 2px, transparent 3px), radial-gradient(circle at 75% 68%, #0d111866 0 4px, transparent 5px), repeating-linear-gradient(135deg, transparent 0 48px, #ffffff08 49px 51px, transparent 52px 94px), radial-gradient(circle at 50% 8%, #71625a, #211f29 66%);
+  background-size: 83px 71px, 117px 101px, auto, auto;
+}
+.mine-depth-1 { --mine-rock: #586158; --mine-rock-dark: #29342d; --mine-rock-light: #7d8874; --mine-glow: #d9a35a; }
+.mine-depth-2 { --mine-rock: #685348; --mine-rock-dark: #342826; --mine-rock-light: #95705b; --mine-glow: #e67d49; }
+.mine-depth-3 { --mine-rock: #504b68; --mine-rock-dark: #27243a; --mine-rock-light: #77719a; --mine-glow: #ad7cff; }
+.mine-cave-glow { position: absolute; inset: 0; background: radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--mine-glow) 28%, transparent), transparent 23%), radial-gradient(circle at 88% 55%, color-mix(in srgb, var(--mine-glow) 22%, transparent), transparent 20%); animation: cave-glow 2s infinite alternate; }
+.mine-timbers { position: absolute; z-index: 1; inset: 72px 7% 5%; pointer-events: none; border-left: 20px solid #4a3027; border-right: 20px solid #4a3027; box-shadow: inset 7px 0 #815238, inset -7px 0 #815238; }
+.mine-timbers::before, .mine-timbers::after { content: ""; position: absolute; left: -27px; right: -27px; height: 22px; background: #53352a; border: 4px solid #2c2424; box-shadow: inset 0 6px #895b3b, 0 8px 20px #080a0d88; }
+.mine-timbers::before { top: 3%; }.mine-timbers::after { bottom: 2%; }
+.mine-timbers i { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #b68b55; box-shadow: inset 2px 2px #ead083; }
+.mine-timbers i:nth-child(1) { left: -20px; top: 5%; }.mine-timbers i:nth-child(2) { right: -20px; top: 5%; }.mine-timbers i:nth-child(3) { left: -20px; bottom: 3%; }
 .mine-status { position: absolute; z-index: 3; left: 50%; top: 96px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); display: flex; justify-content: space-between; padding: 9px 13px; color: #f9e5b5; background: #25232dcc; border: 2px solid #a28a6b; border-radius: 7px; }
-.mine-grid { position: absolute; z-index: 2; left: 50%; top: 55%; transform: translate(-50%, -50%); display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; width: min(520px, calc(100vw - 28px)); aspect-ratio: 1; padding: 12px; background: #302d36; border: 5px solid #75604e; border-radius: 12px; box-shadow: inset 0 0 30px #12121a, 0 12px 40px #0008; }
-.mine-cell { position: relative; overflow: hidden; color: #ffdc80; background: linear-gradient(135deg, #5e5961, #3e3c48); border: 3px solid #292832; border-radius: 7px; box-shadow: inset 4px 4px #777079, inset -4px -4px #312f39; font-size: clamp(17px, 4vw, 32px); font-weight: 900; cursor: pointer; }
-.mine-cell::before, .mine-cell::after { content: ""; position: absolute; height: 3px; background: #27283188; transform: rotate(28deg); }
+.mine-grid { position: absolute; z-index: 2; left: 50%; top: 55%; transform: translate(-50%, -50%); display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; width: min(520px, calc(100vw - 28px)); aspect-ratio: 1; padding: 12px; background: #26242c; border: 5px solid #6d5140; border-radius: 12px; box-shadow: inset 0 0 0 4px #17171d, inset 0 0 36px #08090d, 0 12px 40px #000a; }
+.mine-cell { position: relative; overflow: hidden; color: #ffdc80; background: linear-gradient(145deg, var(--mine-rock-light), var(--mine-rock) 43%, var(--mine-rock-dark)); border: 3px solid #211f27; border-radius: 9px 5px 8px 4px; box-shadow: inset 4px 4px #ffffff17, inset -5px -5px #11131a55, 0 3px 0 #15151b; font-size: clamp(17px, 4vw, 32px); font-weight: 900; cursor: pointer; text-shadow: 0 2px #17131b; }
+.mine-cell::before, .mine-cell::after { content: ""; position: absolute; height: 3px; background: #1e202788; transform: rotate(28deg); }
 .mine-cell::before { width: 52%; left: 8%; top: 30%; }.mine-cell::after { width: 38%; right: 9%; bottom: 28%; transform: rotate(-35deg); }
-.mine-cell.vein-0 { box-shadow: inset 4px 4px #81726e, inset -4px -4px #312f39, 0 0 9px #d39b5b33; }
-.mine-cell.vein-1::after { background: #a8735d99; }
+.mine-cell i { position: absolute; width: 5px; height: 4px; transform: rotate(35deg); background: color-mix(in srgb, var(--mine-glow) 65%, #8f8b83); box-shadow: 0 0 5px color-mix(in srgb, var(--mine-glow) 45%, transparent); }
+.mine-cell i:nth-child(1) { left: 17%; top: 18%; }.mine-cell i:nth-child(2) { right: 20%; bottom: 18%; width: 3px; }.mine-cell i:nth-child(3) { right: 12%; top: 38%; width: 2px; height: 6px; }
+.mine-cell.vein-0 { box-shadow: inset 4px 4px #ffffff1f, inset -5px -5px #11131a66, 0 0 10px color-mix(in srgb, var(--mine-glow) 30%, transparent); }
+.mine-cell.vein-1::after { background: color-mix(in srgb, var(--mine-glow) 45%, #312d35); }
 .mine-cell.striking { animation: rock-shake .16s infinite; }
 .mine-cell.revealed { background: #252630; box-shadow: inset 0 0 14px #11131b; animation: rock-open .3s both; }
 .mine-cell.outcome-extra { color: #ffd767; background: #4c694f; }
 .mine-cell.outcome-amethyst, .mine-cell.outcome-star_gem { color: #e7b5ff; background: #4c3f5f; }
+.mine-cell.outcome-bomb { color: #ffcf72; background: #5d2926; box-shadow: inset 0 0 20px #1b1114, 0 0 22px #ff7b32; }
+.mine-blast { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; min-width: min(340px, calc(100% - 30px)); padding: 28px; color: #fff1c2; background: #3b2423ed; border: 5px solid #ffb24f; border-radius: 50% 42% 48% 44%; box-shadow: 0 0 0 10px #e24f3033, 0 0 70px #ff702c; text-align: center; animation: blast-pop .55s both; }
+.mine-blast[hidden] { display: none; }.mine-blast b { font-size: 42px; color: #ffd262; text-shadow: 3px 4px #9d3028; }.mine-blast span { font-weight: 900; }
+.mining-game.mine-explosion { animation: cave-shake .45s both; }.mining-game.mine-explosion::before { content: ""; position: absolute; z-index: 7; inset: 0; pointer-events: none; background: #fff2b8; animation: explosion-flash .6s both; }
 
 @keyframes tension-pulse { to { filter: brightness(1.7); } }
 @keyframes cave-glow { to { opacity: .7; } }
 @keyframes rock-shake { 50% { transform: translateX(2px); } }
 @keyframes rock-open { from { transform: scale(.9); filter: brightness(2); } }
+@keyframes blast-pop { from { transform: translate(-50%, -50%) scale(.25) rotate(-8deg); opacity: 0; } 70% { transform: translate(-50%, -50%) scale(1.08) rotate(2deg); } }
+@keyframes explosion-flash { 0% { opacity: 1; } 30% { opacity: .85; } 100% { opacity: 0; } }
+@keyframes cave-shake { 20% { transform: translate(5px, -3px); } 40% { transform: translate(-6px, 4px); } 60% { transform: translate(4px, 2px); } 80% { transform: translate(-2px, -2px); } }
 
 @media (max-width: 720px), (pointer: coarse) {
   .estate-topbar { top: max(6px, env(safe-area-inset-top)); width: calc(100% - 12px); min-height: 54px; gap: 6px; padding: 5px 7px; border-width: 3px; }

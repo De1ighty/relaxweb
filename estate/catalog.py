@@ -160,9 +160,12 @@ MINERALS = {
 }
 
 MINING_LEVELS = {
-    1: {"name": "青苔浅层", "unlock_level": 1, "weights": [42, 18, 20, 7, 2, 0]},
-    2: {"name": "赤铜中层", "unlock_level": 3, "weights": [28, 16, 25, 15, 5, 1]},
-    3: {"name": "星晶深层", "unlock_level": 6, "weights": [18, 12, 20, 24, 10, 3]},
+    1: {"name": "青苔浅层", "unlock_level": 1, "bombs": 1, "risk": "低危",
+        "weights": [42, 18, 20, 7, 2, 0]},
+    2: {"name": "赤铜中层", "unlock_level": 3, "bombs": 2, "risk": "中危",
+        "weights": [28, 16, 25, 15, 5, 1]},
+    3: {"name": "星晶深层", "unlock_level": 6, "bombs": 3, "risk": "高危",
+        "weights": [18, 12, 20, 24, 10, 3]},
 }
 
 

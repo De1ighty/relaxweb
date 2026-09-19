@@ -157,7 +157,7 @@ export function createEstateUI(root, activities = {}) {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     show("小胖矿洞");
     const note = document.createElement("p"); note.className = "estate-sheet-note";
-    note.textContent = "每次下矿消耗一点矿镐耐久。敲击次数用尽后自动结算，也可以提前带着收获离开。";
+    note.textContent = "每次下矿消耗一点矿镐耐久。越深奖励越好、炸弹越多；挖到炸弹会立刻结束，但已获得的矿物可以保留。";
     sheetBody.append(note);
     const pickaxe = toolPanel("pickaxe", "⛏️");
     if (snapshot.mining_run) {
@@ -170,7 +170,7 @@ export function createEstateUI(root, activities = {}) {
       const unlocked = pickaxe && pickaxe.level >= Number(level) && snapshot.profile.level >= mine.unlock_level;
       const row = document.createElement("div"); row.className = "estate-item-card";
       const info = document.createElement("div"); info.className = "estate-item-info";
-      info.innerHTML = `<b>第${level}层 · ${mine.name}</b><span>庄园 ${mine.unlock_level} 级 · 矿镐 Lv.${level}</span>`; row.append(info);
+      info.innerHTML = `<b>第${level}层 · ${mine.name}</b><span>${mine.risk} · ${mine.bombs}枚炸弹 · 庄园 ${mine.unlock_level} 级 · 矿镐 Lv.${level}</span>`; row.append(info);
       const enter = button(unlocked ? "进入矿层" : "尚未解锁", async () => {
         try { const run = await estateRequest("estate_start_mining", { mine_level: Number(level) }); closeSheet(); activities.mining?.(run); } catch { /* 弹层由协议统一显示 */ }
       }, "estate-button estate-button-gold");

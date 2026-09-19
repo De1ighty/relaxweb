@@ -252,10 +252,16 @@ def finish_fishing(conn, username, request_id, session_id, trace, now):
 def _make_board(seed, mine_level):
     rng = random.Random(seed)
     minerals = list(MINERALS)
-    weights = MINING_LEVELS[mine_level]["weights"]
+    rule = MINING_LEVELS[mine_level]
+    weights = rule["weights"]
     board = rng.choices(["empty", *minerals], weights=[24, *weights], k=25)
-    for index in rng.sample(range(25), 2):
+    extra_cells = rng.sample(range(25), 2)
+    for index in extra_cells:
         board[index] = "extra"
+    bomb_cells = rng.sample([index for index in range(25) if index not in extra_cells],
+                            rule["bombs"])
+    for index in bomb_cells:
+        board[index] = "bomb"
     return board
 
 
@@ -301,12 +307,13 @@ def start_mining(conn, username, request_id, mine_level, now):
                    {"mine_level": mine_level}, now, mutate)
 
 
-def _finish_run(conn, username, run_id, loot):
+def _finish_run(conn, username, run_id, loot, reason="completed"):
     for mineral_id, quantity in loot.items():
         _change_inventory(conn, username, mineral_item(mineral_id), quantity)
     conn.execute("UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-12) "
                  "WHERE username=?", (username,))
-    result = {"action": "finish_mining", "run_id": run_id, "loot": loot, "finished": True}
+    result = {"action": "finish_mining", "run_id": run_id, "loot": loot,
+              "finished": True, "reason": reason}
     conn.execute("UPDATE estate_mining_runs SET status='finished',result_json=? WHERE run_id=?",
                  (json.dumps(result, ensure_ascii=False), run_id))
     return result
@@ -339,7 +346,10 @@ def mine_cell(conn, username, request_id, run_id, cell, now):
         revealed.append(cell)
         outcome = board[cell]
         strikes = row[3] - 1
-        if outcome == "extra":
+        exploded = outcome == "bomb"
+        if exploded:
+            strikes = 0
+        elif outcome == "extra":
             strikes += 2
         elif outcome in MINERALS:
             loot[outcome] = loot.get(outcome, 0) + 1
@@ -349,9 +359,11 @@ def mine_cell(conn, username, request_id, run_id, cell, now):
         )
         payload = {"action": "mine_cell", "run_id": run_id, "cell": cell,
                    "outcome": outcome, "strikes_left": strikes, "loot": loot,
-                   "revealed": revealed, "finished": strikes <= 0}
-        if strikes <= 0:
-            payload["result"] = _finish_run(conn, username, run_id, loot)
+                   "revealed": revealed, "finished": exploded or strikes <= 0,
+                   "exploded": exploded}
+        if payload["finished"]:
+            payload["result"] = _finish_run(
+                conn, username, run_id, loot, "bomb" if exploded else "exhausted")
         return payload
 
     return _action(conn, username, request_id, "mine_cell",
@@ -370,6 +382,6 @@ def finish_mining(conn, username, request_id, run_id, now):
             raise EstateError("run_missing", "矿场记录不存在")
         if row[1] != "active":
             return {**json.loads(row[2]), "session_replayed": True}
-        return _finish_run(conn, username, run_id, json.loads(row[0]))
+        return _finish_run(conn, username, run_id, json.loads(row[0]), "left")
 
     return _action(conn, username, request_id, "finish_mining", {"run_id": run_id}, now, mutate)

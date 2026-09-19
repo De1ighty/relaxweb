@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from estate.activities import (
-    _pick_fishing_catch, buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
+    _make_board, _pick_fishing_catch, buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
     start_fishing, start_mining, upgrade_tool,
 )
 from estate.catalog import FISHING_TREASURES, bait_item
@@ -149,6 +149,27 @@ class ActivityTests(unittest.TestCase):
         self.assertEqual(state["tools"]["pickaxe"]["durability"], 19)
         with self.assertRaises(EstateError):
             self.call(mine_cell, "alice", "mine-cell-002", started["run_id"], 1, NOW)
+
+    def test_deeper_mines_have_more_bombs(self):
+        for level, expected in ((1, 1), (2, 2), (3, 3)):
+            board = _make_board(1200 + level, level)
+            self.assertEqual(board.count("bomb"), expected)
+            self.assertEqual(len(board), 25)
+
+    def test_bomb_ends_run_and_keeps_existing_loot(self):
+        self.call(buy_tool, "alice", "buy-pick-bomb", "pickaxe", NOW, adjust_coins)
+        board = ["copper", "bomb"] + ["empty"] * 23
+        with patch("estate.activities._make_board", return_value=board):
+            started = self.call(start_mining, "alice", "mine-start-bomb", 1, NOW)
+        first = self.call(mine_cell, "alice", "mine-safe-bomb", started["run_id"], 0, NOW)
+        self.assertEqual(first["loot"], {"copper": 1})
+        exploded = self.call(mine_cell, "alice", "mine-hit-bomb", started["run_id"], 1, NOW)
+        self.assertEqual(exploded["outcome"], "bomb")
+        self.assertTrue(exploded["finished"])
+        self.assertTrue(exploded["exploded"])
+        self.assertEqual(exploded["result"]["loot"], {"copper": 1})
+        self.assertEqual(exploded["result"]["reason"], "bomb")
+        self.assertEqual(self.call(estate_state, "alice", NOW)["profile"]["warehouse_reserved"], 0)
 
 
 if __name__ == "__main__":

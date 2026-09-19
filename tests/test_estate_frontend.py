@@ -77,6 +77,9 @@ class EstateFrontendTests(unittest.TestCase):
             self.assertIn(action, ui)
         self.assertIn("estate_finish_fishing", self.read("assets/js/estate/fishing.js"))
         self.assertIn("estate_mine_cell", self.read("assets/js/estate/mining.js"))
+        mining = self.read("assets/js/estate/mining.js")
+        self.assertIn('bomb: "💣"', mining)
+        self.assertIn("mine-explosion", mining)
 
     def test_all_interactive_places_use_xiaopang_branding(self):
         combined = "\n".join([
