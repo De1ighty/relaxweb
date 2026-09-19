@@ -118,18 +118,64 @@ export function drawWater(ctx, x, y, w, h, tick) {
 
 export function drawCharacter(ctx, player, tick) {
   const moving = player.walking > 0 && tick - (player.lastMove || 0) < 120;
-  const step = moving && Math.floor(player.walking) % 2 ? 2 : 0;
-  pixelRect(ctx, player.x - 10, player.y + 12, 20, 6, PIXEL.shadow);
-  pixelRect(ctx, player.x - 8, player.y - 15, 16, 13, "#efad79");
-  pixelRect(ctx, player.x - 10, player.y - 20, 20, 8, "#6a392c");
-  pixelRect(ctx, player.x - 9, player.y - 13, 4, 6, "#713b2d");
-  pixelRect(ctx, player.x + 5, player.y - 11, 2, 2, "#342c31");
-  pixelRect(ctx, player.x - 10, player.y - 2, 20, 15, "#3f74ad");
-  pixelRect(ctx, player.x - 6, player.y + 1, 12, 4, "#78a9d1");
-  pixelRect(ctx, player.x - 9, player.y + 12, 7, 9 - step, "#4d3b43");
-  pixelRect(ctx, player.x + 2, player.y + 12, 7, 7 + step, "#4d3b43");
-  pixelRect(ctx, player.x - 10, player.y + 18 - step, 8, 3, "#2f3137");
-  pixelRect(ctx, player.x + 2, player.y + 18 + step, 8, 3, "#2f3137");
+  const phase = moving ? Math.floor(player.walking) % 2 : 0;
+  const bob = moving && Math.floor(player.walking * 2) % 2 ? 1 : 0;
+  const direction = player.direction || (player.facing < 0 ? "left" : "right");
+  const x = Math.round(player.x); const y = Math.round(player.y - bob);
+  const skin = "#efad79"; const skinLight = "#ffd09a"; const skinShade = "#c97857";
+  const hair = "#633829"; const hairDark = "#3d2b29";
+  const shirt = "#3976ad"; const shirtLight = "#69a8d0"; const shirtDark = "#285278";
+  const trousers = "#4b4050"; const boot = "#292d35";
+  const hat = "#d99b45"; const hatLight = "#f2c66d"; const hatDark = "#8b5433";
+
+  pixelRect(ctx, x - 12, y + 14, 24, 6, PIXEL.shadow);
+  // Feet and legs move independently so the tiny sprite still reads clearly in motion.
+  const leftStep = phase ? -2 : 1; const rightStep = phase ? 1 : -2;
+  pixelRect(ctx, x - 9, y + 7, 7, 11 + leftStep, trousers);
+  pixelRect(ctx, x + 2, y + 7, 7, 11 + rightStep, trousers);
+  pixelRect(ctx, x - 10, y + 16 + leftStep, 9, 4, boot);
+  pixelRect(ctx, x + 1, y + 16 + rightStep, 9, 4, boot);
+
+  if (direction === "up") {
+    pixelRect(ctx, x - 12, y - 5, 24, 17, shirtDark);
+    pixelRect(ctx, x - 9, y - 3, 18, 15, shirt);
+    pixelRect(ctx, x - 7, y, 14, 10, "#9b623a");
+    pixelRect(ctx, x - 5, y + 2, 10, 5, "#c08349");
+    pixelRect(ctx, x - 11, y - 18, 22, 15, hair);
+    pixelRect(ctx, x - 8, y - 16, 16, 11, skinShade);
+    pixelRect(ctx, x - 9, y - 19, 18, 8, hair);
+  } else if (direction === "down") {
+    pixelRect(ctx, x - 12, y - 5, 24, 17, shirtDark);
+    pixelRect(ctx, x - 9, y - 4, 18, 15, shirt);
+    pixelRect(ctx, x - 6, y - 2, 12, 4, shirtLight);
+    pixelRect(ctx, x - 12, y - 3 + phase, 4, 11, skinShade);
+    pixelRect(ctx, x + 8, y - 3 - phase, 4, 11, skin);
+    pixelRect(ctx, x - 9, y - 19, 18, 16, hair);
+    pixelRect(ctx, x - 7, y - 17, 14, 13, skin);
+    pixelRect(ctx, x - 5, y - 15, 10, 4, skinLight);
+    pixelRect(ctx, x - 5, y - 10, 2, 2, hairDark);
+    pixelRect(ctx, x + 3, y - 10, 2, 2, hairDark);
+    pixelRect(ctx, x - 2, y - 6, 5, 2, skinShade);
+  } else {
+    const side = direction === "left" ? -1 : 1;
+    const block = (dx, dy, w, h, color) => pixelRect(ctx, x + (side < 0 ? -dx - w : dx), y + dy, w, h, color);
+    block(-10, -5, 20, 17, shirtDark);
+    block(-8, -4, 16, 15, shirt);
+    block(4, -2, 7, 11, skin);
+    block(-8, -19, 17, 16, hair);
+    block(-6, -17, 15, 13, skin);
+    block(7, -12, 4, 5, skinLight);
+    block(5, -11, 2, 2, hairDark);
+    block(-8, -18, 5, 12, hair);
+    block(-11, 0, 5, 10, "#9b623a");
+  }
+
+  // A warm straw hat ties the character to the farm and gives a readable silhouette.
+  pixelRect(ctx, x - 13, y - 23, 26, 5, hatDark);
+  pixelRect(ctx, x - 10, y - 28, 20, 7, hat);
+  pixelRect(ctx, x - 7, y - 30, 14, 4, hatLight);
+  pixelRect(ctx, x - 8, y - 23, 16, 2, "#b55c3f");
+  pixelRect(ctx, x - 6, y - 28, 8, 2, "#ffe29a");
 }
 
 export function drawGroundDetails(ctx, width, height, tick) {

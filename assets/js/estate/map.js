@@ -25,6 +25,20 @@ const ZONES = [
   { kind: "fishing", label: "小胖湖钓场", x: 650, y: 430 },
   { kind: "mining", label: "小胖矿洞", x: 140, y: 500 },
 ];
+
+function drawPathSurface(ctx, x, y, w, h, orientation) {
+  pixelRect(ctx, x, y, w, h, "#b28b50");
+  pixelRect(ctx, x + 3, y + 3, w - 6, h - 6, "#dbbd75");
+  pixelRect(ctx, x + 6, y + 6, w - 12, h - 12, "#e3c985");
+  const length = orientation === "horizontal" ? w : h;
+  for (let offset = 12; offset < length - 8; offset += 28) {
+    const px = orientation === "horizontal" ? x + offset : x + 12 + (offset % 3) * 5;
+    const py = orientation === "horizontal" ? y + 11 + (offset % 4) * 5 : y + offset;
+    pixelRect(ctx, px, py, 7, 3, "#c19d5c");
+    pixelRect(ctx, px + 9, py + 8, 4, 3, "#f0d99c");
+  }
+}
+
 function drawGround(ctx, tick) {
   drawGroundDetails(ctx, WORLD.width, WORLD.height, tick);
   pixelRect(ctx, 286, 72, 346, 410, "#cdb16a");
@@ -33,22 +47,11 @@ function drawGround(ctx, tick) {
     pixelRect(ctx, 306 + (y % 3) * 4, y, 16, 4, "#c6a761");
     pixelRect(ctx, 586 - (y % 4) * 5, y + 8, 20, 3, "#f1dc98");
   }
-  pixelRect(ctx, 0, 500, 680, 42, "#dbbd75");
-  pixelRect(ctx, 250, 450, 46, 92, "#dbbd75");
-  for (let x = 0; x < 680; x += 32) pixelRect(ctx, x, 518, 18, 4, "#c39e59");
+  drawPathSurface(ctx, 0, 500, 680, 42, "horizontal");
+  drawPathSurface(ctx, 250, 450, 46, 92, "vertical");
   drawWater(ctx, 690, 310, 270, 290, tick);
   for (let y = 316; y < 585; y += 30) {
     pixelRect(ctx, 678, y, 5, 17, "#5c9a49"); pixelRect(ctx, 684, y + 4, 3, 15, "#80b955");
-  }
-  // Tiny Town tiles add crisp, hand-drawn texture while the procedural layer remains
-  // as a resilient fallback during loading or when an asset is unavailable.
-  for (let x = 0; x < WORLD.width; x += 48) {
-    drawSprite(ctx, "town", 12, x, 492, 3);
-    drawSprite(ctx, "town", 24, x, 540, 3);
-  }
-  for (let y = 72; y < 480; y += 48) {
-    drawSprite(ctx, "town", 13, 282, y, 3);
-    drawSprite(ctx, "town", 25, 618, y, 3);
   }
 }
 
@@ -109,7 +112,7 @@ function collides(x, y) {
 
 export function createEstateMap(canvas, input, onInteract, onTarget) {
   const ctx = canvas.getContext("2d");
-  const player = { x: 275, y: 440, facing: 1, walking: 0, lastMove: 0 };
+  const player = { x: 275, y: 440, facing: 1, direction: "down", walking: 0, lastMove: 0 };
   let frame = 0;
   let last = performance.now();
   let target = null;
@@ -173,7 +176,12 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
     const dy = input.vector.y / length * 125 * dt;
     if (dx && !collides(player.x + dx, player.y)) player.x += dx;
     if (dy && !collides(player.x, player.y + dy)) player.y += dy;
-    if (dx || dy) { player.walking += dt * 12; player.lastMove = now; if (dx) player.facing = Math.sign(dx); }
+    if (dx || dy) {
+      player.walking += dt * 12; player.lastMove = now;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        player.facing = Math.sign(dx); player.direction = dx < 0 ? "left" : "right";
+      } else player.direction = dy < 0 ? "up" : "down";
+    }
     const nextTarget = nearTarget(player, estateStore.snapshot);
     if (nextTarget?.kind !== target?.kind || nextTarget?.plot?.index !== target?.plot?.index) {
       target = nextTarget; onTarget(target);

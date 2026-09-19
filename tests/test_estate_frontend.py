@@ -55,9 +55,16 @@ class EstateFrontendTests(unittest.TestCase):
 
     def test_map_and_economy_actions_are_wired(self):
         world = self.read("assets/js/estate/map.js")
+        art = self.read("assets/js/estate/art.js")
         ui = self.read("assets/js/estate/ui.js")
         self.assertIn("requestAnimationFrame", world)
         self.assertIn("collides", world)
+        self.assertIn("drawPathSurface", world)
+        self.assertNotIn('drawSprite(ctx, "town", 12', world)
+        self.assertNotIn('drawSprite(ctx, "town", 24', world)
+        self.assertIn('direction: "down"', world)
+        for direction in ('"up"', '"down"', '"left"', '"right"'):
+            self.assertIn(direction, art)
         for action in ("estate_buy", "estate_plant", "estate_harvest", "estate_sell", "estate_sell_all"):
             self.assertIn(action, ui)
         for action in ("estate_buy_tool", "estate_start_fishing", "estate_start_mining"):
