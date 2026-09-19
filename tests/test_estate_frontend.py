@@ -45,9 +45,13 @@ class EstateFrontendTests(unittest.TestCase):
 
     def test_desktop_and_mobile_controls_are_present(self):
         source = self.read("assets/js/estate/input.js")
+        world = self.read("assets/js/estate/map.js")
         style = self.read("assets/css/estate.css")
-        for key in ("ArrowRight", "ArrowLeft", "KeyW", "KeyA", "KeyE", "Space"):
+        for key in ("ArrowRight", "ArrowLeft", "KeyW", "KeyA", "KeyE", "Space", "ShiftLeft"):
             self.assertIn(key, source)
+        self.assertIn("sprinting", source)
+        self.assertIn("input.sprinting", world)
+        self.assertIn("190", world)
         for event in ("pointerdown", "pointermove", "pointerup", "pointercancel"):
             self.assertIn(event, source)
         self.assertIn("touch-action: none", style)
@@ -63,6 +67,8 @@ class EstateFrontendTests(unittest.TestCase):
         self.assertNotIn('drawSprite(ctx, "town", 12', world)
         self.assertNotIn('drawSprite(ctx, "town", 24', world)
         self.assertIn('direction: "down"', world)
+        self.assertIn("drawPlotFrame", world)
+        self.assertNotIn('stableSprite(x, [3, 4, 5, 8, 9, 10])', world)
         for direction in ('"up"', '"down"', '"left"', '"right"'):
             self.assertIn(direction, art)
         for action in ("estate_buy", "estate_plant", "estate_harvest", "estate_sell", "estate_sell_all"):

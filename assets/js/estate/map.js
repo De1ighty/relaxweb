@@ -55,18 +55,46 @@ function drawGround(ctx, tick) {
   }
 }
 
+function drawPlotFrame(ctx, x, y, plot) {
+  const locked = plot.locked;
+  const upgraded = Number(plot.land_level) > 1;
+  pixelRect(ctx, x + 3, y + 5, 82, 69, "#5e432f55");
+  pixelRect(ctx, x, y, 82, 70, locked ? "#6e705e" : "#67402b");
+  pixelRect(ctx, x + 4, y + 4, 74, 62, locked ? "#99977a" : upgraded ? "#a65d37" : "#8d5132");
+  pixelRect(ctx, x + 6, y + 6, 70, 4, locked ? "#b7b392" : "#c77a47");
+  pixelRect(ctx, x + 6, y + 61, 70, 3, locked ? "#7f806c" : "#623a28");
+  for (let row = 0; row < 3; row += 1) {
+    const furrow = y + 16 + row * 17;
+    pixelRect(ctx, x + 8, furrow, 66, 4, locked ? "#7e806d" : "#633b29");
+    pixelRect(ctx, x + 10, furrow + 4, 62, 2, locked ? "#aaa78a" : "#b96d40");
+  }
+  for (const [dx, dy] of [[11, 12], [69, 27], [24, 58], [53, 43]]) {
+    pixelRect(ctx, x + dx, y + dy, 3, 2, locked ? "#c2bea0" : "#d18a52");
+  }
+  for (const [dx, dy] of [[-2, -2], [74, -2], [-2, 62], [74, 62]]) {
+    pixelRect(ctx, x + dx, y + dy, 10, 10, "#70462e");
+    pixelRect(ctx, x + dx + 2, y + dy + 2, 6, 5, upgraded ? "#ddb65b" : "#a66c3e");
+  }
+}
+
 function drawPlot(ctx, plot) {
   const [x, y] = PLOT_POSITIONS[plot.index];
   const locked = plot.locked;
-  pixelRect(ctx, x, y, 82, 70, locked ? "#9a966e" : "#75472d");
-  pixelRect(ctx, x + 4, y + 4, 74, 62, locked ? "#aaa780" : plot.land_level > 1 ? "#a55b35" : "#8c5232");
-  for (let row = 0; row < 3; row += 1) pixelRect(ctx, x + 8, y + 13 + row * 18, 66, 3, locked ? "#8b896b" : "#653c29");
+  drawPlotFrame(ctx, x, y, plot);
   if (locked) {
-    pixelRect(ctx, x + 31, y + 22, 20, 24, "#5d625c");
-    pixelRect(ctx, x + 35, y + 15, 12, 12, "#d6c588");
+    pixelRect(ctx, x + 29, y + 26, 24, 22, "#505854");
+    pixelRect(ctx, x + 33, y + 29, 16, 16, "#6b7470");
+    pixelRect(ctx, x + 34, y + 17, 14, 15, "#d3c88c");
+    pixelRect(ctx, x + 38, y + 20, 6, 10, "#777765");
+    pixelRect(ctx, x + 39, y + 35, 4, 7, "#e9d999");
     return;
   }
-  if (!plot.crop_id) return;
+  if (!plot.crop_id) {
+    pixelRect(ctx, x + 18, y + 28, 3, 6, "#4d8848");
+    pixelRect(ctx, x + 15, y + 30, 5, 3, "#62a452");
+    pixelRect(ctx, x + 61, y + 48, 5, 3, "#d7a06a");
+    return;
+  }
   const mature = Number(plot.ready_at) <= estateNow();
   const progress = mature ? 1 : Math.max(.12, (estateNow() - plot.planted_at) / (plot.ready_at - plot.planted_at));
   const color = estateStore.snapshot?.catalog?.crops?.[plot.crop_id]?.color || "#e6cb63";
@@ -150,7 +178,6 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
     drawSignpost(ctx, 604, 370, "小胖湖");
     for (let x = 6; x < 650; x += 72) {
       drawTree(ctx, x, 540 + (x % 3) * 3, x % 2, performance.now());
-      drawSprite(ctx, "town", stableSprite(x, [3, 4, 5, 8, 9, 10]), x - 4, 526, 4);
     }
     [[292, 30, 29], [317, 43, 2], [638, 64, 16], [650, 214, 93], [278, 500, 94]].forEach(([x, y, sprite]) => {
       drawSprite(ctx, "town", sprite, x, y, 2.5);
@@ -172,12 +199,13 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
   function tick(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     const length = Math.hypot(input.vector.x, input.vector.y) || 1;
-    const dx = input.vector.x / length * 125 * dt;
-    const dy = input.vector.y / length * 125 * dt;
+    const speed = input.sprinting ? 190 : 125;
+    const dx = input.vector.x / length * speed * dt;
+    const dy = input.vector.y / length * speed * dt;
     if (dx && !collides(player.x + dx, player.y)) player.x += dx;
     if (dy && !collides(player.x, player.y + dy)) player.y += dy;
     if (dx || dy) {
-      player.walking += dt * 12; player.lastMove = now;
+      player.walking += dt * (input.sprinting ? 18 : 12); player.lastMove = now;
       if (Math.abs(dx) > Math.abs(dy)) {
         player.facing = Math.sign(dx); player.direction = dx < 0 ? "left" : "right";
       } else player.direction = dy < 0 ? "up" : "down";

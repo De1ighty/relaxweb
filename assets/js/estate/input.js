@@ -61,6 +61,7 @@ export function createEstateInput(root) {
 
   return {
     vector,
+    get sprinting() { return keys.has("ShiftLeft"); },
     consumeAction() { const value = actionPressed; actionPressed = false; return value; },
     clear,
     destroy() {

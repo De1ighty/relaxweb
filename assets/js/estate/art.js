@@ -14,14 +14,27 @@ export function pixelRect(ctx, x, y, w, h, color) {
 
 export function drawTree(ctx, x, y, tone = 0, tick = 0) {
   const sway = Math.sin(tick * .0015 + x) > .7 ? 1 : 0;
-  pixelRect(ctx, x + 14, y + 32, 12, 28, "#684129");
-  pixelRect(ctx, x + 18, y + 32, 4, 27, "#8b5c35");
-  pixelRect(ctx, x + 5 + sway, y + 13, 34, 32, tone ? "#317a4b" : "#2e7046");
-  pixelRect(ctx, x - 2 + sway, y + 24, 47, 19, tone ? "#459b54" : "#408e50");
-  pixelRect(ctx, x + 8 + sway, y + 4, 29, 18, "#5ab35f");
-  pixelRect(ctx, x + 11 + sway, y + 10, 8, 6, "#88cf6d");
-  pixelRect(ctx, x + 29 + sway, y + 24, 6, 5, "#75c568");
-  pixelRect(ctx, x + 3, y + 58, 38, 5, PIXEL.shadow);
+  const dark = tone ? "#245d43" : "#28603f";
+  const mid = tone ? "#397e4c" : "#39834b";
+  const light = tone ? "#57a75a" : "#5aad58";
+  pixelRect(ctx, x + 2, y + 57, 43, 6, PIXEL.shadow);
+  pixelRect(ctx, x + 16, y + 31, 13, 29, "#5b3829");
+  pixelRect(ctx, x + 20, y + 33, 5, 27, "#976039");
+  pixelRect(ctx, x + 9, y + 38, 13, 5, "#68402c");
+  pixelRect(ctx, x + 27, y + 34, 10, 5, "#68402c");
+  pixelRect(ctx, x + 4 + sway, y + 15, 38, 30, dark);
+  pixelRect(ctx, x - 2 + sway, y + 25, 49, 18, dark);
+  pixelRect(ctx, x + 2 + sway, y + 20, 40, 20, mid);
+  pixelRect(ctx, x + 10 + sway, y + 5, 27, 24, mid);
+  pixelRect(ctx, x + 15 + sway, y + 1, 18, 13, light);
+  pixelRect(ctx, x + 8 + sway, y + 18, 12, 8, light);
+  pixelRect(ctx, x + 28 + sway, y + 23, 10, 7, light);
+  pixelRect(ctx, x + 13 + sway, y + 7, 7, 5, "#8bd06d");
+  pixelRect(ctx, x + 31 + sway, y + 18, 5, 4, "#79c568");
+  if (tone) {
+    pixelRect(ctx, x + 11 + sway, y + 29, 5, 5, "#e45f4f");
+    pixelRect(ctx, x + 34 + sway, y + 31, 5, 5, "#f08a54");
+  }
 }
 
 export function drawBuilding(ctx, x, y, w, h, wall, roof, sign, accent = "#f4d28f") {

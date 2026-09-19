@@ -33,7 +33,7 @@ function renderEstate() {
     <div class="estate-interact-hint" hidden><kbd>E</kbd><span></span></div>
     <div class="estate-stick"><span class="estate-stick-nub"></span></div>
     <button class="estate-action" type="button"><span>✦</span><small>操作</small></button>
-    <div class="estate-help">WASD / 方向键移动 · E / 空格互动</div>
+    <div class="estate-help">WASD / 方向键移动 · 左 Shift 疾跑 · E / 空格互动</div>
     <div class="estate-sheet" hidden><section><header><h2 class="estate-sheet-title"></h2><button class="estate-sheet-close" type="button">×</button></header><div class="estate-sheet-body"></div></section></div>`;
   elements.gameMain.replaceChildren(root);
   const input = createEstateInput(root);
