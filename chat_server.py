@@ -20,6 +20,7 @@ from games.base import ROOM_TYPES, create_room, parse_amount
 from games.holdem import BLIND_PRESETS as GAME_BLIND_PRESETS
 from games.rating import TIERS, rating_change, rating_info
 from rewards import init_rewards, rewards_state, claim_checkin, draw_lottery
+from estate import init_estate
 
 
 HOST = str(get("servers.chat_host", env="LIVE_CHAT_HOST", default="0.0.0.0"))
@@ -118,6 +119,7 @@ def init_db():
         if "rating_games" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN rating_games INTEGER NOT NULL DEFAULT 0")
         init_rewards(conn)
+        init_estate(conn)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS rating_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
