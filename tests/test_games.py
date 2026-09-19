@@ -77,7 +77,7 @@ def test_room_lifecycle():
     check("开局发牌", started)
     check("暂停清计时器", paused)
     check("恢复", resumed)
-    check("成员移除", left == {"stack": 90.0}, "开局后大盲注已提交")
+    check("成员移除", left == {"stack": 90.0, "paid": 100.0}, "开局后大盲注已提交，累计买入仍记 100")
 
 
 def test_holdem_settlement_payload():
@@ -130,6 +130,199 @@ def test_holdem_settlement_payload():
     # 全员弃牌到一人：没有摊牌也要能看到手牌
     room2, result2, _, _ = asyncio.run(play_out("a"))
     check("弃牌结束也有手牌数据", len(result2["hands"]) == 3)
+
+
+def _holdem_room(room_id, names, blind=5):
+    """建一个只测引擎的房间：宿主能力全部打成桩。"""
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    room = create_room("holdem", room_id=room_id, name="测试", owner=names[0],
+                       buy_in=100, blind=blind)
+    room.views_seen = []
+
+    async def record_views():
+        room.views_seen.append(room.view_for(names[0]))
+
+    room.broadcast_views = record_views
+    room.broadcast_payload = noop
+    room.on_rooms_changed = noop
+    room.player_rating = lambda username: {"score": 1000, "tier": "白银"}
+    room.record_ratings = lambda hand_id, starts, endings: {
+        name: {"delta": 5, "initial": starts[name], "final": endings[name]}
+        for name in endings
+    }
+    for name in names:
+        room.add_member(name, 100)
+    return room
+
+
+async def _play_hand(room, folder=None):
+    """把当前一手打完：指定 folder 则让他弃牌，否则一路过牌/跟注到摊牌。"""
+    guard = 0
+    while room.in_hand() and guard < 300:
+        guard += 1
+        who = room.game["to_act"]
+        if who == folder:
+            folder = None
+            await room.perform_action(who, "fold")
+            continue
+        opts = room.legal_actions(who)
+        await room.perform_action(who, "check" if opts["check"] else "call")
+
+
+def test_holdem_hand_result_and_continue():
+    """一手结束后弹层确认：10 秒倒计时自动开下一手，全员确认则立即开。"""
+
+    async def run():
+        room = _holdem_room(9, ("a", "b", "c"))
+        await room.start()
+        await _play_hand(room, "a")
+        view = room.view_for("b")
+        first = {"status": room.status, "ready": view.get("hand_ready"),
+                 "settlement": view.get("settlement")}
+        await room.mark_ready("b")
+        middle = room.view_for("b")["hand_ready"]
+        await room.mark_ready("c")
+        await room.mark_ready("a")
+        after_all = room.view_for("b")
+        await _play_hand(room, "a")
+        waiting = room.view_for("a").get("hand_ready")
+        await room.continue_timeout()
+        after_timeout = room.view_for("a")
+        views = list(room.views_seen)
+        room.close()
+        return {
+            "views": views,
+            "first": first,
+            "middle": middle,
+            "all_ready": {"hand_no": after_all.get("hand_no"),
+                          "ready": after_all.get("hand_ready")},
+            "waiting": waiting,
+            "timeout": {"hand_no": after_timeout.get("hand_no"),
+                        "ready": after_timeout.get("hand_ready")},
+        }
+
+    out = asyncio.run(run())
+    first = out["first"]
+    check("一手结束进入继续确认", first["status"] == "playing" and bool(first["ready"]))
+    check("继续确认不再走结算投票", first["settlement"] is None)
+    check("倒计时 10 秒", 0 < first["ready"]["left"] <= 10, str(first["ready"]["left"]))
+    check("弹层状态已广播给客户端",
+          any(v.get("hand_ready") for v in out["views"]),
+          f"共 {len(out['views'])} 次广播，必须有一次带 hand_ready")
+    check("确认人数与总人数", first["ready"]["ready"] == [] and first["ready"]["total"] == 3)
+    check("单人确认记录下来", out["middle"]["ready"] == ["b"], str(out["middle"]))
+    check("全员确认立即开下一手",
+          out["all_ready"]["hand_no"] == 2 and out["all_ready"]["ready"] is None,
+          str(out["all_ready"]))
+    check("等待中倒计时仍在", bool(out["waiting"]) and out["waiting"]["ready"] == [])
+    check("倒计时到点自动开下一手",
+          out["timeout"]["hand_no"] == 3 and out["timeout"]["ready"] is None,
+          str(out["timeout"]))
+
+
+def test_holdem_match_settlement_and_vote():
+    """筹码不足盲注则对局结束：展示资产与段位分变化，投票过半数生效。"""
+
+    async def run():
+        dissolved = []
+        room = _holdem_room(10, ("a", "b"))
+        room.on_dissolve_requested = _dissolve_recorder(dissolved)
+        rebuys = []
+        room.on_rebuy_requested = _rebuy_stub(room, rebuys)
+        await room.start()
+        await _play_hand(room, "a")
+        first_delta = dict(room.match_rating_delta)
+        # b 只剩 1 枚（不足盲注 5），下一手打完必定触发对局结束
+        room.members["b"]["stack"] = 1
+        await room.start_next_hand()
+        await _play_hand(room, "b")
+        view = room.view_for("a")
+        result = view.get("match_result") or {}
+        rows = {item["username"]: item for item in result.get("players", [])}
+        snapshot = {
+            "status": room.status,
+            "reason": result.get("reason"),
+            "can_next": result.get("can_next"),
+            "rows": rows,
+            "stacks": {name: room.members[name]["stack"] for name in room.seating},
+            "first_delta": first_delta.get("a"),
+            "votes": dict(room.votes),
+            "rebuys": list(rebuys),
+        }
+        await room.cast_vote("a", "next", 2)
+        mid = {"votes": dict(room.votes), "status": room.status}
+        await room.cast_vote("b", "next", 2)
+        after = {
+            "status": room.status,
+            "match_no": room.match_no,
+            "blind": room.blind,
+            "hand_no": room.view_for("a").get("hand_no"),
+            "match_result": room.match_result,
+            "delta": dict(room.match_rating_delta),
+            "paid": {name: room.members[name]["paid"] for name in room.seating},
+        }
+        room.close()
+
+        # 解散票：过半数即解散房间
+        room2 = _holdem_room(11, ("a", "b"))
+        dissolved2 = []
+        room2.on_dissolve_requested = _dissolve_recorder(dissolved2)
+        await room2.start()
+        await _play_hand(room2, "a")
+        room2.members["b"]["stack"] = 1
+        await room2.start_next_hand()
+        await _play_hand(room2, "b")
+        await room2.cast_vote("a", "dissolve", 5)
+        await room2.cast_vote("b", "dissolve", 5)
+        room2.close()
+        return snapshot, mid, after, dissolved2
+
+    snapshot, mid, after, dissolved2 = asyncio.run(run())
+    rows = snapshot["rows"]
+    stacks = snapshot["stacks"]
+    check("筹码不足盲注即对局结束", snapshot["status"] == "settled", snapshot["status"])
+    check("结束原因写明筹码不足", "筹码不足" in (snapshot["reason"] or ""), str(snapshot["reason"]))
+    check("结算列出每位玩家", sorted(rows) == ["a", "b"], str(sorted(rows)))
+    for name in ("a", "b"):
+        check(f"{name} 的资产等于当前筹码", rows[name]["stack"] == stacks[name],
+              f"{rows[name]['stack']} vs {stacks[name]}")
+        check(f"{name} 的盈亏等于资产减累计买入",
+              rows[name]["net"] == round(stacks[name] - 100, 2),
+              f"{rows[name]['net']}")
+        check(f"{name} 带段位与最后一手", rows[name]["rating"]["tier"] == "白银"
+              and "hand_name" in rows[name])
+    check("段位分按本局累计（两手各 +5）",
+          snapshot["first_delta"] == 5 and rows["a"]["rating_delta"] == 10,
+          f"{snapshot['first_delta']} / {rows['a']['rating_delta']}")
+    check("对局结束前没有投票", snapshot["votes"] == {} and not snapshot["rebuys"])
+    check("人数够时可以再来一局", snapshot["can_next"] is True)
+    check("单人一票未过半不执行", len(mid["votes"]) == 1 and mid["status"] == "settled")
+    check("过半数通过后开新的一局",
+          after["status"] == "playing" and after["match_no"] == 2 and after["hand_no"] == 3,
+          f"{after['status']} m{after['match_no']} h{after['hand_no']}")
+    check("再来一局按票中盲注", after["blind"] == 2, str(after["blind"]))
+    check("再来一局已重新买入", after["paid"] == {"a": 200.0, "b": 200.0}, str(after["paid"]))
+    check("再来一局后清零本局段位累计", after["delta"] == {}, str(after["delta"]))
+    check("新一局结算明细已清空", after["match_result"] is None)
+    check("解散票过半数即解散房间", dissolved2 == ["结算解散"], str(dissolved2))
+
+
+def _dissolve_recorder(sink):
+    async def record(reason):
+        sink.append(reason)
+    return record
+
+
+def _rebuy_stub(room, sink):
+    """模拟宿主：每人扣款再加筹码（宿主还要写数据库，引擎这边只关心筹码）。"""
+    async def rebuy():
+        for name in list(room.seating):
+            room.add_chips(name, room.buy_in)
+        sink.append(len(room.seating))
+    return rebuy
 
 
 def test_registry():
@@ -289,6 +482,8 @@ test_evaluate()
 test_side_pots()
 test_room_lifecycle()
 test_holdem_settlement_payload()
+test_holdem_hand_result_and_continue()
+test_holdem_match_settlement_and_vote()
 test_registry()
 test_uno_deck_and_matches()
 test_uno_lifecycle()

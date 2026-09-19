@@ -17,6 +17,7 @@ logger = logging.getLogger("live-chat.holdem")
 
 TURN_TIMEOUT = float(os.environ.get("HOLDEM_TURN_TIMEOUT", "45"))
 SETTLE_TIMEOUT = float(os.environ.get("HOLDEM_SETTLE_TIMEOUT", "90"))
+CONTINUE_TIMEOUT = float(os.environ.get("HOLDEM_CONTINUE_TIMEOUT", "10"))
 BLIND_PRESETS = (1, 2, 5, 10)
 
 HAND_NAMES = ["高牌", "一对", "两对", "三条", "顺子", "同花", "葫芦", "四条", "同花顺"]
@@ -117,11 +118,15 @@ class HoldemRoom(BaseRoom):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.game = None        # 一手牌的状态字典；None = 未开局/结算投票中
+        self.game = None        # 一手牌的状态字典；None = 未开局
         self.dealer = None
         self.hand_seq = 0
         self.pause_remaining = 0.0
-        self.votes = {}         # 结算投票：username -> {"choice", "blind"}
+        self.votes = {}         # 对局结束投票：username -> {"choice", "blind"}
+        self.ready = {}         # 每手结束的「继续下一手」确认：username -> True
+        self.ready_deadline = 0.0
+        self.match_no = 1       # 第几局对局（对局结束投票后再来一局时 +1）
+        self.match_result = None
 
     # ---- 暂停/恢复 ----
     def on_paused(self):
@@ -198,13 +203,21 @@ class HoldemRoom(BaseRoom):
                 view["your_hole"] = [{"r": r, "s": s} for r, s in g["holes"][username]]
                 if g["to_act"] == username:
                     view["your_options"] = self.legal_actions(username)
-        if self.status == "playing" and not self.in_hand():
-            # 一手结束后进入结算投票阶段（摊牌态保留用于展示）
-            view["settlement"] = {
+        if self.status == "playing" and not self.in_hand() and self.ready_deadline:
+            # 一手刚结束：前端弹层展示牌型与筹码加减，等「继续下一手」
+            view["hand_ready"] = {
+                "ready": sorted(name for name, done in self.ready.items() if done),
+                "total": len(self.seating),
+                "left": round(max(0.0, self.ready_deadline - time.time()), 1),
+                "hand_no": g["hand_no"] if g else 0,
+            }
+        if self.status == "settled" and self.match_result:
+            # 对局结束（有人筹码不足盲注）：展示资产与段位分变化，投票再来一局/解散
+            view["match_result"] = {
+                **self.match_result,
                 "votes": dict(self.votes),
                 "total": len(self.seating),
-                "can_next": self.can_continue(self.blind),
-                "blind": self.blind,
+                "can_next": len(self.seating) >= 2,
             }
         return view
 
@@ -269,29 +282,100 @@ class HoldemRoom(BaseRoom):
             action = "fold"
         await self.perform_action(username, action, auto=True)
 
-    def enter_settlement(self):
-        """一手结束：清空上一手投入记录，进入结算投票，等待过半数决定。"""
+    async def enter_settlement(self):
+        """一手结束：进入「继续下一手」确认，10 秒后自动开始，全员确认则立即开始。"""
         self.votes = {}
-        self.schedule("settle", SETTLE_TIMEOUT, self.settle_timeout)
+        self.ready = {}
+        self.ready_deadline = time.time() + CONTINUE_TIMEOUT
+        self.schedule("continue", CONTINUE_TIMEOUT, self.continue_timeout)
+        await self.broadcast_views()
 
-    def can_continue(self, blind):
-        """全员筹码都够发一轮盲注（2 倍大盲注）且人数足时才能再来一局。"""
-        need = round(blind * 2, 2)
+    def can_continue(self):
+        """对局继续条件：至少两人，且人人筹码够一个盲注（不足者只能结算）。"""
         return len(self.seating) >= 2 and all(
-            member["stack"] >= need for member in self.members.values()
+            member["stack"] >= self.blind for member in self.members.values()
         )
 
-    async def settle_timeout(self):
+    async def mark_ready(self, username):
+        """玩家点「继续下一手」；全员都点则立即开下一手，返回是否记入。"""
+        if self.in_hand() or self.status != "playing" or username not in self.members:
+            return False
+        if self.ready.get(username):
+            return False
+        self.ready[username] = True
+        if all(self.ready.get(name) for name in self.seating):
+            await self.start_next_hand()
+        else:
+            await self.broadcast_views()
+        return True
+
+    async def continue_timeout(self):
+        """10 秒未全员确认：自动开始下一手（继续不需要花钱，可安全自动执行）。"""
         if self.paused or self.in_hand() or self.status != "playing":
             return
-        await self.execute_decision("next", self.blind)
+        await self.start_next_hand()
+
+    async def start_next_hand(self):
+        self.cancel_timer("continue")
+        self.ready = {}
+        self.ready_deadline = 0.0
+        await self.start_hand()
+        await self.on_rooms_changed()
+
+    async def enter_match_settlement(self, reason):
+        """对局结束：进入结算投票（再来一局＝按买入额重新买入，或解散退币）。"""
+        self.cancel_timer("continue")
+        self.ready = {}
+        self.ready_deadline = 0.0
+        self.votes = {}
+        self.status = "settled"
+        self.match_result = self.build_match_result(reason)
+        self.schedule("settle", SETTLE_TIMEOUT, self.settle_timeout)
+        await self.broadcast_views()
+        await self.on_rooms_changed()
+
+    def build_match_result(self, reason):
+        """对局结束明细：每人的资产（筹码）、累计买入与盈亏、本局段位分变化。"""
+        result = self.game["result"] if self.game else None
+        last_hand = {item["username"]: item for item in (result or {}).get("hands", [])}
+        players = []
+        for name in self.seating:
+            member = self.members[name]
+            paid = self.member_paid(name)
+            hand = last_hand.get(name) or {}
+            players.append({
+                "username": name,
+                "nickname": self.display_name(name),
+                "stack": member["stack"],
+                "paid": paid,
+                "net": round(member["stack"] - paid, 2),
+                "rating": self.player_rating(name),
+                "rating_delta": self.match_rating_delta.get(name, 0),
+                "cards": hand.get("cards", []),
+                "hand_name": hand.get("hand_name", ""),
+                "folded": bool(hand.get("folded")),
+            })
+        return {
+            "reason": reason,
+            "match_no": self.match_no,
+            "blind": self.blind,
+            "buy_in": self.buy_in,
+            "hand_no": self.hand_seq,
+            "pot": (result or {}).get("pot", 0),
+            "board": (result or {}).get("board", []),
+            "players": players,
+        }
+
+    async def settle_timeout(self):
+        """投票超时：不强制扣钱，按当前筹码结算并解散房间。"""
+        if self.paused or self.in_hand() or self.status != "settled":
+            return
+        await self.execute_decision("dissolve", None, "投票超时，结算解散")
 
     async def cast_vote(self, username, choice, blind):
-        """记录一票；过半数（或全员已投）即执行，返回执行结果或 None。"""
-        if self.in_hand() or self.status != "playing":
+        """对局结束后投票：过半数（或全员已投）即执行，返回执行结果或 None。"""
+        if self.in_hand() or self.status != "settled" or username not in self.members:
             return None
-        if choice == "next" and not self.can_continue(blind):
-            raise ValueError("有人筹码不足下一局门槛，只能结算并解散房间")
         self.votes[username] = {
             "choice": choice,
             "blind": blind if choice == "next" else None,
@@ -318,16 +402,27 @@ class HoldemRoom(BaseRoom):
             await self.execute_decision("dissolve", None)
         return executed
 
-    async def execute_decision(self, choice, blind):
+    async def execute_decision(self, choice, blind, reason=None):
         self.cancel_timer("settle")
         if choice == "next":
             self.blind = blind or self.blind
             self.votes = {}
+            self.match_result = None
+            self.status = "playing"
+            self.match_no += 1
+            self.reset_match_rating()
+            if self.on_rebuy_requested:
+                await self.on_rebuy_requested()
+            if len(self.members_with_chips()) < 2:
+                self.status = "settled"
+                if self.on_dissolve_requested:
+                    await self.on_dissolve_requested(reason or "人数不足，结算解散")
+                return
             await self.start_hand()
             await self.on_rooms_changed()
         else:
             if self.on_dissolve_requested:
-                await self.on_dissolve_requested("结算解散")
+                await self.on_dissolve_requested(reason or "结算解散")
 
     async def start(self):
         """房主开局；筹码不足时抛 ValueError（消息可直接展示给玩家）。"""
@@ -335,6 +430,12 @@ class HoldemRoom(BaseRoom):
             raise ValueError("至少需要两名有筹码的玩家才能开局")
         self.status = "playing"
         self.dealer = None
+        self.match_no = 1
+        self.match_result = None
+        self.votes = {}
+        self.ready = {}
+        self.ready_deadline = 0.0
+        self.reset_match_rating()
         await self.start_hand()
 
     def commit_chips(self, username, amount):
@@ -378,6 +479,8 @@ class HoldemRoom(BaseRoom):
             self.status = "waiting"
             self.game = None
             self.votes = {}
+            self.ready = {}
+            self.ready_deadline = 0.0
             await self.broadcast_views()
             await self.on_rooms_changed()
             return
@@ -596,7 +699,13 @@ class HoldemRoom(BaseRoom):
         )
         await self.broadcast_views()
         await self.on_rooms_changed()
-        self.enter_settlement()
+        if self.can_continue():
+            await self.enter_settlement()
+        else:
+            # 有人筹码不足盲注（或人数不足）：对局结束，转入结算投票
+            reason = ("有玩家筹码不足盲注，本局结束" if len(self.seating) >= 2
+                      else "人数不足，本局结束")
+            await self.enter_match_settlement(reason)
 
     async def restart(self):
         """重新开始：本手已投入的筹码退回各家，随后重新发一手。"""
@@ -610,5 +719,8 @@ class HoldemRoom(BaseRoom):
         self.game = None
         self.paused = False
         self.votes = {}
+        self.cancel_timer("continue")
+        self.ready = {}
+        self.ready_deadline = 0.0
         await self.broadcast_payload({"type": "game_restart"})
         await self.start_hand()

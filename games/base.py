@@ -63,6 +63,9 @@ class BaseRoom:
         set_escrow(username, amount) 筹码变动后同步托管（宿主写数据库）
         player_rating(username)     读取公开段位
         record_ratings(id, starts, endings) 同步提交积分及已结算筹码，返回逐人明细
+        on_dissolve_requested(reason)    async，房间解散（含结算解散、流局）
+        on_rebuy_requested()             async，对局结束「再来一局」：按买入额重新买入，
+                                         余额不足者由宿主负责离桌退币
     """
 
     max_seats = 9
@@ -74,10 +77,10 @@ class BaseRoom:
         self.buy_in = buy_in
         self.blind = blind
         self.rules = rules if isinstance(rules, dict) else {}
-        self.status = "waiting"          # waiting | playing
+        self.status = "waiting"          # waiting | playing | settled（对局结束待投票）
         self.paused = False
         self.seating = []                # 座位顺序即加入顺序
-        self.members = {}                # username -> {"stack": float}
+        self.members = {}                # username -> {"stack": float, "paid": float}
         self.chat = deque(maxlen=30)     # 房间聊天，内存态，随房间销毁
         self.timers = {}                 # key -> asyncio.TimerHandle
 
@@ -85,6 +88,7 @@ class BaseRoom:
         self.broadcast_views = None
         self.on_rooms_changed = None
         self.on_dissolve_requested = None   # async (reason) -> None，宿主注入
+        self.on_rebuy_requested = None      # async () -> None，宿主注入
         self.display_name = lambda username: username
         self.set_escrow = lambda username, amount: None
         self.player_rating = lambda username: None
@@ -92,6 +96,7 @@ class BaseRoom:
         self.rating_hand_id = None
         self.rating_starts = {}
         self.rating_results = {}
+        self.match_rating_delta = {}     # 本局累计段位分变化，随每手结算累加
 
     def begin_rating_hand(self, names):
         """在扣盲注/发牌之前固定本金；重开只替换未完成的快照。"""
@@ -106,9 +111,16 @@ class BaseRoom:
         pending = {name: amount for name, amount in endings.items()
                    if name in self.rating_starts and name not in self.rating_results}
         if pending:
-            self.rating_results.update(self.record_ratings(
-                self.rating_hand_id, self.rating_starts, pending))
+            fresh = self.record_ratings(self.rating_hand_id, self.rating_starts, pending)
+            self.rating_results.update(fresh)
+            for name, info in fresh.items():
+                self.match_rating_delta[name] = (
+                    self.match_rating_delta.get(name, 0) + int(info.get("delta", 0)))
         return dict(self.rating_results)
+
+    def reset_match_rating(self):
+        """开始新的一局对局时清零累计段位分变化。"""
+        self.match_rating_delta = {}
 
     # ---- 成员与筹码 ----
     def has_member(self, username):
@@ -116,12 +128,28 @@ class BaseRoom:
 
     def add_member(self, username, buy_in):
         self.seating.append(username)
-        self.members[username] = {"stack": buy_in}
+        self.members[username] = {"stack": buy_in, "paid": buy_in}
 
     def remove_member(self, username):
         member = self.members.pop(username, None)
         self.seating = [name for name in self.seating if name != username]
         return member
+
+    def member_paid(self, username):
+        """该成员在本房间的累计买入（含多次重新买入），用于结算净额。"""
+        member = self.members.get(username)
+        if not member:
+            return self.buy_in
+        return round(member.get("paid", self.buy_in), 2)
+
+    def add_chips(self, username, amount):
+        """买入/重新买入：宿主扣完金币后调用，筹码与累计买入同步增加。"""
+        member = self.members.get(username)
+        if not member or amount <= 0:
+            return 0.0
+        member["stack"] = round(member["stack"] + amount, 2)
+        member["paid"] = round(member.get("paid", 0.0) + amount, 2)
+        return amount
 
     def members_with_chips(self):
         return [name for name in self.seating if self.members[name]["stack"] > 0]

@@ -406,11 +406,12 @@ def merge_ref_coins(conn, username, ref, delta, kind="", detail="",
     return balance
 
 
-def settle_room_coins(room, username, refund, detail):
-    """离桌/解散时结算该房间的流水：买入与退款合并为一条净额记录。
+def settle_room_coins(room, username, refund, detail, paid=None):
+    """离桌/解散时结算该房间的流水：买入（含重新买入）与退款合并为一条净额记录。
 
     净额为零（如未开局的流局退款）时只删除扣款条目，不留痕。
     """
+    paid = room.buy_in if paid is None else paid
     with database() as conn, conn:
         if refund > 0:
             conn.execute(
@@ -419,7 +420,7 @@ def settle_room_coins(room, username, refund, detail):
             )
         merge_ref_coins(
             conn, username, f"room:{room.id}:{username}",
-            round(refund - room.buy_in, 2), "game_result", detail,
+            round(refund - paid, 2), "game_result", detail,
             stake_kind="game_buyin", stake_detail=f"游戏厅买入：{room.name}",
         )
 
@@ -1345,10 +1346,14 @@ def attach_host(room):
     async def on_dissolve_requested(reason):
         await dissolve_room(room, reason)
 
+    async def on_rebuy_requested():
+        await rebuy_members(room)
+
     room.broadcast_payload = broadcast_payload
     room.broadcast_views = broadcast_views
     room.on_rooms_changed = on_rooms_changed
     room.on_dissolve_requested = on_dissolve_requested
+    room.on_rebuy_requested = on_rebuy_requested
     room.display_name = display_name
     room.set_escrow = sync_escrow
     room.player_rating = get_rating
@@ -1360,6 +1365,44 @@ def attach_host(room):
         return results
 
     room.record_ratings = record_ratings
+
+
+async def rebuy_members(room):
+    """对局结束「再来一局」：每人按买入额重新买入，余额不足者自动离桌退币。
+
+    筹码与累计买入（paid）同步增加，最终离桌结算仍只留一条净额流水。
+    """
+    for username in list(room.seating):
+        try:
+            with database() as conn, conn:
+                balance = user_balance(conn, username)
+                if balance is None or balance < room.buy_in:
+                    raise ValueError("金币不足")
+                balance = adjust_coins(
+                    conn, username, -room.buy_in, "game_buyin",
+                    f"游戏厅重新买入：{room.name}", ref=f"room:{room.id}:{username}",
+                )
+        except ValueError:
+            logger.info("%s 金币不足，未能重新买入 %s", username, room.id)
+            await send_to_user(username, {"type": "game_error",
+                                          "message": f"金币不足 {room.buy_in:.2f}，已离桌"})
+            await leave_room_internal(room, username)
+            continue
+        room.add_chips(username, room.buy_in)
+        await push_balance(username, balance)   # 客户端金币牌要立刻反映扣款
+    room.stacks_changed()
+    await room.broadcast_views()
+    await broadcast_room_list()
+
+
+def send_to_user(username, payload):
+    """给某个用户的所有连接发一条定向消息（如重新买入失败的通知）。"""
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return asyncio.gather(*(
+        _ws_send(socket, text)
+        for socket, client_state in list(clients.items())
+        if (client_state.get("user") or {}).get("username") == username
+    ))
 
 
 async def broadcast_room_list():
@@ -1377,7 +1420,7 @@ async def dissolve_room(room, reason):
         else f"游戏厅结算：{room.name}"
     )
     for username, refund in room.pending_refunds().items():
-        settle_room_coins(room, username, refund, detail)
+        settle_room_coins(room, username, refund, detail, room.member_paid(username))
     with database() as conn, conn:
         conn.execute("DELETE FROM game_escrows WHERE room_id = ?", (room.id,))
     logger.info("game room %s dissolved: %s", room.id, reason)
@@ -1393,7 +1436,8 @@ async def leave_room_internal(room, username):
         return
     mid_hand = room.note_leave(username)
     set_escrow(username, room.id, None)
-    settle_room_coins(room, username, member["stack"], f"游戏厅离桌：{room.name}")
+    settle_room_coins(room, username, member["stack"],
+                      f"游戏厅离桌：{room.name}", member.get("paid"))
     await publish_ratings(room)
     logger.info("%s left game room %s", username, room.id)
     if not room.members:
@@ -1627,28 +1671,38 @@ async def handle_pause_game(websocket, state, data):
 
 
 async def handle_settle_vote(websocket, state, data):
-    """结算投票：过半数生效；票中可携带下一局盲注偏好。"""
+    """对局结束投票：过半数生效；票中可携带下一局盲注偏好，再来一局会按买入额重新买入。"""
     user = state.get("user")
     if not user:
         return
     room = find_user_room(user["username"])
-    if not room or room.status != "playing":
+    if not room or room.status not in ("playing", "settled"):
         return
     choice = str(data.get("choice") or "")
     if choice not in ("next", "dissolve"):
         return
     blind = data.get("blind")
     blind = blind if blind in GAME_BLIND_PRESETS else room.blind
-    if rate_limited(state, "last_settle_vote", 0.5):
+    # 冷却刻意很短：投票本身幂等（同一个人只留最后一票），而连打多局时
+    # 上一局的票和下一局的票可能只隔几十毫秒，卡太久会把合法投票丢掉
+    if rate_limited(state, "last_settle_vote", 0.1):
         return
-    try:
-        executed = await room.cast_vote(user["username"], choice, blind)
-    except ValueError as error:
-        await send_json(websocket, {"type": "game_error", "message": str(error)})
-        return
+    executed = await room.cast_vote(user["username"], choice, blind)
     if executed == "dissolve":
         return
     await room.broadcast_views()
+
+
+async def handle_hand_continue(websocket, state, data):
+    """每手结束后的「继续下一手」：全员确认或 10 秒倒计时到点即开下一手。"""
+    user = state.get("user")
+    if not user:
+        return
+    room = find_user_room(user["username"])
+    if not room or room.status != "playing":
+        return
+    # 不限流：连得快时两手之间可能只隔几十毫秒，而 mark_ready 自身幂等
+    await room.mark_ready(user["username"])
 
 
 async def handle_restart_game(websocket, state, data):
@@ -1956,6 +2010,7 @@ handlers = {
     "pause_game": handle_pause_game,
     "restart_game": handle_restart_game,
     "settle_vote": handle_settle_vote,
+    "hand_continue": handle_hand_continue,
     "room_chat": handle_room_chat,
     "list_users": handle_list_users,
 }
