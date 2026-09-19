@@ -1,5 +1,7 @@
-/* 国标麻将牌桌：方形桌面、四方座位、牌河/副露/花牌展示、吃碰杠胡操作与结算回顾。
-   起和判定与番种计算以服务器为准，客户端只做展示与操作入口。 */
+/* 国标麻将牌桌：全屏毛毡牌桌、四家牌河（每家 6 列不重叠网格）、
+   mahjim 国标牌面图（assets/tiles/mahjim/），常驻操作条
+   （打出/吃/碰/杠，可胡时显示胡），手机端通过「牌河」二级菜单查看
+   全部打出的牌。起和判定与番种计算以服务器为准。 */
 
 import {
   displayNameOf, elements, formatCoins, ratingBadge, renderGameView, requestProfile,
@@ -8,82 +10,121 @@ import {
 import { registerGame } from "../registry.js";
 import { openChatOverlay, reapplySeatBubbles } from "../room-chat.js";
 
-const WIND_NAMES = ["东", "南", "西", "北"];
-const SUIT_NAMES = ["万", "条", "筒"];
-const FAN_ORDER_HINT = "国标麻将：八番起和，花牌每张 1 分。";
+const TILE_DIR = "assets/tiles/mahjim";
 
 let actionLock = false;
 let selected = new Set();
 let lastHandJson = "";
+let chiOpen = false;
+let gangOpen = false;
+let riverOverlayOpen = false;
 
 function tileLabel(code) {
   if (code >= 34) return "春夏秋冬梅兰竹菊"[code - 34];
   if (code >= 27) return "东南西北中发白"[code - 27];
-  return `${code % 9 + 1}${SUIT_NAMES[Math.floor(code / 9)]}`;
-}
-
-function isHonor(code) {
-  return code >= 27 && code < 34;
+  return `${code % 9 + 1}${"万条筒"[Math.floor(code / 9)]}`;
 }
 
 function sortHand(hand) {
   return hand.map((code, index) => ({ code, index }))
-    .sort((a, b) => Math.floor(a.code / 9) - Math.floor(b.code / 9)
-      || a.code - b.code);
+    .sort((a, b) => Math.floor(a.code / 9) - Math.floor(b.code / 9) || a.code - b.code);
 }
 
 /* =========================================================
-   牌面渲染
+   牌面组件：mahjim 国标牌面图；side=横置（吃碰杠），back=牌背
 ========================================================= */
 
 function mjTileNode(code, opts = {}) {
-  const node = document.createElement("span");
-  node.className = "mj-tile";
-  if (opts.small) node.classList.add("small");
-  if (opts.tiny) node.classList.add("tiny");
-  if (opts.picked) node.classList.add("picked");
-  if (opts.win) node.classList.add("win");
-  if (code >= 34) {
-    node.classList.add("flower");
-    node.textContent = tileLabel(code);
-    node.title = "花牌（每张 1 分）";
-    return node;
-  }
-  if (isHonor(code)) {
-    node.classList.add(code === 31 ? "suit-z" : code === 32 ? "suit-f" : "suit-w");
-    const face = document.createElement("span");
-    face.className = "mt-face";
-    face.textContent = tileLabel(code);
-    node.append(face);
-    return node;
-  }
-  node.classList.add(`suit${Math.floor(code / 9)}`);
-  const face = document.createElement("span");
-  face.className = "mt-face";
-  face.textContent = String(code % 9 + 1);
-  const suit = document.createElement("span");
-  suit.className = "mt-suit";
-  suit.textContent = SUIT_NAMES[Math.floor(code / 9)];
-  node.append(face, suit);
-  return node;
+  const wrap = document.createElement("span");
+  wrap.className = "mj-tile";
+  if (opts.small) wrap.classList.add("small");
+  if (opts.mini) wrap.classList.add("mini");
+  if (opts.picked) wrap.classList.add("picked");
+  if (opts.win) wrap.classList.add("win");
+  if (code >= 34) wrap.classList.add("flower");
+  const img = document.createElement("img");
+  img.src = `${TILE_DIR}/${code}.png`;
+  img.alt = tileLabel(code);
+  img.draggable = false;
+  wrap.append(img);
+  return wrap;
 }
 
 function mjBackNode(opts = {}) {
-  const node = document.createElement("span");
-  node.className = "mj-tile back";
-  if (opts.tiny) node.classList.add("tiny");
-  return node;
+  const wrap = document.createElement("span");
+  wrap.className = "mj-tile back";
+  if (opts.small) wrap.classList.add("small");
+  if (opts.mini) wrap.classList.add("mini");
+  const img = document.createElement("img");
+  img.src = `${TILE_DIR}/back.png`;
+  img.alt = "";
+  img.draggable = false;
+  wrap.append(img);
+  return wrap;
+}
+
+/** 副露里横置的一张（吃碰杠来自别家的牌），占位宽高互换。 */
+function mjSideTileNode(opts = {}) {
+  const wrap = document.createElement("span");
+  wrap.className = "mj-tile side";
+  if (opts.small) wrap.classList.add("small");
+  if (opts.mini) wrap.classList.add("mini");
+  const img = document.createElement("img");
+  img.src = `${TILE_DIR}/back.png`;
+  img.alt = "";
+  img.draggable = false;
+  wrap.append(img);
+  return wrap;
+}
+
+function mjSideFaceNode(code, opts = {}) {
+  const wrap = document.createElement("span");
+  wrap.className = "mj-tile side";
+  if (opts.small) wrap.classList.add("small");
+  if (opts.mini) wrap.classList.add("mini");
+  const img = document.createElement("img");
+  img.src = `${TILE_DIR}/${code}.png`;
+  img.alt = tileLabel(code);
+  img.draggable = false;
+  wrap.append(img);
+  return wrap;
+}
+
+/** 副露组：碰/杠横置来自别家的那张，吃横置末张（来自上家），暗杠全背面。 */
+function meldNode(meld, opts = {}) {
+  const group = document.createElement("span");
+  group.className = `mj-meld meld-${meld.type}`;
+  const tiles = meld.tiles || [];
+  if (meld.type === "angang") {
+    for (let i = 0; i < 4; i += 1) group.append(mjBackNode(opts));
+    group.title = "暗杠";
+    return group;
+  }
+  tiles.forEach((code, i) => {
+    if (meld.type === "chi") {
+      group.append(i === tiles.length - 1
+        ? mjSideFaceNode(code, opts) : mjTileNode(code, opts));
+      return;
+    }
+    if (meld.type === "peng") {
+      group.append(i === 0 ? mjSideFaceNode(code, opts) : mjTileNode(code, opts));
+      return;
+    }
+    // 明杠（含补杠）：首张横置 + 三张正置
+    group.append(i === 0 ? mjSideFaceNode(code, opts) : mjTileNode(code, opts));
+  });
+  return group;
 }
 
 /* =========================================================
-   操作
+   操作发送
 ========================================================= */
 
 function mjAct(payload) {
   if (actionLock) return;
   actionLock = send({ type: "poker_action", ...payload });
   if (actionLock) {
-    document.querySelectorAll(".mj-dock button").forEach((b) => { b.disabled = true; });
+    document.querySelectorAll(".mj-actions button").forEach((b) => { b.disabled = true; });
   }
 }
 
@@ -102,72 +143,73 @@ function mySeatIndex() {
   return Math.max(0, players.findIndex((p) => p.username === state.currentUser?.username));
 }
 
+function claimTile() {
+  return state.myRoom.claim?.tile;
+}
+
+function chiOptions() {
+  return state.myRoom.your_options?.claim?.chi || [];
+}
+
+/** 杠的全部来源：声明窗明杠 / 手牌暗杠 / 补杠。 */
+function gangActions() {
+  const room = state.myRoom;
+  const list = [];
+  if (room.your_options?.claim?.gang && claimTile() != null) {
+    list.push({
+      label: `杠 ${tileLabel(claimTile())}`,
+      run: () => mjAct({ action: "claim", kind: "gang" }),
+    });
+  }
+  for (const code of room.your_options?.angang || []) {
+    list.push({
+      label: `暗杠 ${tileLabel(code)}`,
+      run: () => mjAct({ action: "angang", index: (room.your_hand || []).indexOf(code) }),
+    });
+  }
+  for (const code of room.your_options?.bugang || []) {
+    list.push({
+      label: `补杠 ${tileLabel(code)}`,
+      run: () => mjAct({ action: "bugang", index: (room.your_hand || []).indexOf(code) }),
+    });
+  }
+  return list;
+}
+
 /* =========================================================
    牌桌渲染
 ========================================================= */
 
-function seatNode(p) {
-  const room = state.myRoom;
-  const seat = document.createElement("div");
-  seat.className = "mj-seat";
-  seat.dataset.username = p.username;
-  if (room.status === "playing" && room.to_act === p.username) seat.classList.add("active");
-  if (state.currentUser && p.username === state.currentUser.username) seat.classList.add("me");
-  const name = document.createElement("div");
-  name.className = "ms-name";
-  const wind = document.createElement("span");
-  wind.className = "ms-wind";
-  wind.textContent = p.seat_wind;
-  if (p.is_dealer) {
-    wind.classList.add("dealer");
-    wind.title = "庄家";
-  }
-  name.append(wind, document.createTextNode(p.nickname));
-  const info = document.createElement("div");
-  info.className = "ms-info";
-  const stack = document.createElement("span");
-  stack.className = "ms-stack";
-  stack.textContent = formatCoins(p.stack);
-  if (p.flowers) {
-    const flowers = document.createElement("span");
-    flowers.className = "ms-flowers";
-    flowers.textContent = `🌸${p.flowers}`;
-    flowers.title = `花牌 ${p.flowers} 张`;
-    info.append(flowers);
-  }
-  info.append(stack);
-  seat.append(name, ratingBadge(p.rating), info);
-  const melds = document.createElement("div");
-  melds.className = "ms-melds";
-  for (const meld of p.melds || []) {
-    const group = document.createElement("span");
-    group.className = `ms-meld meld-${meld.type}`;
-    for (const code of meld.tiles) group.append(mjTileNode(code, { tiny: true }));
-    if (meld.type === "angang") group.title = "暗杠";
-    melds.append(group);
-  }
-  if (melds.children.length) seat.append(melds);
-  if (room.status === "playing" && p.in_hand && p.concealed) {
-    const backs = document.createElement("div");
-    backs.className = "ms-backs";
-    for (let i = 0; i < p.concealed; i += 1) backs.append(mjBackNode({ tiny: true }));
-    seat.append(backs);
-  }
-  return seat;
-}
-
 function topbarNode() {
   const room = state.myRoom;
   const bar = document.createElement("div");
-  bar.className = "poker-topbar";
+  bar.className = "mj-topbar";
   const left = document.createElement("span");
+  left.className = "mj-topbar-info";
   const rules = room.rules || {};
-  left.textContent = `第 ${room.hand_no || "-"} 局 · ${room.round_wind || "东"}风圈 · 庄家 ${displayNameOf(room.dealer)} · 底注 ${room.blind}`
-    + ` · 起和${rules.min_fan ?? 8}番`
+  left.textContent = `第 ${room.hand_no || "-"} 局 · ${room.round_wind || "东"}风圈 · 庄家 ${displayNameOf(room.dealer)} · 底注 ${room.blind} · 起和${rules.min_fan ?? 8}番`
     + (rules.flowers ? " · 花牌开" : " · 花牌关")
     + (rules.chow ? " · 吃开" : " · 吃关");
-  const right = document.createElement("span");
-  right.textContent = room.paused ? "⏸ 已暂停" : `牌墙余 ${room.wall_count ?? 0} 张`;
+  const right = document.createElement("div");
+  right.className = "mj-topbar-right";
+  const wall = document.createElement("span");
+  wall.className = "mj-wall-count";
+  wall.textContent = `牌墙 ${room.wall_count ?? 0}`;
+  const riverBtn = document.createElement("button");
+  riverBtn.type = "button";
+  riverBtn.className = "mj-river-toggle";
+  riverBtn.textContent = "牌河";
+  riverBtn.title = "查看全部打出的牌";
+  riverBtn.addEventListener("click", () => {
+    riverOverlayOpen = true;
+    renderGameView();
+  });
+  const chatToggle = document.createElement("button");
+  chatToggle.className = "dock-chat-toggle mj-chat-toggle";
+  chatToggle.type = "button";
+  chatToggle.textContent = "💬";
+  chatToggle.addEventListener("click", openChatOverlay);
+  right.append(wall, riverBtn, chatToggle);
   bar.append(left, right);
   return bar;
 }
@@ -175,7 +217,7 @@ function topbarNode() {
 function statusNode() {
   const room = state.myRoom;
   const status = document.createElement("div");
-  status.className = "poker-status";
+  status.className = "mj-status";
   const la = room.last_action;
   status.textContent = la ? `${la.nickname} ${la.text}`
     : room.claim ? `${displayNameOf(room.claim.by)} 打出 ${tileLabel(room.claim.tile)}，等待响应…`
@@ -183,45 +225,116 @@ function statusNode() {
   return status;
 }
 
-function pileNode(username, position) {
-  const room = state.myRoom;
-  const pile = document.createElement("div");
-  pile.className = `mj-pile pile-${position}`;
-  const tiles = (room.discards?.[username] || []).slice(-12);
-  for (const code of tiles) {
-    const isLast = room.last_discard && room.last_discard.by === username
-      && room.last_discard.tile === code
-      && (room.discards[username] || []).length
-      && room.discards[username][room.discards[username].length - 1] === code;
-    const node = mjTileNode(code, { tiny: true });
-    if (isLast) node.classList.add("just-discarded");
-    pile.append(node);
+function playerHeadNode(p, isMe) {
+  const head = document.createElement("div");
+  head.className = "mj-player-head";
+  const wind = document.createElement("span");
+  wind.className = "mj-wind";
+  wind.textContent = isMe
+    ? (state.myRoom.players?.[mySeatIndex()]?.seat_wind || "东")
+    : p.seat_wind;
+  if (isMe ? state.myRoom.players?.[mySeatIndex()]?.is_dealer : p.is_dealer) {
+    wind.classList.add("dealer");
+    wind.title = "庄家";
   }
-  return pile;
+  const name = document.createElement("span");
+  name.className = "mj-player-name";
+  name.textContent = isMe
+    ? (state.currentUser?.nickname || state.currentUser?.username || "我")
+    : p.nickname;
+  head.append(wind, name);
+  if (!isMe) head.append(ratingBadge(p.rating));
+  const flowers = document.createElement("span");
+  flowers.className = "mj-player-flowers";
+  const flowerCount = isMe ? (state.myRoom.your_flowers || []).length : p.flowers;
+  flowers.textContent = flowerCount ? `🌸${flowerCount}` : "";
+  flowers.title = `花牌 ${flowerCount} 张`;
+  head.append(flowers);
+  if (!isMe) {
+    const stack = document.createElement("span");
+    stack.className = "mj-player-stack";
+    stack.textContent = formatCoins(p.stack);
+    head.append(stack);
+  }
+  return head;
 }
 
-function centerNode() {
+/** 对手座位：top（对家）/ left（左家）/ right（右家）。 */
+function opponentNode(p, position) {
   const room = state.myRoom;
-  const center = document.createElement("div");
-  center.className = "mj-center";
+  const seat = document.createElement("div");
+  seat.className = `mj-opp mj-opp-${position}`;
+  seat.dataset.username = p.username;
+  seat.dataset.seat = room.players.indexOf(p);
+  if (room.status === "playing" && room.to_act === p.username) seat.classList.add("active");
+  seat.append(playerHeadNode(p, false));
+  if ((p.melds || []).length) {
+    const melds = document.createElement("div");
+    melds.className = "mj-player-melds";
+    for (const meld of p.melds) melds.append(meldNode(meld, { tiny: true }));
+    seat.append(melds);
+  }
+  if (room.status === "playing" && p.in_hand && p.concealed) {
+    const backs = document.createElement("div");
+    backs.className = "mj-player-backs";
+    const count = document.createElement("span");
+    count.className = "mj-back-count";
+    count.textContent = `🀄×${p.concealed}`;
+    count.title = `手牌 ${p.concealed} 张`;
+    backs.append(count);
+    const pics = document.createElement("span");
+    pics.className = "mj-backs-pics";
+    for (let i = 0; i < p.concealed; i += 1) pics.append(mjBackNode({ mini: true }));
+    backs.append(pics);
+    seat.append(backs);
+  }
+  return seat;
+}
+
+function myAreaNode() {
+  const room = state.myRoom;
+  const me = mySeatIndex();
+  const area = document.createElement("div");
+  area.className = "mj-me";
+  if (room.status === "playing" && room.to_act === state.currentUser?.username) {
+    area.classList.add("active");
+  }
+  area.dataset.username = state.currentUser?.username;
+  area.dataset.seat = me;
+  area.append(playerHeadNode(null, true));
+  const melds = room.players?.[me]?.melds || [];
+  if (melds.length) {
+    const box = document.createElement("div");
+    box.className = "mj-player-melds";
+    for (const meld of melds) box.append(meldNode(meld, { mini: true }));
+    area.append(box);
+  }
+  return area;
+}
+
+/** 牌河：6 列网格不重叠，先出的在前；最新一张高亮。 */
+function riverNode(username, position) {
+  const room = state.myRoom;
+  const river = document.createElement("div");
+  river.className = `mj-river river-${position}`;
+  const tiles = room.discards?.[username] || [];
+  for (const code of tiles) {
+    const node = mjTileNode(code, { mini: true });
+    const isLast = room.last_discard && room.last_discard.by === username
+      && room.last_discard.tile === code && tiles.length
+      && tiles[tiles.length - 1] === code;
+    if (isLast) node.classList.add("just-discarded");
+    river.append(node);
+  }
+  return river;
+}
+
+function centerBadgeNode() {
+  const room = state.myRoom;
   const badge = document.createElement("div");
   badge.className = "mj-center-badge";
   badge.textContent = `${room.round_wind || "东"}风圈 · 墙 ${room.wall_count ?? 0}`;
-  center.append(badge);
-  const me = mySeatIndex();
-  const positions = ["pile-bottom", "pile-right", "pile-top", "pile-left"];
-  for (const p of room.players) {
-    const relative = (room.players.indexOf(p) - me + room.players.length) % room.players.length;
-    center.append(pileNode(p.username, positions[relative] || "pile-top"));
-  }
-  if (room.claim) {
-    const claim = document.createElement("div");
-    claim.className = "mj-claim-badge";
-    claim.textContent = `${displayNameOf(room.claim.by)} 打出 ${tileLabel(room.claim.tile)}`
-      + (room.claim.waiting?.length ? ` · 等待 ${room.claim.waiting.map(displayNameOf).join("、")}` : "");
-    center.append(claim);
-  }
-  return center;
+  return badge;
 }
 
 function tenpaiNode() {
@@ -236,16 +349,70 @@ function tenpaiNode() {
   for (const code of tenpai.waits) {
     const chip = document.createElement("span");
     chip.className = "mj-tenpai-chip";
-    const remaining = tenpai.remaining?.[code];
-    chip.title = remaining != null ? `可见余 ${remaining} 张` : "";
-    chip.append(mjTileNode(code, { tiny: true }));
+    chip.append(mjTileNode(code, { mini: true }));
     const count = document.createElement("span");
+    const remaining = tenpai.remaining?.[code];
     count.textContent = remaining != null ? `×${remaining}` : "";
     chip.append(count);
     node.append(chip);
   }
   return node;
 }
+
+/** 牌河全览（二级菜单）：四家 6 列网格完整牌河。 */
+function riverOverlayNode() {
+  const room = state.myRoom;
+  const overlay = document.createElement("div");
+  overlay.className = "mj-river-overlay";
+  const head = document.createElement("div");
+  head.className = "mj-river-overlay-head";
+  const title = document.createElement("div");
+  title.textContent = "牌河 · 全部打出的牌";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "mj-river-overlay-close";
+  close.textContent = "✕ 关闭";
+  close.addEventListener("click", () => {
+    riverOverlayOpen = false;
+    renderGameView();
+  });
+  head.append(title, close);
+  overlay.append(head);
+  const me = mySeatIndex();
+  const labels = ["本家（下）", "右家", "对家（上）", "左家"];
+  for (const rel of [0, 1, 2, 3]) {
+    const p = room.players[(me + rel) % room.players.length];
+    const block = document.createElement("div");
+    block.className = "mj-river-block";
+    const name = document.createElement("div");
+    name.className = "mj-river-block-name";
+    name.textContent = `${labels[rel]} · ${p.nickname}`;
+    block.append(name);
+    const grid = document.createElement("div");
+    grid.className = "mj-river-full";
+    const tiles = room.discards?.[p.username] || [];
+    for (const code of tiles) grid.append(mjTileNode(code, { small: true }));
+    if (!tiles.length) {
+      const empty = document.createElement("span");
+      empty.className = "mj-river-empty";
+      empty.textContent = "尚未出牌";
+      grid.append(empty);
+    }
+    block.append(grid);
+    overlay.append(block);
+  }
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) {
+      riverOverlayOpen = false;
+      renderGameView();
+    }
+  });
+  return overlay;
+}
+
+/* =========================================================
+   结算回顾
+========================================================= */
 
 function resultNode(result) {
   const box = document.createElement("div");
@@ -284,10 +451,6 @@ function resultNode(result) {
     }
     if (fans.children.length) box.append(fans);
   }
-  const rows = document.createElement("div");
-  for (const name of Object.keys(result.hands || {})) {
-    requestProfile(name);
-  }
   const paying = Object.entries(result.payouts || {});
   if (paying.length && !result.draw_game) {
     for (const [name, amount] of paying) {
@@ -300,9 +463,8 @@ function resultNode(result) {
       amt.className = "lose";
       amt.textContent = `-${formatCoins(amount)}`;
       row.append(who, amt);
-      rows.append(row);
+      box.append(row);
     }
-    box.append(rows);
   }
   const reveal = document.createElement("div");
   reveal.className = "uno-reveal";
@@ -317,7 +479,7 @@ function resultNode(result) {
     const cardsBox = document.createElement("span");
     cardsBox.className = "uno-reveal-cards";
     for (const meld of result.melds?.[name] || []) {
-      for (const code of meld.tiles) cardsBox.append(mjTileNode(code, { small: true }));
+      cardsBox.append(meldNode(meld, { small: true }));
     }
     for (const code of tiles || []) {
       cardsBox.append(mjTileNode(code, { small: true, win: won && code === result.win_tile }));
@@ -332,95 +494,131 @@ function resultNode(result) {
   return box;
 }
 
-function actionBarNode() {
+/* =========================================================
+   常驻操作条：打出 / 吃 / 碰 / 杠 常驻，可胡时显示胡
+========================================================= */
+
+function actionButton(label, cls, enabled, onClick, title = "") {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `mj-act ${cls}`;
+  btn.textContent = label;
+  btn.disabled = !enabled;
+  if (title) btn.title = title;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+function chiPairLabel(pair) {
+  const tile = claimTile();
+  const tiles = [...pair, tile].sort((a, b) => a - b);
+  return tiles.map(tileLabel).join("·");
+}
+
+function actionsNode() {
   const room = state.myRoom;
   const bar = document.createElement("div");
-  bar.className = "action-bar";
+  bar.className = "mj-actions";
   const options = room.your_options || {};
   const claim = options.claim;
+  const myDiscardTurn = isMyTurn() && room.phase === "discard" && !room.paused;
+  const canDiscard = myDiscardTurn && selected.size === 1;
 
-  if (options.discard && isMyTurn() && !room.paused) {
-    const legal = selected.size === 1;
-    const play = document.createElement("button");
-    play.type = "button";
-    play.className = "action-btn primary";
-    play.textContent = legal ? `出牌 · ${tileLabel([...selected][0])}` : "选中要打出的牌";
-    play.disabled = !legal;
-    play.addEventListener("click", () => {
-      if (!legal) return;
-      mjAct({ action: "discard", index: [...selected][0] });
-    });
-    bar.append(play);
-    for (const code of options.angang || []) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      btn.textContent = `暗杠 ${tileLabel(code)}`;
-      btn.addEventListener("click", () => mjAct({ action: "angang", index: (room.your_hand || []).indexOf(code) }));
-      bar.append(btn);
-    }
-    for (const code of options.bugang || []) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      btn.textContent = `补杠 ${tileLabel(code)}`;
-      btn.addEventListener("click", () => mjAct({ action: "bugang", index: (room.your_hand || []).indexOf(code) }));
-      bar.append(btn);
-    }
-    if (options.zimo) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn danger";
-      btn.textContent = "自摸胡";
-      btn.addEventListener("click", () => mjAct({ action: "hu" }));
-      bar.append(btn);
-    }
-    return bar;
-  }
+  bar.append(actionButton(
+    canDiscard ? `打出 ${tileLabel([...selected][0])}` : "打出",
+    "primary", canDiscard,
+    () => mjAct({ action: "discard", index: [...selected][0] }),
+    "先点选一张手牌，再点打出"));
 
-  if (claim && !room.paused) {
-    if (claim.hu) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn danger";
-      btn.textContent = "胡";
-      btn.addEventListener("click", () => mjAct({ action: "claim", kind: "hu" }));
-      bar.append(btn);
-    }
-    if (claim.gang) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      btn.textContent = `杠 ${tileLabel(room.claim.tile)}`;
-      btn.addEventListener("click", () => mjAct({ action: "claim", kind: "gang" }));
-      bar.append(btn);
-    }
-    if (claim.peng) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      btn.textContent = `碰 ${tileLabel(room.claim.tile)}`;
-      btn.addEventListener("click", () => mjAct({ action: "claim", kind: "peng" }));
-      bar.append(btn);
-    }
-    for (const pair of claim.chi || []) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      const tiles = [...pair, room.claim.tile].sort((a, b) => a - b);
-      btn.textContent = `吃 ${tiles.map(tileLabel).join(" ")}`;
-      btn.addEventListener("click", () => mjAct({ action: "claim", kind: "chi", tiles: pair }));
-      bar.append(btn);
-    }
-    const pass = document.createElement("button");
-    pass.type = "button";
-    pass.className = "action-btn quiet";
-    pass.textContent = "过";
-    pass.addEventListener("click", () => mjAct({ action: "pass" }));
-    bar.append(pass);
+  const chis = chiOptions();
+  bar.append(actionButton(
+    chis.length === 1 ? `吃 ${chiPairLabel(chis[0])}` : "吃",
+    "eat", chis.length > 0,
+    () => {
+      if (chis.length === 1) {
+        mjAct({ action: "claim", kind: "chi", tiles: chis[0] });
+        return;
+      }
+      chiOpen = !chiOpen;
+      gangOpen = false;
+      renderGameView();
+    },
+    chis.length > 1 ? "有多种吃法，点击展开选择" : ""));
+
+  bar.append(actionButton(
+    claim?.peng ? `碰 ${tileLabel(claimTile())}` : "碰",
+    "peng", Boolean(claim?.peng),
+    () => mjAct({ action: "claim", kind: "peng" })));
+
+  const gangs = gangActions();
+  bar.append(actionButton(
+    gangs.length === 1 ? gangs[0].label : "杠",
+    "gang", gangs.length > 0,
+    () => {
+      if (gangs.length === 1) {
+        gangs[0].run();
+        return;
+      }
+      gangOpen = !gangOpen;
+      chiOpen = false;
+      renderGameView();
+    }));
+
+  const canHu = Boolean(options.zimo) || Boolean(claim?.hu);
+  const hu = actionButton(
+    options.zimo ? "自摸胡" : "胡",
+    "hu", canHu,
+    () => mjAct(claim?.hu && !options.zimo
+      ? { action: "claim", kind: "hu" }
+      : { action: "hu" }));
+  hu.hidden = !canHu;                       // 可胡时才显示
+  bar.append(hu);
+
+  if (room.phase === "claim" && claim && !options.passed) {
+    bar.append(actionButton("过", "pass", true, () => mjAct({ action: "pass" })));
   }
   return bar;
 }
+
+/** 吃/杠多选项时的二级选项行。 */
+function optionChipsNode() {
+  const box = document.createElement("div");
+  box.className = "mj-chips";
+  let items = [];
+  if (chiOpen && chiOptions().length > 1) {
+    items = chiOptions().map((pair) => ({
+      label: `吃 ${chiPairLabel(pair)}`,
+      run: () => mjAct({ action: "claim", kind: "chi", tiles: pair }),
+    }));
+  } else if (gangOpen && gangActions().length > 1) {
+    items = gangActions().map((g) => ({ label: g.label, run: g.run }));
+  } else {
+    return box;
+  }
+  for (const item of items) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "mj-chip";
+    chip.textContent = item.label;
+    chip.addEventListener("click", item.run);
+    box.append(chip);
+  }
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "mj-chip cancel";
+  cancel.textContent = "取消";
+  cancel.addEventListener("click", () => {
+    chiOpen = false;
+    gangOpen = false;
+    renderGameView();
+  });
+  box.append(cancel);
+  return box;
+}
+
+/* =========================================================
+   主渲染
+========================================================= */
 
 function renderMahjongTable() {
   const room = state.myRoom;
@@ -433,6 +631,8 @@ function renderMahjongTable() {
     selected = new Set();
     lastHandJson = handJson;
   }
+  if (!chiOptions().length) chiOpen = false;
+  if (!gangActions().length) gangOpen = false;
 
   const wrap = document.createElement("div");
   wrap.className = "poker-page mj-page";
@@ -442,18 +642,30 @@ function renderMahjongTable() {
   table.className = "mj-table";
   table.append(topbarNode(), statusNode());
 
-  const seats = document.createElement("div");
-  seats.className = "mj-seats";
   const players = room.players;
   const me = mySeatIndex();
-  const positions = ["pos-bottom", "pos-right", "pos-top", "pos-left"];
-  players.forEach((p, index) => {
-    const seat = seatNode(p);
-    const relative = (index - me + players.length) % players.length;
-    seat.classList.add(positions[relative] || "pos-top");
-    seats.append(seat);
-  });
-  table.append(seats, centerNode());
+  const positionOf = ["bottom", "right", "top", "left"];
+  const posMap = new Map(players.map((p) =>
+    [positionOf[(players.indexOf(p) - me + players.length) % players.length], p]));
+
+  const seatRow = document.createElement("div");
+  seatRow.className = "mj-seat-row";
+  for (const pos of ["left", "top", "right"]) {
+    const p = posMap.get(pos);
+    if (p) seatRow.append(opponentNode(p, pos));
+  }
+  table.append(seatRow);
+
+  const rivers = document.createElement("div");
+  rivers.className = "mj-rivers";
+  for (const pos of ["top", "left", "right", "bottom"]) {
+    const p = posMap.get(pos);
+    if (p) rivers.append(riverNode(p.username, pos));
+  }
+  rivers.append(centerBadgeNode());
+  table.append(rivers);
+
+  table.append(myAreaNode());
 
   if (room.result) table.append(resultNode(room.result));
   if (room.paused) {
@@ -462,31 +674,37 @@ function renderMahjongTable() {
     overlay.textContent = "⏸ 牌局已暂停，等待房主继续";
     table.append(overlay);
   }
+  if (riverOverlayOpen) table.append(riverOverlayNode());
   wrap.append(table);
 
   const dock = document.createElement("div");
   dock.className = "poker-dock mj-dock";
   dock.classList.toggle("is-my-turn", isMyTurn() && !room.paused && room.phase === "discard");
+
   const dockHead = document.createElement("div");
-  dockHead.className = "dock-head";
+  dockHead.className = "mj-dock-head";
   const label = document.createElement("div");
   label.className = "my-cards-label";
   const hand = room.your_hand || [];
   const claimMine = room.your_options?.claim;
   label.textContent = room.claim && claimMine && !room.your_options?.passed
-    ? "有人打出的牌可以响应"
+    ? "可响应：点吃 / 碰 / 杠 / 胡，或点过"
     : isMyTurn() && room.phase === "discard"
-      ? "轮到你出牌 · 选中一张打出"
+      ? "轮到你 · 点选一张牌后点「打出」"
       : `你的手牌 · ${hand.length} 张`;
-  const chatToggle = document.createElement("button");
-  chatToggle.className = "dock-chat-toggle";
-  chatToggle.type = "button";
-  chatToggle.textContent = "💬 聊天";
-  chatToggle.addEventListener("click", openChatOverlay);
-  dockHead.append(label, chatToggle);
+  dockHead.append(label);
+  const countdown = document.createElement("div");
+  countdown.className = "countdown";
+  const fill = document.createElement("div");
+  fill.className = "countdown-fill";
+  countdown.append(fill);
+  dockHead.append(countdown);
   dock.append(dockHead);
 
-  if (room.your_flowers?.length) {
+  const tenpai = tenpaiNode();
+  if (tenpai) dock.append(tenpai);
+
+  if ((room.your_flowers || []).length) {
     const flowers = document.createElement("div");
     flowers.className = "mj-my-flowers";
     const flabel = document.createElement("span");
@@ -497,8 +715,8 @@ function renderMahjongTable() {
     dock.append(flowers);
   }
 
-  const tenpai = tenpaiNode();
-  if (tenpai) dock.append(tenpai);
+  const chips = optionChipsNode();
+  if (chips.children.length) dock.append(chips);
 
   const myCards = document.createElement("div");
   myCards.className = "mj-hand";
@@ -515,27 +733,24 @@ function renderMahjongTable() {
     node.append(mjTileNode(code, { picked: selected.has(index) }));
     node.setAttribute("aria-label", tileLabel(code));
     node.addEventListener("click", () => {
-      if (selected.has(index)) selected.delete(index);
-      else {
-        selected.clear();
-        selected.add(index);
-      }
+      if (selected.has(index)) selected.clear();
+      else selected.add(index);
       renderGameView();
+    });
+    node.addEventListener("dblclick", () => {
+      if (!(isMyTurn() && room.phase === "discard" && !room.paused)) return;
+      selected.clear();
+      selected.add(index);
+      mjAct({ action: "discard", index });
     });
     myCards.append(node);
   }
   dock.append(myCards);
+  dock.append(actionsNode());
 
-  const countdown = document.createElement("div");
-  countdown.className = "countdown";
-  const fill = document.createElement("div");
-  fill.className = "countdown-fill";
-  countdown.append(fill);
-  dock.append(countdown);
-
-  if (!room.paused && ((isMyTurn() && room.phase === "discard") || claimMine)) {
-    dock.append(actionBarNode());
-    if (room.turn_left > 0) startHallTicker(fill, Math.max(1, room.turn_left));
+  if (!room.paused && room.turn_left > 0
+      && ((isMyTurn() && room.phase === "discard") || claimMine)) {
+    startHallTicker(fill, Math.max(1, room.turn_left));
   }
   wrap.append(dock);
 
@@ -549,7 +764,7 @@ function renderMahjongTable() {
 registerGame("mahjong", {
   stakeLabel: "底注",
   blindLabel: "下一局底注",
-  waitingHint: `国标麻将需要正好 4 名玩家：吃碰杠胡、八番起和，花牌每张 1 分。${FAN_ORDER_HINT}等待房主开局，中途退出本局作废、筹码原封退回。`,
+  waitingHint: "国标麻将需要正好 4 名玩家：吃碰杠胡、八番起和，花牌每张 1 分。等待房主开局，中途退出本局作废、筹码原封退回。",
   noNextHint: () => "人数不足 4 人或有人筹码已输光，过半数投「解散」后房间将按当前筹码退还所有人。",
   renderTable: renderMahjongTable,
   renderReview: (result) => {
@@ -562,5 +777,5 @@ registerGame("mahjong", {
     return review;
   },
   seatElement: (index) => document.querySelector(
-    `#gameMain .mj-seats .mj-seat:nth-child(${index + 1})`),
+    `#gameMain .mj-table [data-seat="${index}"]`),
 });

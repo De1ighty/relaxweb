@@ -287,6 +287,87 @@ def force_hand(room, name, tiles, win_tile=None):
         tiles[-1] if g["to_act"] == name else None)
 
 
+def test_chi_claim():
+    async def run():
+        room = make_room()
+        await room.start()
+        g = room.game
+        # a（庄）打 3万；b 是 a 的下家，手里 4万5万可吃；c/d 不可吃
+        force_hand(room, "a", [m(3), m(1), m(1), m(2), p(1), p(2), p(3),
+                               s(1), s(2), s(3), h("中"), h("发"), h("白"), h("北")])
+        force_hand(room, "b", [m(4), m(5), m(1), m(1), m(2), p(1), p(2), p(3),
+                               s(1), s(2), s(3), h("中"), h("发")])
+        force_hand(room, "c", [m(4), m(5), m(1), m(2), m(3), p(1), p(2), p(3),
+                               s(1), s(2), s(3), h("中"), h("发")])
+        force_hand(room, "d", [m(4), m(5), m(1), m(2), m(3), p(1), p(2), p(3),
+                               s(1), s(2), s(3), h("中"), h("发")])
+        await room.perform_action("a", "discard", {"index": 0})
+        options = g["claim"]["options"] if g["claim"] else {}
+        only_next = options.get("b", {}).get("chi")
+        others = any(options.get(n, {}).get("chi") for n in ("c", "d"))
+        pair = only_next[0]
+        await room.perform_action("b", "claim", {"kind": "chi", "tiles": pair})
+        meld = g["melds"]["b"][0] if g["melds"]["b"] else {}
+        chi_ok = (meld.get("type") == "chi"
+                  and sorted(meld.get("tiles", [])) == sorted(pair + [m(3)])
+                  and g["to_act"] == "b" and g["phase"] == "discard"
+                  and g["discards"]["a"] == []
+                  and len(g["hands"]["b"]) == 11)
+        # 吃后打牌继续正常（声明结算是元组/字符串混用，曾在此抛异常）
+        tile_out = g["hands"]["b"][0]
+        await room.perform_action("b", "discard", {"index": 0})
+        # 下家可能对这张牌有吃碰响应，因此只要求牌落河且流程推进
+        advanced = (g["discards"]["b"] == [tile_out]
+                    and g["phase"] in ("claim", "discard")
+                    and (g["phase"] == "claim" or g["to_act"] == "c"))
+        return bool(only_next), others, chi_ok, advanced
+
+    has_chi, others, chi_ok, advanced = asyncio.run(run())
+    check("只有下家可吃", has_chi and not others)
+    check("吃牌成副露并轮到出牌", chi_ok)
+    check("吃后正常继续", advanced)
+
+
+def test_gang_claim_and_draw():
+    async def run():
+        room = make_room()
+        await room.start()
+        g = room.game
+        # a 打 5万，b 手里三张 5万可明杠
+        force_hand(room, "a", [m(5), m(1), m(2), m(3), p(1), p(2), p(3),
+                               s(1), s(2), s(3), h("中"), h("发"), h("白"), h("北")])
+        force_hand(room, "b", [m(5), m(5), m(5), m(1), m(2), m(3), p(1), p(2),
+                               p(3), s(1), s(2), s(3), h("中")])
+        force_hand(room, "c", [m(1), m(2), m(3), m(4), m(5), m(6), m(7), m(8),
+                               m(9), p(1), p(2), p(3), s(5)])
+        force_hand(room, "d", [m(1), m(2), m(3), m(4), m(5), m(6), m(7), m(8),
+                               m(9), p(1), p(2), p(3), s(9)])
+        wall_before = len(g["wall"])
+        await room.perform_action("a", "discard", {"index": 0})
+        can_gang = g["claim"]["options"]["b"].get("gang")
+        await room.perform_action("b", "claim", {"kind": "gang"})
+        meld = g["melds"]["b"][0] if g["melds"]["b"] else {}
+        gang_ok = (bool(can_gang) and meld.get("type") == "gang"
+                   and len(meld.get("tiles", [])) == 4
+                   and g["to_act"] == "b" and g["phase"] == "discard"
+                   and g["gang_draw"] and len(g["hands"]["b"]) == 11
+                   and len(g["wall"]) == wall_before - 1)
+        # 暗杠：把 b 手牌换成四张相同
+        force_hand(room, "b", [s(7)] * 4 + [m(1), m(2), m(3), p(1), p(2), p(3)])
+        g["gang_draw"] = False
+        wall2 = len(g["wall"])
+        await room.perform_action("b", "angang", {"index": 0})
+        angang_ok = (len(g["melds"]["b"]) == 2
+                     and g["melds"]["b"][1]["type"] == "angang"
+                     and len(g["hands"]["b"]) == 7
+                     and len(g["wall"]) == wall2 - 1)
+        return gang_ok, angang_ok
+
+    gang_ok, angang_ok = asyncio.run(run())
+    check("明杠成副露并补牌", gang_ok)
+    check("暗杠成副露并补牌", angang_ok)
+
+
 def test_rules_sanitize():
     room = make_room({"min_fan": 4, "flowers": False, "chow": False,
                       "dianpao_full": False, "junk": 1})
@@ -482,6 +563,8 @@ test_special_fans()
 test_situational_fans()
 test_wait_shapes()
 test_waits()
+test_chi_claim()
+test_gang_claim_and_draw()
 test_rules_sanitize()
 test_discard_and_peng()
 test_hu_on_discard()

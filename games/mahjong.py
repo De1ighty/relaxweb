@@ -1143,9 +1143,13 @@ class MahjongRoom(BaseRoom):
         if claim["mode"] == "bugang":
             await self._apply_bugang(claim["by"], claim["tile"])
             return
+        # 吃的声明是 ("chi", 两张手牌) 元组，其余是字符串
         priority = {"gang": 3, "peng": 2, "chi": 1}
-        takers = [(name, kind) for name, kind in claim["claims"].items()
-                  if kind in priority]
+        takers = []
+        for name, declared in claim["claims"].items():
+            kind = declared[0] if isinstance(declared, tuple) else declared
+            if kind in priority:
+                takers.append((name, kind))
         if not takers:
             await self._advance(claim["by"])
             return
