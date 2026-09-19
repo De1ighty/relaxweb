@@ -23,12 +23,20 @@ from rewards import init_rewards, rewards_state, claim_checkin, draw_lottery
 from estate import (
     EstateError,
     buy as estate_buy,
+    buy_tool as estate_buy_tool,
     estate_state,
+    finish_fishing as estate_finish_fishing,
+    finish_mining as estate_finish_mining,
     harvest as estate_harvest,
     init_estate,
     plant as estate_plant,
+    mine_cell as estate_mine_cell,
+    repair_tool as estate_repair_tool,
     sell as estate_sell,
     sell_all as estate_sell_all,
+    start_fishing as estate_start_fishing,
+    start_mining as estate_start_mining,
+    upgrade_tool as estate_upgrade_tool,
 )
 
 
@@ -787,7 +795,8 @@ async def handle_delete_account(websocket, state, data):
                      "(SELECT id FROM users WHERE username = ?)", (user["username"],))
         conn.execute("DELETE FROM lottery_draws WHERE user_id = "
                      "(SELECT id FROM users WHERE username = ?)", (user["username"],))
-        for table in ("estate_actions", "estate_inventory", "estate_plots", "estate_profiles"):
+        for table in ("estate_actions", "estate_fishing_sessions", "estate_mining_runs",
+                      "estate_tools", "estate_inventory", "estate_plots", "estate_profiles"):
             conn.execute(f"DELETE FROM {table} WHERE username = ?", (user["username"],))
         conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
     state["user"] = None
@@ -978,6 +987,30 @@ async def handle_estate_action(websocket, state, data, action):
                 result = estate_sell_all(
                     conn, username, request_id, now, adjust_coins,
                 )
+            elif action == "buy_tool":
+                result = estate_buy_tool(conn, username, request_id,
+                                         data.get("tool_type"), now, adjust_coins)
+            elif action == "upgrade_tool":
+                result = estate_upgrade_tool(conn, username, request_id,
+                                             data.get("tool_type"), now, adjust_coins)
+            elif action == "repair_tool":
+                result = estate_repair_tool(conn, username, request_id,
+                                            data.get("tool_type"), now, adjust_coins)
+            elif action == "start_fishing":
+                result = estate_start_fishing(conn, username, request_id,
+                                              data.get("bait_id"), now)
+            elif action == "finish_fishing":
+                result = estate_finish_fishing(conn, username, request_id,
+                                               data.get("session_id"), data.get("trace"), now)
+            elif action == "start_mining":
+                result = estate_start_mining(conn, username, request_id,
+                                             data.get("mine_level"), now)
+            elif action == "mine_cell":
+                result = estate_mine_cell(conn, username, request_id,
+                                          data.get("run_id"), data.get("cell"), now)
+            elif action == "finish_mining":
+                result = estate_finish_mining(conn, username, request_id,
+                                              data.get("run_id"), now)
             snapshot = estate_state(conn, username, now)
     except (EstateError, ValueError, sqlite3.Error) as error:
         code = error.code if isinstance(error, EstateError) else "estate_failed"
@@ -1030,6 +1063,38 @@ async def handle_estate_sell(websocket, state, data):
 
 async def handle_estate_sell_all(websocket, state, data):
     await handle_estate_action(websocket, state, data, "sell_all")
+
+
+async def handle_estate_buy_tool(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "buy_tool")
+
+
+async def handle_estate_upgrade_tool(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "upgrade_tool")
+
+
+async def handle_estate_repair_tool(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "repair_tool")
+
+
+async def handle_estate_start_fishing(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "start_fishing")
+
+
+async def handle_estate_finish_fishing(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "finish_fishing")
+
+
+async def handle_estate_start_mining(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "start_mining")
+
+
+async def handle_estate_mine_cell(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "mine_cell")
+
+
+async def handle_estate_finish_mining(websocket, state, data):
+    await handle_estate_action(websocket, state, data, "finish_mining")
 
 
 async def handle_transfer_coins(websocket, state, data):
@@ -2217,6 +2282,14 @@ handlers = {
     "estate_harvest": handle_estate_harvest,
     "estate_sell": handle_estate_sell,
     "estate_sell_all": handle_estate_sell_all,
+    "estate_buy_tool": handle_estate_buy_tool,
+    "estate_upgrade_tool": handle_estate_upgrade_tool,
+    "estate_repair_tool": handle_estate_repair_tool,
+    "estate_start_fishing": handle_estate_start_fishing,
+    "estate_finish_fishing": handle_estate_finish_fishing,
+    "estate_start_mining": handle_estate_start_mining,
+    "estate_mine_cell": handle_estate_mine_cell,
+    "estate_finish_mining": handle_estate_finish_mining,
     "get_rating_history": handle_get_rating_history,
     "get_rating_leaderboard": handle_get_rating_leaderboard,
     "transfer_coins": handle_transfer_coins,

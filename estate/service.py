@@ -7,9 +7,9 @@ import hashlib
 import json
 
 from estate.catalog import (
-    CROPS, INITIAL_PLOTS, LAND_LEVELS, MAX_PLOTS, PLOT_UNLOCKS,
+    BAITS, CROPS, INITIAL_PLOTS, LAND_LEVELS, MAX_PLOTS, PLOT_UNLOCKS, TOOLS,
     WAREHOUSE_LEVELS, crop_item, grow_seconds, item_info, public_catalog,
-    seed_item, xp_for_next,
+    bait_item, seed_item, xp_for_next,
 )
 
 
@@ -61,15 +61,15 @@ def ensure_estate(conn, username, now):
 
 def _profile(conn, username):
     row = conn.execute(
-        "SELECT level,xp,warehouse_level,plot_count,version,created_at,updated_at "
+        "SELECT level,xp,warehouse_level,plot_count,reserved_capacity,version,created_at,updated_at "
         "FROM estate_profiles WHERE username = ?", (username,),
     ).fetchone()
     if not row:
         raise EstateError("estate_missing", "庄园存档不存在")
     return {
         "level": row[0], "xp": row[1], "warehouse_level": row[2],
-        "plot_count": row[3], "version": row[4], "created_at": row[5],
-        "updated_at": row[6],
+        "plot_count": row[3], "reserved_capacity": row[4], "version": row[5],
+        "created_at": row[6], "updated_at": row[7],
     }
 
 
@@ -130,6 +130,17 @@ def estate_state(conn, username, now):
                                       "sellable": False, "sell_price": None}
         inventory.append({**info, "quantity": quantity})
 
+    tools = {}
+    for tool_type, level, durability in conn.execute(
+        "SELECT tool_type,level,durability FROM estate_tools WHERE username=?",
+        (username,),
+    ):
+        rule = TOOLS.get(tool_type, {}).get(level, {})
+        tools[tool_type] = {"type": tool_type, "level": level,
+                            "durability": durability,
+                            "max_durability": rule.get("max_durability", durability),
+                            "name": rule.get("name", tool_type)}
+
     return {
         "version": profile["version"],
         "server_time": now,
@@ -138,10 +149,13 @@ def estate_state(conn, username, now):
             **profile,
             "xp_next": xp_for_next(profile["level"]),
             "warehouse_capacity": _capacity(profile),
-            "warehouse_used": used,
+            "warehouse_used": used + profile["reserved_capacity"],
+            "warehouse_items": used,
+            "warehouse_reserved": profile["reserved_capacity"],
         },
         "plots": plots,
         "inventory": inventory,
+        "tools": tools,
         "catalog": public_catalog(),
     }
 
@@ -170,7 +184,7 @@ def _change_inventory(conn, username, item_id, delta):
 
 
 def _require_capacity(conn, username, profile, extra):
-    if _inventory_used(conn, username) + extra > _capacity(profile):
+    if _inventory_used(conn, username) + profile.get("reserved_capacity", 0) + extra > _capacity(profile):
         raise EstateError("warehouse_full", "仓库空间不足")
 
 
@@ -253,6 +267,21 @@ def buy(conn, username, request_id, item_kind, item_id, quantity, now, adjust_co
                              f"小胖庄园购买：{crop['name']}种子 ×{count}", request_id)
             _change_inventory(conn, username, seed_item(str(item_id)), count)
             return {"action": "buy", "kind": "seed", "item_id": item_id,
+                    "quantity": count, "cost": total, "coins": balance}
+
+        if item_kind == "bait":
+            bait = BAITS.get(str(item_id))
+            count = _positive_int(quantity, maximum=999)
+            if not bait:
+                raise EstateError("unknown_item", "鱼饵不存在")
+            if profile["level"] < bait["unlock_level"]:
+                raise EstateError("level_locked", "庄园等级不足")
+            _require_capacity(conn, username, profile, count)
+            total = round(bait["price"] * count, 2)
+            balance = _debit(adjust_coins, conn, username, total,
+                             f"小胖庄园购买：{bait['name']} ×{count}", request_id)
+            _change_inventory(conn, username, bait_item(str(item_id)), count)
+            return {"action": "buy", "kind": "bait", "item_id": item_id,
                     "quantity": count, "cost": total, "coins": balance}
 
         if item_kind == "plot":

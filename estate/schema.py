@@ -9,11 +9,15 @@ def init_estate(conn):
             xp INTEGER NOT NULL DEFAULT 0 CHECK(xp >= 0),
             warehouse_level INTEGER NOT NULL DEFAULT 1 CHECK(warehouse_level >= 1),
             plot_count INTEGER NOT NULL DEFAULT 0 CHECK(plot_count >= 0),
+            reserved_capacity INTEGER NOT NULL DEFAULT 0 CHECK(reserved_capacity >= 0),
             version INTEGER NOT NULL DEFAULT 1 CHECK(version >= 1),
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         )
     """)
+    profile_columns = {row[1] for row in conn.execute("PRAGMA table_info(estate_profiles)")}
+    if "reserved_capacity" not in profile_columns:
+        conn.execute("ALTER TABLE estate_profiles ADD COLUMN reserved_capacity INTEGER NOT NULL DEFAULT 0")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS estate_plots (
             username TEXT NOT NULL COLLATE NOCASE,
@@ -53,3 +57,46 @@ def init_estate(conn):
         "CREATE INDEX IF NOT EXISTS idx_estate_actions_created "
         "ON estate_actions(username, created_at)"
     )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS estate_tools (
+            username TEXT NOT NULL COLLATE NOCASE,
+            tool_type TEXT NOT NULL,
+            level INTEGER NOT NULL CHECK(level >= 1),
+            durability INTEGER NOT NULL CHECK(durability >= 0),
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (username, tool_type)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS estate_fishing_sessions (
+            session_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL COLLATE NOCASE,
+            bait_id TEXT NOT NULL,
+            rod_level INTEGER NOT NULL,
+            fish_id TEXT NOT NULL,
+            seed INTEGER NOT NULL,
+            pattern_json TEXT NOT NULL,
+            started_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            result_json TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS estate_mining_runs (
+            run_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL COLLATE NOCASE,
+            mine_level INTEGER NOT NULL,
+            pickaxe_level INTEGER NOT NULL,
+            seed INTEGER NOT NULL,
+            board_json TEXT NOT NULL,
+            revealed_json TEXT NOT NULL DEFAULT '[]',
+            loot_json TEXT NOT NULL DEFAULT '{}',
+            strikes_left INTEGER NOT NULL,
+            started_at INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            result_json TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_fishing_user ON estate_fishing_sessions(username,status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mining_user ON estate_mining_runs(username,status)")

@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""小胖庄园工具、钓鱼和矿场领域测试。"""
+import sqlite3
+from pathlib import Path
+import sys
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from estate.activities import (
+    buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
+    start_fishing, start_mining, upgrade_tool,
+)
+from estate.catalog import bait_item
+from estate.schema import init_estate
+from estate.service import EstateError, buy, estate_state
+
+NOW = 2_000_000_000
+
+
+def adjust_coins(conn, username, delta, kind, detail="", ref=""):
+    balance = conn.execute("SELECT coins FROM users WHERE username=?", (username,)).fetchone()[0] + delta
+    if balance < 0:
+        raise ValueError("金币不足")
+    conn.execute("UPDATE users SET coins=? WHERE username=?", (balance, username))
+    conn.execute("INSERT INTO coin_transactions(username,amount,balance,kind,detail,created_at,ref) "
+                 "VALUES (?,?,?,?,?,?,?)", (username, delta, balance, kind, detail, NOW, ref))
+    return balance
+
+
+def winning_trace(pattern, rod_level=1):
+    factor = {1: 1.0, 2: .82, 3: .68}[rod_level]
+    tension, progress, trace = .18, .08, []
+    for index in range(360):
+        force = pattern[min(len(pattern) - 1, index // 10)]
+        held = tension < .64
+        trace.append(held)
+        if held:
+            tension += .026 * (.68 + force) * factor
+            progress += .013 * (1.12 - force * .3)
+        else:
+            tension = max(0, tension - .045)
+            progress = max(0, progress - .0035 * (.5 + force))
+        if progress >= 1:
+            return trace
+    return trace
+
+
+class ActivityTests(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.execute("CREATE TABLE users(username TEXT PRIMARY KEY,coins REAL NOT NULL)")
+        self.conn.execute("CREATE TABLE coin_transactions(id INTEGER PRIMARY KEY,username TEXT,amount REAL,balance REAL,kind TEXT,detail TEXT,created_at INTEGER,ref TEXT)")
+        self.conn.execute("INSERT INTO users VALUES ('alice',10000)")
+        init_estate(self.conn)
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def call(self, function, *args):
+        with self.conn:
+            return function(self.conn, *args)
+
+    def test_tools_buy_use_repair_and_upgrade(self):
+        bought = self.call(buy_tool, "alice", "buy-rod-0001", "rod", NOW, adjust_coins)
+        self.assertEqual(bought["durability"], 20)
+        self.conn.execute("UPDATE estate_tools SET durability=5 WHERE username='alice' AND tool_type='rod'")
+        repaired = self.call(repair_tool, "alice", "repair-rod-01", "rod", NOW, adjust_coins)
+        self.assertEqual(repaired["durability"], 20)
+        self.conn.execute("UPDATE estate_profiles SET level=3 WHERE username='alice'")
+        upgraded = self.call(upgrade_tool, "alice", "upgrade-rod-1", "rod", NOW, adjust_coins)
+        self.assertEqual((upgraded["level"], upgraded["durability"]), (2, 35))
+        replay = self.call(upgrade_tool, "alice", "upgrade-rod-1", "rod", NOW, adjust_coins)
+        self.assertTrue(replay["replayed"])
+
+    def test_fishing_consumes_cost_and_awards_verified_fish(self):
+        self.call(buy_tool, "alice", "buy-rod-0002", "rod", NOW, adjust_coins)
+        self.call(buy, "alice", "buy-bait-001", "bait", "worm", 2, NOW, adjust_coins)
+        started = self.call(start_fishing, "alice", "fish-start-01", "worm", NOW)
+        state = self.call(estate_state, "alice", NOW)
+        self.assertEqual(next(i for i in state["inventory"] if i["id"] == bait_item("worm"))["quantity"], 1)
+        self.assertEqual(state["tools"]["rod"]["durability"], 19)
+        self.assertEqual(state["profile"]["warehouse_reserved"], 1)
+        result = self.call(finish_fishing, "alice", "fish-done-001", started["session_id"],
+                           winning_trace(started["pattern"]), NOW + 25)
+        self.assertEqual(result["outcome"], "caught")
+        state = self.call(estate_state, "alice", NOW + 25)
+        self.assertEqual(state["profile"]["warehouse_reserved"], 0)
+        self.assertTrue(any(item["kind"] == "fish" for item in state["inventory"]))
+
+    def test_failed_fishing_does_not_refund(self):
+        self.call(buy_tool, "alice", "buy-rod-0003", "rod", NOW, adjust_coins)
+        self.call(buy, "alice", "buy-bait-002", "bait", "worm", 1, NOW, adjust_coins)
+        started = self.call(start_fishing, "alice", "fish-start-02", "worm", NOW)
+        result = self.call(finish_fishing, "alice", "fish-done-002", started["session_id"],
+                           [True] * 100, NOW + 10)
+        self.assertEqual(result["outcome"], "snapped")
+        state = self.call(estate_state, "alice", NOW + 10)
+        self.assertFalse(any(item["kind"] == "bait" for item in state["inventory"]))
+        self.assertEqual(state["tools"]["rod"]["durability"], 19)
+
+    def test_mining_is_hidden_idempotent_and_settles(self):
+        self.call(buy_tool, "alice", "buy-pick-001", "pickaxe", NOW, adjust_coins)
+        started = self.call(start_mining, "alice", "mine-start-01", 1, NOW)
+        self.assertNotIn("board", started)
+        first = self.call(mine_cell, "alice", "mine-cell-001", started["run_id"], 0, NOW)
+        replay = self.call(mine_cell, "alice", "mine-cell-001", started["run_id"], 0, NOW)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(first["outcome"], replay["outcome"])
+        result = self.call(finish_mining, "alice", "mine-finish-1", started["run_id"], NOW)
+        self.assertTrue(result["finished"])
+        state = self.call(estate_state, "alice", NOW)
+        self.assertEqual(state["profile"]["warehouse_reserved"], 0)
+        self.assertEqual(state["tools"]["pickaxe"]["durability"], 19)
+        with self.assertRaises(EstateError):
+            self.call(mine_cell, "alice", "mine-cell-002", started["run_id"], 1, NOW)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
