@@ -1,0 +1,57 @@
+/* Shared game metadata used by the hall and room views. */
+
+export const GAME_TYPES = [
+  {
+    id: "holdem",
+    name: "德州扑克 · 无限注",
+    icon: "♠",
+    desc: "经典规则：盲注轮转、边池分配、全下自动跑马。金币买入，离桌自动结算。",
+    seats: 9,
+    minStartPlayers: 2,
+  },
+  {
+    id: "uno",
+    name: "UNO · 经典牌局",
+    icon: "🃏",
+    desc: "同色同数出牌，功能牌逆转战局。剩牌按张赔给赢家，先出完者通吃本局。",
+    seats: 9,
+    minStartPlayers: 2,
+  },
+  {
+    id: "guandan",
+    name: "掼蛋 · 组队升级",
+    icon: "🎴",
+    seats: 4,
+    minStartPlayers: 4,
+    desc: "双副牌四人组队，级牌为王前第二大，逢人配、炸弹翻倍。头游定胜负，从 2 打到 A。",
+  },
+  {
+    id: "mahjong",
+    name: "国标麻将 · 八番起和",
+    icon: "🀄",
+    seats: 4,
+    minStartPlayers: 4,
+    desc: "144 张牌吃碰杠胡，圈风门风随庄轮转，76 个常用番种、花牌计分。自摸三家各付，点炮包三家。",
+  },
+];
+
+export const DEFAULT_GAME = GAME_TYPES[0];
+
+export function gameMetaById(id) {
+  return GAME_TYPES.find((game) => game.id === id) || DEFAULT_GAME;
+}
+
+export function fillBlindOptions(select, gameId, selected) {
+  for (const blind of [1, 2, 5, 10]) {
+    const option = document.createElement("option");
+    option.value = String(blind);
+    option.textContent = gameId === "holdem" ? `盲注 ${blind}/${blind * 2}`
+      : gameId === "uno" ? `每张赔付 ${blind}` : `底注 ${blind}`;
+    if (String(blind) === String(selected)) option.selected = true;
+    select.append(option);
+  }
+}
+
+export function minimumBuyIn(blind) {
+  return Number(blind || 0) * 20;
+}

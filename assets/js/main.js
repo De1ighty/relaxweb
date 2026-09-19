@@ -9,7 +9,7 @@ import {
 import {
   openFinance, openLogin, setAuthMode, submitAuth, submitTransfer, switchFinanceTab,
 } from "./auth.js";
-import { closeChatOverlay } from "./room.js";
+import { closeChatOverlay } from "./room-chat.js";
 import { confirmDialog } from "./dialog.js";
 // 以下模块靠导入时的副作用完成注册（大厅视图、房间视图、各游戏牌桌）
 import "./hall.js";

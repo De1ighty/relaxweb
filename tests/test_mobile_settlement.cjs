@@ -27,10 +27,21 @@ const assert = require('node:assert/strict');
     // Native scroll input, followed by a coordinate tap. Locator.click/tap and
     // scrollIntoView would auto-scroll even an overflow:hidden page and mask this bug.
     async function swipeUp(width, height) {
-      await touch.send('Input.synthesizeScrollGesture', {
-        x: Math.round(width / 2), y: Math.round(height * 0.75),
-        yDistance: -Math.round(height * 0.6), speed: 1800, gestureSourceType: 'touch',
+      // Some Chrome versions acknowledge synthesizeScrollGesture without
+      // delivering touch scrolling. Dispatch actual touch points across frames.
+      const x = Math.round(width / 2);
+      const startY = Math.round(height * 0.75);
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchStart', touchPoints: [{x, y: startY}],
       });
+      for (let step = 1; step <= 8; step++) {
+        await touch.send('Input.dispatchTouchEvent', {
+          type: 'touchMove', touchPoints: [{x, y: startY - Math.round(height * 0.6 * step / 8)}],
+        });
+        await page.evaluate(() => new Promise(requestAnimationFrame));
+      }
+      await touch.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+      await page.evaluate(() => new Promise(requestAnimationFrame));
     }
 
     for (const game of ['holdem', 'uno']) {

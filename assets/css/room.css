@@ -110,64 +110,6 @@
     white-space: nowrap;
 }
 
-.new-room-card {
-    display: flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    width: 100%;
-
-    min-height: 58px;
-
-    margin-top: 8px;
-
-    border: 2px dashed #d2d2d7;
-
-    border-radius: 11px;
-
-    background: transparent;
-
-    color: #86868b;
-
-    font: inherit;
-
-    font-size: 26px;
-
-    font-weight: 300;
-
-    cursor: pointer;
-
-    transition: border-color .15s, color .15s;
-}
-
-.new-room-card:hover {
-    border-color: #1fa971;
-
-    color: #1fa971;
-}
-
-.create-form-column {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 10px;
-
-    margin-top: 12px;
-}
-
-.create-form-column .login-input {
-    margin-top: 0;
-
-    width: 100%;
-}
-
-.create-form-column .login-submit {
-    margin-top: 4px;
-}
-
 .room-topbar {
     position: absolute;
 
@@ -840,3 +782,59 @@
 
     font-weight: 650;
 }
+
+/* Shared waiting table shell. Each game still owns its live-play table skin. */
+.waiting-room { width:100%; min-width:0; }
+.waiting-room-info { overflow:hidden; padding:13px 16px; border:1px solid #e4e9eb; border-radius:13px; background:#fff; color:#647078; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+.waiting-room-title { margin:15px 2px 13px; color:#263238; font-size:18px; font-weight:750; }
+.waiting-table { position:relative; width:100%; height:clamp(330px, 43vw, 520px); min-height:330px; overflow:hidden; isolation:isolate; border:1px solid #d7e1df; border-radius:45% / 38%; background:radial-gradient(ellipse at center, #d9eee6 0, #c3e0d5 56%, #b2d2c8 100%); box-shadow:inset 0 0 0 8px #ffffff76, 0 14px 34px #123a2b16; }
+.waiting-table::before { position:absolute; inset:8% 8%; z-index:-1; content:""; border:1px solid #ffffffa8; border-radius:45% / 38%; }
+.waiting-seats { position:absolute; inset:12px 6px; }
+.waiting-seat { position:absolute; left:var(--seat-x, 50%); top:var(--seat-y, 50%); display:flex; flex-direction:column; justify-content:center; align-items:center; gap:3px; width:clamp(78px, 11vw, 126px); min-height:65px; padding:7px 8px; transform:translate(-50%,-50%); border:1px solid #dce5e2; border-radius:13px; background:#fff; color:#46544e; box-shadow:0 5px 16px #183b2d20; text-align:center; }
+.waiting-seat[data-position="bottom"] { left:50%; top:84%; }
+.waiting-seat[data-position="top"] { left:50%; top:16%; }
+.waiting-seat[data-position="left"] { left:14%; top:50%; }
+.waiting-seat[data-position="right"] { left:86%; top:50%; }
+.waiting-seat.is-me { border-color:#6fa8db; background:#eff7ff; box-shadow:inset 0 0 0 1px #6fa8db,0 5px 16px #183b2d20; }
+.waiting-seat.is-owner { border-top:3px solid #d7a73b; }
+.waiting-seat.is-empty { justify-content:center; border:1px dashed #91afa2; background:#ffffff61; color:#71877c; box-shadow:none; font-size:12px; }
+.waiting-seat-name { max-width:100%; overflow:hidden; color:#283930; font-size:13px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.waiting-seat-rating { line-height:1; }
+.waiting-seat-rating .rating-badge { font-size:10px; }
+.waiting-seat-badges { display:flex; flex-wrap:wrap; justify-content:center; gap:3px; }
+.waiting-owner-badge, .waiting-me-badge, .waiting-team-badge { padding:1px 5px; border-radius:5px; background:#fff0d5; color:#79530e; font-size:10px; font-weight:700; }
+.waiting-me-badge { background:#e1efff; color:#1c5f9b; }
+.waiting-team-badge.team-1 { background:#eee7ff; color:#6244a2; }
+.waiting-seat-stack { color:#8b6418; font-size:12px; font-weight:750; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.waiting-center { position:absolute; left:28%; top:39%; display:flex; align-items:center; justify-content:center; width:44%; min-height:54px; padding:10px; border:1px solid #ffffff91; border-radius:14px; background:#ffffffb5; color:#4b6860; font-size:13px; font-weight:700; text-align:center; line-height:1.5; }
+.waiting-room-controls { display:flex; flex-direction:column; gap:8px; margin-top:14px; padding:15px 17px; border:1px solid #e4e9eb; border-radius:14px; background:#fff; }
+.waiting-start { width:100%; margin:0; }
+.waiting-start:disabled { opacity:.5; cursor:not-allowed; }
+.waiting-room-hint { margin:0; }
+.waiting-seat-enter { animation:waiting-seat-arrive .38s ease-out both; }
+@keyframes waiting-seat-arrive { from { opacity:0; transform:translate(-50%,-40%) scale(.94); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
+@media (max-width:1023px) {
+    .waiting-table { display:flex; flex-direction:column; height:auto; min-height:0; overflow:visible; border-radius:20px; background:#e2efe9; }
+    .waiting-table::before { display:none; }
+    .waiting-seats { position:relative; inset:auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; padding:12px; }
+    .waiting-room[data-game="guandan"] .waiting-seats,
+    .waiting-room[data-game="mahjong"] .waiting-seats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .waiting-seat { position:relative; inset:auto; left:auto; top:auto; width:auto; min-width:0; min-height:68px; transform:none; }
+    .waiting-seat[data-position="bottom"], .waiting-seat[data-position="top"],
+    .waiting-seat[data-position="left"], .waiting-seat[data-position="right"] { position:relative; left:auto; top:auto; }
+    .waiting-seat-enter { animation:waiting-seat-grid-arrive .38s ease-out both; }
+    @keyframes waiting-seat-grid-arrive { from { opacity:0; transform:translateY(5px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+    .waiting-center { position:relative; inset:auto; width:auto; min-height:48px; margin:0 12px 12px; padding:8px 12px; }
+}
+@media (max-width:650px) {
+    .waiting-room-info { padding:11px 12px; font-size:12px; }
+    .waiting-room-title { font-size:16px; }
+    .waiting-table { height:auto; min-height:0; border-radius:15px; }
+    .waiting-seats { gap:6px; padding:9px; }
+    .waiting-seat { min-height:62px; padding:5px 4px; gap:2px; border-radius:10px; }
+    .waiting-seat-name { font-size:11px; }
+    .waiting-seat-stack { font-size:10px; }
+    .waiting-center { min-height:44px; margin:0 9px 9px; padding:8px 5px; font-size:11px; }
+    .waiting-room-controls { padding:12px; }
+}
+@media (prefers-reduced-motion:reduce) { .waiting-seat-enter { animation:none; } }

@@ -7,31 +7,6 @@
    游戏厅
 ========================================================= */
 
-.game-card {
-    width: 720px;
-}
-
-.hall-intro {
-    display: flex;
-
-    align-items: center;
-
-    gap: 14px;
-
-    padding: 16px;
-
-    border-radius: 14px;
-
-    background:
-        linear-gradient(
-            135deg,
-            #eef4ff,
-            #f5f0ff
-        );
-
-    margin-bottom: 14px;
-}
-
 .hall-game-icon {
     display: flex;
 
@@ -73,46 +48,6 @@
     font-size: 12px;
 }
 
-.hall-room {
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    gap: 10px;
-
-    padding: 11px 13px;
-
-    border-radius: 11px;
-
-    background: #f5f5f7;
-
-    margin-top: 8px;
-}
-
-.hall-room-name {
-    font-size: 13px;
-
-    font-weight: 650;
-
-    word-break: break-all;
-}
-
-.hall-room-meta {
-    margin-top: 2px;
-
-    color: #86868b;
-
-    font-size: 12px;
-}
-
-.hall-room-meta .live-dot {
-    color: #1fa971;
-
-    font-weight: 700;
-}
-
 .hall-join {
     border: 0;
 
@@ -135,24 +70,6 @@
 
 .hall-join:hover {
     background: #18945f;
-}
-
-.hall-create-form {
-    display: flex;
-
-    gap: 8px;
-
-    margin-top: 12px;
-}
-
-.hall-create-form .login-input {
-    margin-top: 0;
-}
-
-.hall-create-form select.login-input {
-    width: 92px;
-
-    min-width: 92px;
 }
 
 .hall-section-title {
@@ -241,3 +158,122 @@
 .game-btn-row .bet-secondary {
     margin-top: 0;
 }
+
+/* Room directory and two-column room creation form. */
+.hall-toolbar { display:grid; grid-template-columns:auto minmax(180px,1fr) minmax(180px,320px) auto; align-items:center; gap:14px; margin:4px 0 18px; }
+.hall-toolbar .hall-page-title { margin:0; }
+.hall-search-wrap { display:block; min-width:0; }
+.hall-search { width:100%; height:42px; padding:0 14px; border:1px solid #e1e4e8; border-radius:11px; background:#fff; color:#24292e; font:inherit; font-size:14px; }
+.hall-search:focus { outline:3px solid #1fa97133; border-color:#1fa971; }
+.hall-create-button { min-height:42px; padding:0 16px; border:0; border-radius:11px; background:#16865d; color:#fff; font:inherit; font-size:14px; font-weight:700; white-space:nowrap; cursor:pointer; }
+.hall-create-button:hover { background:#0e714d; }
+.rooms-layout { display:grid; grid-template-columns:208px minmax(0,1fr); gap:20px; align-items:start; }
+.rooms-game-nav { display:flex; flex-direction:column; gap:5px; padding:12px; border:1px solid #e9ecef; border-radius:16px; background:#fff; box-shadow:0 6px 22px #182c3d08; }
+.rooms-nav-title { padding:4px 9px 8px; color:#7b838b; font-size:12px; font-weight:700; }
+.rooms-game-link { width:100%; padding:10px 11px; border:0; border-radius:9px; background:transparent; color:#30363b; font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.rooms-game-link:hover { background:#f4f7f6; }
+.rooms-game-link.active { background:#e9f6f0; color:#126b4b; font-weight:750; }
+.rooms-content { min-width:0; overflow:hidden; padding:18px; border:1px solid #e8ecef; border-radius:16px; background:#fff; box-shadow:0 8px 28px #182c3d08; }
+.hall-room-filters { display:flex; gap:7px; margin-bottom:14px; }
+.hall-filter-button { padding:8px 13px; border:1px solid #e4e8eb; border-radius:999px; background:#fff; color:#59626a; font:inherit; font-size:13px; cursor:pointer; }
+.hall-filter-button[aria-pressed="true"] { border-color:#16865d; background:#e9f6f0; color:#126b4b; font-weight:700; }
+.hall-room-table { width:100%; }
+.hall-room-cell { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hall-room-header, .hall-room-row { display:grid; grid-template-columns:minmax(150px,1.6fr) minmax(105px,1fr) 78px minmax(94px,.8fr) 100px 84px; align-items:center; gap:12px; }
+.hall-room-header { padding:0 13px 10px; border-bottom:1px solid #e8ecef; color:#838b92; font-size:12px; font-weight:700; }
+.hall-room-list { min-height:76px; }
+.hall-room-row { min-height:68px; padding:9px 13px; border-bottom:1px solid #f0f2f3; color:#47515a; font-size:13px; transition:background-color .2s,box-shadow .2s,opacity .2s,transform .2s; }
+.hall-room-row:last-child { border-bottom:0; }
+.hall-room-row:hover { background:#fafcfb; }
+.hall-room-room { overflow:hidden; color:#20272c; font-size:14px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.hall-room-players, .hall-room-buyin { font-variant-numeric:tabular-nums; }
+.hall-room-status::before { content:""; display:inline-block; width:7px; height:7px; margin-right:7px; border-radius:50%; background:#24a66a; vertical-align:1px; }
+.hall-room-status[data-status="playing"]::before { background:#e05658; }
+.hall-room-action { text-align:right; }
+.hall-room-action { overflow:visible; }
+.hall-room-action .hall-join { min-width:68px; padding:8px 12px; }
+.hall-join:disabled { background:#eceff0; color:#92999e; cursor:not-allowed; }
+.hall-empty-state { padding:44px 16px; color:#7d868c; font-size:14px; text-align:center; }
+.room-entering { animation:hall-row-enter .32s ease-out both; }
+.room-updated { animation:hall-row-update .55s ease-out both; }
+@keyframes hall-row-enter { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
+@keyframes hall-row-update { 35% { background:#e8f7ef; box-shadow:inset 3px 0 #26a36d; } 100% { background:transparent; box-shadow:none; } }
+.create-toolbar { grid-template-columns:auto 1fr auto; margin-bottom:16px; }
+.create-toolbar-game { color:#68737a; font-size:14px; font-weight:650; }
+.create-room-layout { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(260px,.85fr); gap:18px; align-items:start; }
+.create-room-form, .create-summary-card { min-width:0; padding:22px; border:1px solid #e7eaed; border-radius:16px; background:#fff; box-shadow:0 8px 26px #182c3d08; }
+.create-fields-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.create-field { display:flex; flex-direction:column; gap:7px; min-width:0; }
+.create-field-group { display:flex; flex-direction:column; min-width:0; }
+.create-field-label { color:#30383e; font-size:13px; font-weight:700; }
+.create-field .login-input { box-sizing:border-box; width:100%; min-width:0; margin:0; }
+.create-field-help, .create-minimum { color:#818a91; font-size:12px; line-height:1.5; }
+.create-minimum { grid-column:1/-1; margin-top:-7px; color:#126b4b; font-weight:650; }
+.create-rules-details { margin-top:22px; border-top:1px solid #edf0f1; padding-top:16px; }
+.create-rules-details summary { color:#37424a; font-size:14px; font-weight:700; cursor:pointer; }
+.create-long-rules { margin-top:14px; padding-top:14px; border-top:1px solid #edf0f1; }
+.create-long-rules summary { color:#69757d; font-size:13px; cursor:pointer; }
+.create-long-rules p { color:#69757d; font-size:13px; line-height:1.65; }
+.create-rules-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; margin-top:16px; }
+.create-rules-note { grid-column:1/-1; margin:0; color:#65717a; font-size:13px; line-height:1.65; }
+.create-submit { width:100%; margin-top:20px; }
+.create-submit:disabled { opacity:.48; cursor:not-allowed; }
+.create-error, .create-field-error { color:#a3342b; font-size:12px; line-height:1.5; }
+.create-error { margin-top:12px; padding:10px 12px; border-radius:9px; background:#fff0ef; font-size:13px; }
+.create-field-error { min-height:18px; }
+.create-field .login-input[aria-invalid="true"] { border-color:#ce5148; }
+.create-summary-card { position:sticky; top:86px; }
+.create-summary-card h2 { margin:0 0 14px; color:#263139; font-size:16px; }
+.create-summary-row { display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid #eff1f2; color:#707a81; font-size:13px; }
+.create-summary-row strong { min-width:0; color:#2d373d; font-size:13px; text-align:right; overflow-wrap:anywhere; }
+.create-summary-hint { margin:15px 0 0; color:#748088; font-size:12px; line-height:1.7; }
+@media (min-width:1024px) {
+    body:has(.rooms-layout) .game-container { width:calc(100% - 48px); max-width:1600px; margin:18px auto 44px; }
+    body:has(.create-room-layout) .game-container { width:calc(100% - 48px); max-width:1200px; margin:18px auto 44px; }
+}
+@media (max-width:1023px) {
+    .hall-toolbar { grid-template-columns:auto minmax(0,1fr) auto; gap:10px; }
+    .hall-toolbar > .hall-page-title { grid-column:2; grid-row:1; }
+    .hall-search-wrap { grid-column:1/3; grid-row:2; }
+    .hall-create-button { grid-column:3; grid-row:2; }
+    .rooms-layout { grid-template-columns:1fr; gap:10px; }
+    .rooms-game-nav { flex-direction:row; overflow-x:auto; padding:7px; gap:4px; }
+    .rooms-nav-title { display:none; }
+    .rooms-game-link { width:auto; flex:none; white-space:nowrap; }
+    .rooms-content { padding:13px; }
+    .create-room-layout { grid-template-columns:minmax(0,1fr) minmax(225px,.8fr); gap:12px; }
+    .create-room-form, .create-summary-card { padding:17px; }
+}
+@media (max-width:700px) {
+    .hall-toolbar { grid-template-columns:auto minmax(0,1fr); gap:8px; margin-bottom:12px; }
+    .hall-toolbar > .hall-page-title { grid-column:2; grid-row:1; font-size:16px; }
+    .hall-search-wrap { grid-column:1/-1; grid-row:2; }
+    .hall-create-button { grid-column:1/-1; grid-row:3; }
+    .hall-create-button { min-height:44px; }
+    .rooms-content { padding:10px; border-radius:13px; }
+    .hall-room-header { display:none; }
+    .hall-room-row { position:relative; grid-template-columns:minmax(0,1fr) 66px; gap:6px 10px; align-items:start; margin:8px 0; padding:13px; border:1px solid #e9edef; border-radius:12px; background:#fff; }
+    .hall-room-room { grid-column:1; grid-row:1; font-size:14px; }
+    .hall-room-owner { grid-column:1; grid-row:2; color:#7c858c; font-size:12px; }
+    .hall-room-players, .hall-room-buyin, .hall-room-status { grid-column:1; color:#59656d; font-size:12px; }
+    .hall-room-players { grid-row:3; }
+    .hall-room-buyin { grid-row:4; }
+    .hall-room-status { grid-row:5; }
+    .hall-room-players::before { content:"人数 "; color:#9aa1a6; }
+    .hall-room-buyin::before { content:"买入 "; color:#9aa1a6; }
+    .hall-room-action { grid-column:2; grid-row:1/6; align-self:center; }
+    .hall-room-action .hall-join { min-width:60px; }
+    .create-toolbar { grid-template-columns:auto 1fr; }
+    .create-toolbar-game { grid-column:1/-1; }
+    .create-room-layout { grid-template-columns:1fr; }
+    .create-summary-card { position:static; grid-row:1; }
+    .create-fields-grid, .create-rules-grid { grid-template-columns:1fr; }
+    .create-minimum, .create-rules-note { grid-column:auto; }
+    .create-room-form, .create-summary-card { padding:15px; }
+}
+@media (min-width:701px) and (max-width:1100px) {
+    .rooms-layout { grid-template-columns:168px minmax(0,1fr); gap:12px; }
+    .rooms-content { padding:12px; }
+    .hall-room-header, .hall-room-row { grid-template-columns:minmax(110px,1.5fr) minmax(82px,1fr) 62px minmax(72px,.8fr) 78px 70px; gap:8px; }
+}
+@media (prefers-reduced-motion:reduce) { .room-entering, .room-updated { animation:none; } }

@@ -6,7 +6,7 @@ import {
   send, startHallTicker, state,
 } from "../core.js";
 import { registerGame } from "../registry.js";
-import { openChatOverlay, reapplySeatBubbles } from "../room.js";
+import { openChatOverlay, reapplySeatBubbles } from "../room-chat.js";
 
 const WIND_NAMES = ["东", "南", "西", "北"];
 const SUIT_NAMES = ["万", "条", "筒"];

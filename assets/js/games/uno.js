@@ -3,7 +3,7 @@
 import { displayNameOf, elements, formatCoins, ratingBadge, renderGameView, requestProfile, send, startHallTicker, state } from "../core.js";
 import { animateUnoEvent } from "./uno-effects.js";
 import { registerGame } from "../registry.js";
-import { openChatOverlay, reapplySeatBubbles } from "../room.js";
+import { openChatOverlay, reapplySeatBubbles } from "../room-chat.js";
 
 const UNO_COLORS = ["r", "y", "g", "b"];
 const UNO_COLOR_NAMES = { r: "红", y: "黄", g: "绿", b: "蓝" };

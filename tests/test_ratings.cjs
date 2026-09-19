@@ -44,7 +44,7 @@ const assert = require('node:assert/strict');
           {username: 'bob', nickname: '鲍勃', stack: 100, rating}]};
       core.renderGameView();
     });
-    assert.equal(await page.locator('.game-player-row .rating-badge').count(), 2);
+    assert.equal(await page.locator('.waiting-seat[data-username] .rating-badge').count(), 2);
     await page.evaluate(() => {
       core.state.myRoom.status = 'playing';
       core.state.myRoom.settlement = {can_next: true, votes: {}, total: 2, blind: 5};

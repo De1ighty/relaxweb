@@ -4,7 +4,7 @@
 
 import { displayNameOf, elements, formatCoins, ratingBadge, renderGameView, requestProfile, send, startHallTicker, state } from "../core.js";
 import { registerGame } from "../registry.js";
-import { openChatOverlay, reapplySeatBubbles } from "../room.js";
+import { openChatOverlay, reapplySeatBubbles } from "../room-chat.js";
 
 const SUIT_CHARS = ["♠", "♥", "♦", "♣"];
 const RANK_CHARS = { 11: "J", 12: "Q", 13: "K", 14: "A", 16: "小王", 17: "大王" };
