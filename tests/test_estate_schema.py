@@ -38,6 +38,19 @@ class EstateSchemaTests(unittest.TestCase):
                     "VALUES ('alice', ?, 0, 0)", (value,)
                 )
 
+    def test_legacy_mining_reservation_is_preserved(self):
+        self.conn.execute("ALTER TABLE estate_mining_runs DROP COLUMN reserved_slots")
+        self.conn.execute(
+            "INSERT INTO estate_mining_runs "
+            "(run_id,username,mine_level,pickaxe_level,seed,board_json,strikes_left,started_at) "
+            "VALUES ('legacy','alice',3,3,1,'[]',14,0)"
+        )
+        init_estate(self.conn)
+        init_estate(self.conn)
+        self.assertEqual(self.conn.execute(
+            "SELECT reserved_slots,strikes_left FROM estate_mining_runs WHERE run_id='legacy'"
+        ).fetchone(), (12, 14))
+
     def test_plot_and_inventory_constraints(self):
         self.conn.execute(
             "INSERT INTO estate_plots(username,plot_index) VALUES ('alice',0)"

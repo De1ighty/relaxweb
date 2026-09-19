@@ -34,9 +34,10 @@ class EstateCatalogContentTests(unittest.TestCase):
         self.assertFalse(info["sellable"])
         self.assertEqual(info["name"], "小胖的内裤")
 
-    def test_all_entries_are_marked_draft_for_later_balancing(self):
+    def test_catalog_uses_reviewed_economy_version(self):
+        self.assertEqual(public_catalog()["balance_version"], "v1")
         for entry in (*CROPS.values(), *FISH.values(), *FISHING_TREASURES.values()):
-            self.assertEqual(entry["balance_status"], "draft")
+            self.assertEqual(entry["balance_status"], "v1")
 
 
 if __name__ == "__main__":

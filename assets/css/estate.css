@@ -81,7 +81,7 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
   background: linear-gradient(100deg, #fff9e9, #f6e6bc); border: 2px solid #c5a56d; border-radius: 8px; box-shadow: inset 0 2px #fffdf3, inset 0 -3px #ead6a8, 0 2px #7b5b3722;
 }
 .estate-item-icon { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; font-size: 30px; text-align: center; background: #e6cf93; border: 2px solid #9b7448; border-radius: 8px; box-shadow: inset 0 0 0 2px #f8e8b7, 0 2px #76533b; filter: drop-shadow(0 2px #a78055); }
-.estate-item-info { display: grid; flex: 1; gap: 5px; }
+.estate-item-info { display: grid; flex: 1; min-width: 0; gap: 5px; overflow-wrap: anywhere; }
 .estate-item-info b { font-size: 17px; color: #5a3f2c; }
 .estate-item-info span, .estate-crop-hero small { color: #8b7558; font-size: 12px; }
 .estate-inventory-row > div { flex: 1; }
@@ -203,6 +203,9 @@ body.estate-active .game-container { width: 100%; max-width: none; height: 100dv
   .estate-sheet { padding: 68px 8px 8px; align-items: end; }
   .estate-sheet > section { max-height: 74dvh; border-width: 4px; }
   .estate-item-card { align-items: center; gap: 7px; padding: 8px; }
+  .estate-tool-card { flex-wrap: wrap; padding: 9px; gap: 8px; }
+  .estate-tool-card .estate-item-info { flex-basis: calc(100% - 70px); }
+  .estate-tool-card .estate-button { flex: 1; padding: 9px 7px; font-size: 12px; white-space: nowrap; }
   .estate-item-icon { width: 34px; font-size: 26px; }
   .estate-item-card .estate-button { padding: 8px 7px; font-size: 11px; }
   .minigame-title { min-width: 0; left: 8px; right: 90px; transform: none; padding: 8px; }

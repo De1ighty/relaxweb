@@ -4,7 +4,7 @@ import random
 import secrets
 
 from estate.catalog import (
-    BAITS, FISH, FISHING_TREASURES, MINERALS, MINING_LEVELS, TOOLS,
+    BAITS, FISH, FISHING_TREASURES, FISH_RARITY_WEIGHTS, MINERALS, MINING_LEVELS, TOOLS,
     bait_item, collectible_item, fish_item, mineral_item, xp_for_next,
 )
 from estate.service import (
@@ -134,7 +134,9 @@ def _pick_fishing_catch(rng, bait, rod):
         )[0]
         return f"treasure:{treasure_id}", FISHING_TREASURES[treasure_id]
     allowed = [key for key, value in FISH.items() if value["rarity"] <= rarity_cap]
-    weights = [max(.35, 9 - FISH[key]["rarity"] * 1.45) for key in allowed]
+    boost = 1 + .35 * (rod["level"] - 1) + bait["rarity_bonus"]
+    weights = [FISH_RARITY_WEIGHTS[FISH[key]["rarity"]] * boost ** (FISH[key]["rarity"] - 1)
+               for key in allowed]
     fish_id = rng.choices(allowed, weights=weights, k=1)[0]
     return fish_id, FISH[fish_id]
 
@@ -152,9 +154,12 @@ def start_fishing(conn, username, request_id, bait_id, now):
             raise EstateError("tool_broken", "鱼竿需要修理")
         if not bait:
             raise EstateError("unknown_item", "鱼饵不存在")
+        if profile["level"] < bait["unlock_level"]:
+            raise EstateError("level_locked", "庄园等级不足")
         if _active(conn, "estate_fishing_sessions", username):
             raise EstateError("session_active", "已有一局钓鱼正在进行")
-        _require_capacity(conn, username, profile, 1)
+        # 消耗的一份鱼饵腾出一格，满仓时仍可用现有鱼饵钓鱼。
+        _require_capacity(conn, username, profile, 0)
         _change_inventory(conn, username, bait_item(bait_id), -1)
         conn.execute("UPDATE estate_tools SET durability=durability-1,updated_at=? "
                      "WHERE username=? AND tool_type='rod'", (int(now), username))
@@ -285,21 +290,23 @@ def start_mining(conn, username, request_id, mine_level, now):
             raise EstateError("level_locked", "该矿层尚未解锁")
         if _active(conn, "estate_mining_runs", username):
             raise EstateError("session_active", "已有一次挖矿正在进行")
-        _require_capacity(conn, username, profile, 12)
+        strikes = TOOLS["pickaxe"][pickaxe["level"]]["strikes"]
+        # 两个 +2 格各自也消耗一镐，最多产出 strikes + 2 份矿物。
+        reserved_slots = strikes + 2
+        _require_capacity(conn, username, profile, reserved_slots)
         seed = secrets.randbelow(2_000_000_000)
         board = _make_board(seed, mine_level)
         run_id = secrets.token_urlsafe(12)
-        strikes = TOOLS["pickaxe"][pickaxe["level"]]["strikes"]
         conn.execute("UPDATE estate_tools SET durability=durability-1,updated_at=? "
                      "WHERE username=? AND tool_type='pickaxe'", (int(now), username))
-        conn.execute("UPDATE estate_profiles SET reserved_capacity=reserved_capacity+12 "
-                     "WHERE username=?", (username,))
+        conn.execute("UPDATE estate_profiles SET reserved_capacity=reserved_capacity+? "
+                     "WHERE username=?", (reserved_slots, username))
         conn.execute(
             "INSERT INTO estate_mining_runs"
-            "(run_id,username,mine_level,pickaxe_level,seed,board_json,strikes_left,started_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(run_id,username,mine_level,pickaxe_level,seed,board_json,strikes_left,started_at,reserved_slots) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (run_id, username, mine_level, pickaxe["level"], seed,
-             json.dumps(board), strikes, int(now)),
+             json.dumps(board), strikes, int(now), reserved_slots),
         )
         return {"action": "start_mining", "run_id": run_id,
                 "mine_level": mine_level, "mine_name": rule["name"],
@@ -310,12 +317,21 @@ def start_mining(conn, username, request_id, mine_level, now):
 
 
 def _finish_run(conn, username, run_id, loot, reason="completed"):
+    reserved_slots = conn.execute(
+        "SELECT reserved_slots FROM estate_mining_runs WHERE run_id=? AND username=?",
+        (run_id, username),
+    ).fetchone()[0]
+    # 老存档保留原来的 12 格预留；额外产物必须仍然能放入仓库。
+    _require_capacity(conn, username, _profile(conn, username),
+                      max(0, sum(loot.values()) - reserved_slots))
     for mineral_id, quantity in loot.items():
         _change_inventory(conn, username, mineral_item(mineral_id), quantity)
-    conn.execute("UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-12) "
-                 "WHERE username=?", (username,))
+    conn.execute("UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-?) "
+                 "WHERE username=?", (reserved_slots, username))
+    xp = sum(MINERALS[key]["xp"] * count for key, count in loot.items())
+    level = _award_xp(conn, username, xp)
     result = {"action": "finish_mining", "run_id": run_id, "loot": loot,
-              "finished": True, "reason": reason}
+              "finished": True, "reason": reason, "xp_awarded": xp, "level": level}
     conn.execute("UPDATE estate_mining_runs SET status='finished',result_json=? WHERE run_id=?",
                  (json.dumps(result, ensure_ascii=False), run_id))
     return result

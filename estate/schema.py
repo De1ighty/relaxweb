@@ -99,4 +99,7 @@ def init_estate(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fishing_user ON estate_fishing_sessions(username,status)")
+    mining_columns = {row[1] for row in conn.execute("PRAGMA table_info(estate_mining_runs)")}
+    if "reserved_slots" not in mining_columns:
+        conn.execute("ALTER TABLE estate_mining_runs ADD COLUMN reserved_slots INTEGER NOT NULL DEFAULT 12")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_mining_user ON estate_mining_runs(username,status)")

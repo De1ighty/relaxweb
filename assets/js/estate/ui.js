@@ -42,12 +42,12 @@ export function createEstateUI(root, activities = {}) {
     sheetTitle.textContent = title; sheetBody.replaceChildren(); sheet.hidden = false;
   }
 
-  function cropCard(crop, actionLabel, action) {
+  function cropCard(crop, actionLabel, action, multiplier = 1) {
     const card = document.createElement("div"); card.className = "estate-item-card";
     const icon = document.createElement("span"); icon.className = "estate-item-icon"; icon.textContent = crop.icon || "🌱";
     const info = document.createElement("div"); info.className = "estate-item-info";
     const title = document.createElement("b"); title.textContent = crop.name;
-    const meta = document.createElement("span"); meta.textContent = `成熟 ${timeLeft(crop.grow_seconds)} · 收购 ${crop.sell_price} 金币`;
+    const meta = document.createElement("span"); meta.textContent = `成熟 ${timeLeft(Math.ceil(crop.grow_seconds * multiplier))} · 售价 ${crop.sell_price} · 净赚 ${Number((crop.sell_price * crop.yield - crop.seed_price).toFixed(2))}金币 · ${crop.xp}经验`;
     info.append(title, meta); card.append(icon, info, button(actionLabel, action));
     return card;
   }
@@ -58,7 +58,7 @@ export function createEstateUI(root, activities = {}) {
     const crops = Object.values(snapshot.catalog.crops).sort((a, b) => a.unlock_level - b.unlock_level || a.name.localeCompare(b.name, "zh-CN"));
     const unlockedCount = crops.filter((crop) => snapshot.profile.level >= crop.unlock_level).length;
     const intro = document.createElement("p"); intro.className = "estate-sheet-note";
-    intro.textContent = `共 ${crops.length} 种作物 · 当前已解锁 ${unlockedCount} 种。价格与收购价暂为测试数值，后续统一平衡。`;
+    intro.textContent = `共 ${crops.length} 种作物 · 已解锁 ${unlockedCount} 种。播种后离线也会生长，不用浇水；净收益已扣除种子成本，升级土地可缩短等待。`;
     sheetBody.append(intro);
     crops.forEach((crop) => {
       const locked = snapshot.profile.level < crop.unlock_level;
@@ -115,7 +115,10 @@ export function createEstateUI(root, activities = {}) {
     info.append(title, meta); card.append(visual, info);
     if (!owned) card.append(button(`${currentRule.price}金币购买`, () => estateCommand("estate_buy_tool", { tool_type: toolType })));
     else {
-      if (owned.durability < owned.max_durability) card.append(button("修理", () => estateCommand("estate_repair_tool", { tool_type: toolType })));
+      if (owned.durability < owned.max_durability) {
+        const cost = Math.max(1, Math.round(currentRule.repair_price * (owned.max_durability - owned.durability) / owned.max_durability * 100) / 100);
+        card.append(button(`修理 · ${cost}金币`, () => estateCommand("estate_repair_tool", { tool_type: toolType })));
+      }
       if (currentRule.upgrade_price != null) {
         const next = rules[String(owned.level + 1)] || rules[owned.level + 1];
         const upgrade = button(`${currentRule.upgrade_price}金币升级`, () => estateCommand("estate_upgrade_tool", { tool_type: toolType }));
@@ -130,7 +133,7 @@ export function createEstateUI(root, activities = {}) {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     show("小胖湖钓场");
     const note = document.createElement("p"); note.className = "estate-sheet-note";
-    note.textContent = `湖中有 ${Object.keys(snapshot.catalog.fish).length} 种鱼类，还有 ${Object.keys(snapshot.catalog.fishing_treasures || {}).length} 种神秘收藏物。按住收线提高进度和张力，松开可以卸力。`;
+    note.textContent = `湖中有 ${Object.keys(snapshot.catalog.fish).length} 种鱼类，还有 ${Object.keys(snapshot.catalog.fishing_treasures || {}).length} 种神秘收藏物。每轮消耗1份鱼饵和1点耐久，失败也会消耗。按住收线，张力过高时松开卸力；高级鱼竿与荧光虫饵能提高稀有鱼机会。`;
     sheetBody.append(note);
     const rod = toolPanel("rod", "🎣");
     if (snapshot.fishing_session) {
@@ -144,8 +147,11 @@ export function createEstateUI(root, activities = {}) {
       const locked = snapshot.profile.level < bait.unlock_level; const amount = baitCounts.get(bait.id) || 0;
       const row = document.createElement("div"); row.className = "estate-item-card";
       const info = document.createElement("div"); info.className = "estate-item-info";
-      info.innerHTML = `<b>🪱 ${bait.name}</b><span>库存 ${amount} · 单价 ${bait.price}金币</span>`; row.append(info);
-      row.append(button("购买1个", () => estateCommand("estate_buy", { kind: "bait", item_id: bait.id, quantity: 1 })));
+      const rule = rod && snapshot.catalog.tools.rod[rod.level];
+      const cost = rule ? (bait.price + rule.repair_price / rule.max_durability).toFixed(2) : null;
+      info.innerHTML = `<b>🪱 ${bait.name}</b><span>库存 ${amount} · 单价 ${bait.price}金币${cost ? ` · 每轮约${cost}金币（含维修分摊）` : ""}</span>`; row.append(info);
+      const buy = button(locked ? `${bait.unlock_level}级解锁` : "购买1个", () => estateCommand("estate_buy", { kind: "bait", item_id: bait.id, quantity: 1 }));
+      buy.disabled ||= locked; row.append(buy);
       const start = button("开始钓鱼", async () => {
         try { const session = await estateRequest("estate_start_fishing", { bait_id: bait.id }); closeSheet(); activities.fishing?.(session); } catch { /* 弹层由协议统一显示 */ }
       }, "estate-button estate-button-gold");
@@ -157,7 +163,7 @@ export function createEstateUI(root, activities = {}) {
     const snapshot = estateStore.snapshot; if (!snapshot) return;
     show("小胖矿洞");
     const note = document.createElement("p"); note.className = "estate-sheet-note";
-    note.textContent = "每次下矿消耗一点矿镐耐久。越深奖励越好、炸弹越多；挖到炸弹会立刻结束，但已获得的矿物可以保留。";
+    note.textContent = "每次下矿消耗一点矿镐耐久，空手或触雷也会消耗。越深奖励越好、炸弹越多；触雷立即结束，已获得的矿物可以保留并结算经验。";
     sheetBody.append(note);
     const pickaxe = toolPanel("pickaxe", "⛏️");
     if (snapshot.mining_run) {
@@ -170,7 +176,9 @@ export function createEstateUI(root, activities = {}) {
       const unlocked = pickaxe && pickaxe.level >= Number(level) && snapshot.profile.level >= mine.unlock_level;
       const row = document.createElement("div"); row.className = "estate-item-card";
       const info = document.createElement("div"); info.className = "estate-item-info";
-      info.innerHTML = `<b>第${level}层 · ${mine.name}</b><span>${mine.risk} · ${mine.bombs}枚炸弹 · 庄园 ${mine.unlock_level} 级 · 矿镐 Lv.${level}</span>`; row.append(info);
+      const rule = pickaxe && snapshot.catalog.tools.pickaxe[pickaxe.level];
+      const cost = rule ? (rule.repair_price / rule.max_durability).toFixed(2) : null;
+      info.innerHTML = `<b>第${level}层 · ${mine.name}</b><span>${mine.risk} · ${mine.bombs}枚炸弹 · 庄园 ${mine.unlock_level} 级 · 矿镐 Lv.${level}${cost ? ` · 每轮维修约${cost}金币 · 预留${rule.strikes + 2}格仓位` : ""}</span>`; row.append(info);
       const enter = button(unlocked ? "进入矿层" : "尚未解锁", async () => {
         try { const run = await estateRequest("estate_start_mining", { mine_level: Number(level) }); closeSheet(); activities.mining?.(run); } catch { /* 弹层由协议统一显示 */ }
       }, "estate-button estate-button-gold");
@@ -189,7 +197,7 @@ export function createEstateUI(root, activities = {}) {
       sheetBody.append(note);
       if (rule) {
         const buy = button(`解锁土地 · ${rule.price}金币`, () => estateCommand("estate_buy", { kind: "plot", item_id: plot.index, quantity: 1 }));
-        buy.disabled ||= snapshot.profile.level < rule.unlock_level; sheetBody.append(buy);
+        buy.disabled ||= snapshot.profile.level < rule.unlock_level || plot.index !== snapshot.profile.plot_count; sheetBody.append(buy);
       }
       return;
     }
@@ -207,7 +215,7 @@ export function createEstateUI(root, activities = {}) {
     sheetBody.append(note);
     Object.values(snapshot.catalog.crops).forEach((crop) => {
       const amount = seeds.get(crop.id) || 0;
-      const card = cropCard(crop, amount ? `播种 · 库存${amount}` : "没有种子", () => estateCommand("estate_plant", { plot_id: plot.index, crop_id: crop.id }));
+      const card = cropCard(crop, amount ? `播种 · 库存${amount}` : "没有种子", () => estateCommand("estate_plant", { plot_id: plot.index, crop_id: crop.id }), snapshot.catalog.land_levels[plot.land_level].multiplier);
       card.querySelector("button").disabled ||= !amount; sheetBody.append(card);
     });
     const landRule = snapshot.catalog.land_levels[String(plot.land_level)] || snapshot.catalog.land_levels[plot.land_level];

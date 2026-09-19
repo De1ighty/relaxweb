@@ -12,7 +12,7 @@ from estate.activities import (
     _make_board, _pick_fishing_catch, buy_tool, finish_fishing, finish_mining, mine_cell, repair_tool,
     start_fishing, start_mining, upgrade_tool,
 )
-from estate.catalog import FISHING_TREASURES, bait_item
+from estate.catalog import FISHING_TREASURES, MINERALS, bait_item
 from estate.schema import init_estate
 from estate.service import EstateError, buy, estate_state
 
@@ -103,6 +103,50 @@ class ActivityTests(unittest.TestCase):
         self.assertFalse(any(item["kind"] == "bait" for item in state["inventory"]))
         self.assertEqual(state["tools"]["rod"]["durability"], 19)
 
+    def test_fishing_reuses_bait_slot_in_full_warehouse(self):
+        self.call(buy_tool, "alice", "full-rod-0001", "rod", NOW, adjust_coins)
+        self.call(buy, "alice", "full-bait-001", "bait", "worm", 100, NOW, adjust_coins)
+        started = self.call(start_fishing, "alice", "full-start-01", "worm", NOW)
+        state = self.call(estate_state, "alice", NOW)
+        self.assertEqual(state["profile"]["warehouse_used"], 100)
+        self.call(finish_fishing, "alice", "full-finish-1", started["session_id"],
+                  winning_trace(started["pattern"]), NOW + 25)
+        self.assertEqual(self.call(estate_state, "alice", NOW + 25)["profile"]["warehouse_used"], 100)
+
+    def test_locked_bait_cannot_bypass_level_check(self):
+        self.call(buy_tool, "alice", "lock-rod-0001", "rod", NOW, adjust_coins)
+        self.conn.execute("INSERT INTO estate_inventory VALUES ('alice','bait:glow_grub',1)")
+        self.conn.commit()
+        with self.assertRaises(EstateError) as error:
+            self.call(start_fishing, "alice", "lock-start-01", "glow_grub", NOW)
+        self.assertEqual(error.exception.code, "level_locked")
+        self.assertEqual(self.call(estate_state, "alice", NOW)["tools"]["rod"]["durability"], 20)
+
+    def test_mining_reserves_maximum_loot_and_awards_xp_once(self):
+        self.call(buy_tool, "alice", "max-pick-0001", "pickaxe", NOW, adjust_coins)
+        self.conn.execute("UPDATE estate_tools SET level=3,durability=55 WHERE username='alice'")
+        self.conn.execute("UPDATE estate_profiles SET level=6 WHERE username='alice'")
+        self.conn.execute("INSERT INTO estate_inventory VALUES ('alice','seed:wheat',85)")
+        self.conn.commit()
+        with self.assertRaises(EstateError) as error:
+            self.call(start_mining, "alice", "max-block-01", 3, NOW)
+        self.assertEqual(error.exception.code, "warehouse_full")
+        self.conn.execute("UPDATE estate_inventory SET quantity=84 WHERE username='alice'")
+        self.conn.commit()
+        with patch("estate.activities._make_board", return_value=["extra", "extra"] + ["copper"] * 23):
+            started = self.call(start_mining, "alice", "max-start-01", 3, NOW)
+        self.assertEqual(self.call(estate_state, "alice", NOW)["profile"]["warehouse_used"], 100)
+        for index in range(18):
+            mined = self.call(mine_cell, "alice", f"max-cell-{index:04}", started["run_id"], index, NOW)
+        self.assertTrue(mined["finished"])
+        self.assertEqual(mined["result"]["loot"], {"copper": 16})
+        self.assertEqual(mined["result"]["xp_awarded"], 16 * MINERALS["copper"]["xp"])
+        state = self.call(estate_state, "alice", NOW)
+        self.assertEqual(state["profile"]["warehouse_used"], 100)
+        self.assertEqual(state["profile"]["warehouse_reserved"], 0)
+        self.call(finish_mining, "alice", "max-finish-1", started["run_id"], NOW)
+        self.assertEqual(self.call(estate_state, "alice", NOW)["profile"]["xp"], state["profile"]["xp"])
+
     def test_best_gear_can_reach_rarest_collectible(self):
         class TreasureRng:
             @staticmethod
@@ -171,6 +215,7 @@ class ActivityTests(unittest.TestCase):
         self.assertTrue(exploded["exploded"])
         self.assertEqual(exploded["result"]["loot"], {"copper": 1})
         self.assertEqual(exploded["result"]["reason"], "bomb")
+        self.assertEqual(exploded["result"]["xp_awarded"], MINERALS["copper"]["xp"])
         self.assertEqual(self.call(estate_state, "alice", NOW)["profile"]["warehouse_reserved"], 0)
 
 

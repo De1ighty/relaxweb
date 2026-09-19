@@ -1,22 +1,23 @@
 """小胖庄园服务端权威目录。
 
 数值集中在这里，前端只消费 ``public_catalog`` 的输出，不能提交价格、
-成熟时间、产量或经验。首轮数值用于功能测试和 HTML 试玩，PR 前再做
-一次人工经济审阅。
+成熟时间、产量或经验。首版经济基线与复核方式见 docs/estate-economy.md。
 """
 import math
 
 
 INITIAL_PLOTS = 4
 MAX_PLOTS = 8
+BALANCE_VERSION = "v1"
+FISH_RARITY_WEIGHTS = {1: 100, 2: 22, 3: 4, 4: .6, 5: .08, 6: .006}
 
 def _crop(name, seed_price, sell_price, grow_minutes, xp, unlock_level, icon, color):
-    """创建待平衡作物条目；正式数值确定后只需改本目录。"""
+    """所有收益与成长规则集中定义，保留稳定存档 ID。"""
     return {
         "name": name, "seed_price": float(seed_price), "sell_price": float(sell_price),
         "grow_seconds": int(grow_minutes * 60), "yield": 1, "xp": xp,
         "unlock_level": unlock_level, "icon": icon, "color": color,
-        "balance_status": "draft",
+        "balance_status": BALANCE_VERSION,
     }
 
 
@@ -26,25 +27,25 @@ CROPS = {
     "rice": _crop("水稻", 28, 44, 9, 6, 1, "🌾", "#ddd477"),
     "potato": _crop("土豆", 34, 54, 12, 7, 1, "🥔", "#c99b61"),
     "tomato": _crop("番茄", 52, 84, 20, 10, 1, "🍅", "#df5b45"),
-    "cabbage": _crop("卷心菜", 64, 104, 28, 12, 2, "🥬", "#78b95d"),
-    "cucumber": _crop("黄瓜", 72, 118, 35, 14, 2, "🥒", "#5da653"),
-    "soybean": _crop("大豆", 82, 136, 42, 16, 2, "🫘", "#d0b65d"),
-    "corn": _crop("玉米", 100, 170, 60, 20, 2, "🌽", "#f4cf46"),
-    "peanut": _crop("花生", 116, 198, 75, 23, 2, "🥜", "#c78b50"),
-    "sweet_potato": _crop("红薯", 132, 228, 90, 26, 3, "🍠", "#b75c49"),
-    "eggplant": _crop("茄子", 150, 260, 110, 30, 3, "🍆", "#835c9f"),
-    "pepper": _crop("辣椒", 172, 302, 135, 34, 3, "🌶️", "#d94b3d"),
-    "pumpkin": _crop("南瓜", 260, 450, 240, 40, 3, "🎃", "#ee7a2d"),
-    "strawberry": _crop("草莓", 290, 510, 300, 46, 4, "🍓", "#e85e67"),
-    "watermelon": _crop("西瓜", 340, 610, 390, 54, 4, "🍉", "#52a95e"),
-    "grape": _crop("葡萄", 410, 750, 480, 62, 4, "🍇", "#8663a8"),
-    "spinach": _crop("菠菜", 460, 850, 600, 72, 5, "🥬", "#3e9652"),
-    "onion": _crop("洋葱", 530, 990, 750, 84, 5, "🧅", "#d3a5bb"),
-    "garlic": _crop("大蒜", 620, 1170, 900, 96, 5, "🧄", "#e7d9b1"),
-    "sunflower": _crop("向日葵", 760, 1450, 1080, 112, 6, "🌻", "#f3c84d"),
-    "xiaopang_grass": _crop("小胖草", 1100, 2250, 1440, 150, 6, "🌿", "#64c987"),
-    "xiaopang_flower": _crop("小胖花", 1800, 3900, 2160, 220, 7, "🌸", "#f28fc2"),
-    "starlight_berry": _crop("星露果", 3200, 7200, 2880, 320, 8, "✨", "#8dd9df"),
+    "cabbage": _crop("卷心菜", 64, 120, 28, 20, 2, "🥬", "#78b95d"),
+    "cucumber": _crop("黄瓜", 72, 142, 35, 24, 2, "🥒", "#5da653"),
+    "soybean": _crop("大豆", 82, 166, 42, 28, 2, "🫘", "#d0b65d"),
+    "corn": _crop("玉米", 100, 220, 60, 40, 2, "🌽", "#f4cf46"),
+    "peanut": _crop("花生", 116, 266, 75, 48, 2, "🥜", "#c78b50"),
+    "sweet_potato": _crop("红薯", 132, 335, 90, 56, 3, "🍠", "#b75c49"),
+    "eggplant": _crop("茄子", 150, 398, 110, 68, 3, "🍆", "#835c9f"),
+    "pepper": _crop("辣椒", 172, 476, 135, 80, 3, "🌶️", "#d94b3d"),
+    "pumpkin": _crop("南瓜", 260, 800, 240, 140, 3, "🎃", "#ee7a2d"),
+    "strawberry": _crop("草莓", 290, 1040, 300, 175, 4, "🍓", "#e85e67"),
+    "watermelon": _crop("西瓜", 340, 1315, 390, 225, 4, "🍉", "#52a95e"),
+    "grape": _crop("葡萄", 410, 1610, 480, 280, 4, "🍇", "#8663a8"),
+    "spinach": _crop("菠菜", 460, 2110, 600, 320, 5, "🥬", "#3e9652"),
+    "onion": _crop("洋葱", 530, 2593, 750, 400, 5, "🧅", "#d3a5bb"),
+    "garlic": _crop("大蒜", 620, 3095, 900, 480, 5, "🧄", "#e7d9b1"),
+    "sunflower": _crop("向日葵", 760, 4000, 1080, 540, 6, "🌻", "#f3c84d"),
+    "xiaopang_grass": _crop("小胖草", 1100, 5420, 1440, 720, 6, "🌿", "#64c987"),
+    "xiaopang_flower": _crop("小胖花", 1800, 8820, 2160, 1080, 7, "🌸", "#f28fc2"),
+    "starlight_berry": _crop("星露果", 3200, 13280, 2880, 1440, 8, "✨", "#8dd9df"),
 }
 
 LAND_LEVELS = {
@@ -80,26 +81,26 @@ TOOLS = {
     },
     "pickaxe": {
         1: {"name": "铜矿镐", "price": 350.0, "max_durability": 20,
-            "repair_price": 110.0, "upgrade_price": 1100.0, "unlock_level": 1,
+            "repair_price": 200.0, "upgrade_price": 1100.0, "unlock_level": 1,
             "strikes": 8},
         2: {"name": "铁矿镐", "price": None, "max_durability": 35,
-            "repair_price": 260.0, "upgrade_price": 2800.0, "unlock_level": 3,
+            "repair_price": 525.0, "upgrade_price": 2800.0, "unlock_level": 3,
             "strikes": 11},
         3: {"name": "秘银矿镐", "price": None, "max_durability": 55,
-            "repair_price": 550.0, "upgrade_price": None, "unlock_level": 6,
+            "repair_price": 1100.0, "upgrade_price": None, "unlock_level": 6,
             "strikes": 14},
     },
 }
 
 BAITS = {
     "worm": {"name": "蚯蚓鱼饵", "price": 15.0, "unlock_level": 1, "rarity_bonus": 0},
-    "glow_grub": {"name": "荧光虫饵", "price": 45.0, "unlock_level": 3, "rarity_bonus": 1},
+    "glow_grub": {"name": "荧光虫饵", "price": 25.0, "unlock_level": 3, "rarity_bonus": 1},
 }
 
 def _fish(name, sell_price, rarity, xp, difficulty, habitat):
     return {
         "name": name, "sell_price": float(sell_price), "rarity": rarity, "xp": xp,
-        "difficulty": difficulty, "habitat": habitat, "balance_status": "draft",
+        "difficulty": difficulty, "habitat": habitat, "balance_status": BALANCE_VERSION,
     }
 
 
@@ -134,29 +135,29 @@ FISH = {
 FISHING_TREASURES = {
     "xiaopang_bottle": {
         "name": "小胖漂流瓶", "rarity": 5, "xp": 45, "difficulty": .68,
-        "required_rod_level": 2, "weight": 5.0, "balance_status": "draft",
+        "required_rod_level": 2, "weight": 5.0, "balance_status": BALANCE_VERSION,
     },
     "xiaopang_button": {
         "name": "小胖的金纽扣", "rarity": 6, "xp": 70, "difficulty": .76,
-        "required_rod_level": 2, "weight": 2.4, "balance_status": "draft",
+        "required_rod_level": 2, "weight": 2.4, "balance_status": BALANCE_VERSION,
     },
     "xiaopang_watch": {
         "name": "小胖旧怀表", "rarity": 7, "xp": 110, "difficulty": .84,
-        "required_rod_level": 3, "weight": .8, "balance_status": "draft",
+        "required_rod_level": 3, "weight": .8, "balance_status": BALANCE_VERSION,
     },
     "xiaopang_underwear": {
         "name": "小胖的内裤", "rarity": 8, "xp": 180, "difficulty": .92,
-        "required_rod_level": 3, "weight": .18, "balance_status": "draft",
+        "required_rod_level": 3, "weight": .18, "balance_status": BALANCE_VERSION,
     },
 }
 
 MINERALS = {
-    "stone": {"name": "石料", "sell_price": 18.0, "rarity": 1},
-    "coal": {"name": "煤块", "sell_price": 32.0, "rarity": 1},
-    "copper": {"name": "铜矿", "sell_price": 65.0, "rarity": 2},
-    "iron": {"name": "铁矿", "sell_price": 120.0, "rarity": 3},
-    "amethyst": {"name": "紫晶", "sell_price": 260.0, "rarity": 4},
-    "star_gem": {"name": "星辉宝石", "sell_price": 620.0, "rarity": 5},
+    "stone": {"name": "石料", "sell_price": 5.0, "rarity": 1, "xp": 2},
+    "coal": {"name": "煤块", "sell_price": 10.0, "rarity": 1, "xp": 3},
+    "copper": {"name": "铜矿", "sell_price": 20.0, "rarity": 2, "xp": 4},
+    "iron": {"name": "铁矿", "sell_price": 38.0, "rarity": 3, "xp": 6},
+    "amethyst": {"name": "紫晶", "sell_price": 85.0, "rarity": 4, "xp": 10},
+    "star_gem": {"name": "星辉宝石", "sell_price": 200.0, "rarity": 5, "xp": 16},
 }
 
 MINING_LEVELS = {
@@ -227,6 +228,7 @@ def item_info(item_id):
 
 def public_catalog():
     return {
+        "balance_version": BALANCE_VERSION,
         "crops": {
             crop_id: {
                 "id": crop_id,
