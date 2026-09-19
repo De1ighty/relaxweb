@@ -62,7 +62,7 @@ export function ratingCard() {
   const summary = document.createElement("summary");
   summary.textContent = "积分怎么算？";
   const copy = document.createElement("p");
-  copy.textContent = "从 1000 分起步，德州与 UNO 共用段位。每局收益率 =（结余 − 开局筹码）÷ 开局筹码；盈利 × 40，亏损 × 20，加扣系数 2:1，更容易上分。四舍五入到整数，最多 +40 / −20，最低 0 分。例：100 → 120 加 8 分，100 → 80 扣 4 分，保本不变。";
+  copy.textContent = "从 1000 分起步，所有游戏共用段位。每局收益率 =（结余 − 开局筹码）÷ 开局筹码；盈利 × 40，亏损 × 20，加扣系数 2:1，更容易上分。四舍五入到整数，最多 +40 / −20，最低 0 分。例：100 → 120 加 8 分，100 → 80 扣 4 分，保本不变。";
   const tiers = document.createElement("p");
   tiers.textContent = "青铜 0–799 · 白银 800–1199 · 黄金 1200–1599 · 铂金 1600–1999 · 钻石 2000–2399 · 大师 2400+";
   const scope = document.createElement("p");
@@ -155,7 +155,7 @@ function renderRankings() {
   }
   const note = document.createElement("p");
   note.className = "rating-detail";
-  note.textContent = `共 ${data.total} 位玩家 · 展示前 ${data.limit} 位 · 按段位分排序，同分并列（如 1、1、3）。所有账号均参与，德州与 UNO 共用积分。`;
+  note.textContent = `共 ${data.total} 位玩家 · 展示前 ${data.limit} 位 · 按段位分排序，同分并列（如 1、1、3）。所有账号均参与，所有游戏共用积分。`;
   board.append(note);
 
   const list = document.createElement("ol");

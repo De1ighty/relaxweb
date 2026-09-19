@@ -368,6 +368,7 @@ def test_hu_on_discard():
     check("胡牌进入结算", settled, str(result and result.get("fans")))
     check("点炮包三家付3份", bool(payouts_ok), str(result and result["payouts"]))
     check("筹码结算正确", stacks_ok)
+    check("结算载荷带段位明细", "ratings" in result)
     check("非庄胡牌后下家坐庄", dealer_moved)
     names = fan_names([(f["name"], f["value"]) for f in result["fans"]]) \
         if result else []

@@ -1474,6 +1474,7 @@ class MahjongRoom(BaseRoom):
             "unit": unit,
             "payouts": payouts,
             "gains": {winner: gain} if gain else {},
+            "ratings": ratings,
             "dealer_repeat": dealer_won,
             "round_wind": WIND_NAMES[self.round_wind],
         })

@@ -235,6 +235,7 @@ def test_lifecycle():
     check("赢家平分", result["gains"] == {"a": 10, "c": 10}, str(result["gains"]))
     check("筹码更新", room.members["b"]["stack"] == 90
           and room.members["a"]["stack"] == 110)
+    check("结算载荷带段位明细", "ratings" in result)
 
     async def vote():
         for name in ("a", "b", "c", "d"):

@@ -124,6 +124,34 @@ class RatingTests(unittest.IsolatedAsyncioTestCase):
             room.close()
         self.assertEqual(self.count(), 4)
 
+    async def test_mahjong_and_guandan_feed_shared_rating_pool(self):
+        with server.database() as conn, conn:
+            conn.execute("INSERT INTO users (username, password_hash, salt, created_at, coins) "
+                         "VALUES ('dave', '', '', 0, 900)")
+        names = ("alice", "bob", "carol", "dave")
+        for game in ("mahjong", "guandan"):
+            room = self.room(game, names)
+            room.begin_rating_hand(names)
+            self.assertEqual(set(room.rating_starts), set(names))
+            for index, name in enumerate(names):
+                room.members[name]["stack"] = 100 + (10 if index % 2 == 0 else -10)
+            endings = {name: room.members[name]["stack"] for name in names}
+            results = room.settle_ratings(endings)
+            self.assertEqual(set(results), set(names))
+            self.assertEqual(results["alice"]["delta"], 4)   # +10% → +4
+            self.assertEqual(results["bob"]["delta"], -2)    # −10% → −2
+            room.settle_ratings(endings)  # 同一手重复提交不重复计分
+            room.close()
+        self.assertEqual(self.count(), 8)
+        with server.database() as conn:
+            types = {row[0] for row in conn.execute(
+                "SELECT DISTINCT game_type FROM rating_history")}
+            scores = dict(conn.execute("SELECT username, rating_score FROM users"))
+        self.assertLessEqual({"mahjong", "guandan"}, types)
+        self.assertEqual(scores["alice"], 1008)  # 两局各 +4
+        self.assertEqual(scores["bob"], 996)     # 两局各 −2
+        self.assertEqual(scores["dave"], 996)
+
     async def test_holdem_before_blinds_and_idempotence(self):
         room = self.room()
         await room.start()
