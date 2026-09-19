@@ -37,8 +37,9 @@ function renderEstate() {
     <div class="estate-sheet" hidden><section><header><h2 class="estate-sheet-title"></h2><button class="estate-sheet-close" type="button">×</button></header><div class="estate-sheet-body"></div></section></div>`;
   elements.gameMain.replaceChildren(root);
   const input = createEstateInput(root);
-  const ui = createEstateUI(root, {
-    fishing: (session) => openFishingGame(root, session),
+  let ui;
+  ui = createEstateUI(root, {
+    fishing: (session) => openFishingGame(root, session, { onBack: () => ui.openFishing() }),
     mining: (run) => openMiningGame(root, run),
   });
   const hint = root.querySelector(".estate-interact-hint");

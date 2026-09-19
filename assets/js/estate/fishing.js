@@ -2,7 +2,7 @@
 
 import { estateRequest } from "./protocol.js";
 
-export function openFishingGame(root, session) {
+export function openFishingGame(root, session, options = {}) {
   const layer = document.createElement("div");
   layer.className = "estate-minigame fishing-game";
   layer.innerHTML = `
@@ -13,7 +13,14 @@ export function openFishingGame(root, session) {
       <label>鱼线张力<i class="tension"><span data-tension></span></i></label>
     </div>
     <button class="fishing-reel" type="button">按住<br><b>收线</b></button>
-    <button class="minigame-exit" type="button">放弃本次</button>`;
+    <button class="minigame-exit" type="button">放弃本次</button>
+    <section class="fishing-catch-card" hidden>
+      <div class="fishing-catch-rays"></div>
+      <div class="fishing-catch-rarity"></div>
+      <div class="fishing-catch-portrait"><span class="catch-tail"></span><span class="catch-body"><i></i></span><b>🐟</b></div>
+      <h2></h2><p></p>
+      <div class="fishing-result-actions"><button class="estate-button estate-button-gold" data-fish-again>继续钓鱼</button><button class="estate-button" data-fish-back>返回小胖钓场</button></div>
+    </section>`;
   root.append(layer);
   const canvas = layer.querySelector("canvas");
   const ctx = canvas.getContext("2d");
@@ -21,7 +28,7 @@ export function openFishingGame(root, session) {
   const catchBar = layer.querySelector("[data-catch]");
   const tensionBar = layer.querySelector("[data-tension]");
   const trace = [];
-  let held = false; let tension = .18; let progress = .08; let elapsed = 0;
+  let held = false; let tension = .18; let progress = .08;
   let accumulator = 0; let last = performance.now(); let frame = 0; let finished = false;
   const factor = { 1: 1, 2: .82, 3: .68 }[session.rod_level] || 1;
 
@@ -46,15 +53,29 @@ export function openFishingGame(root, session) {
     ctx.fillStyle = "#fff0c1"; ctx.fillRect(w * .5 - 5, h * .25, 10, 6);
   }
   function step() {
-    const force = session.pattern[Math.min(session.pattern.length - 1, Math.floor(elapsed))];
+    const force = session.pattern[Math.min(session.pattern.length - 1, Math.floor(trace.length / 10))];
     trace.push(Boolean(held));
     if (held) { tension += .026 * (.68 + force) * factor; progress += .013 * (1.12 - force * .3); }
     else { tension = Math.max(0, tension - .045); progress = Math.max(0, progress - .0035 * (.5 + force)); }
-    elapsed += .1;
     catchBar.style.width = `${Math.min(100, progress * 100)}%`;
     tensionBar.style.width = `${Math.min(100, tension * 100)}%`;
     tensionBar.dataset.danger = String(tension > .78);
-    if (tension >= 1 || progress >= 1 || elapsed >= session.duration_limit) void finish();
+    if (tension >= 1 || progress >= 1 || trace.length >= session.duration_limit * 10) void finish();
+  }
+  function showCatch(result) {
+    const caught = result.outcome === "caught";
+    const collectible = result.catch_kind === "collectible";
+    const card = layer.querySelector(".fishing-catch-card");
+    const rarity = Math.max(1, Number(result.rarity || 1));
+    card.dataset.rarity = String(rarity); card.classList.toggle("is-caught", caught); card.classList.toggle("is-collectible", collectible);
+    card.querySelector(".fishing-catch-rarity").textContent = caught
+      ? `${"★".repeat(Math.min(5, rarity))}${rarity > 5 ? ` · 稀有度 ${rarity}` : ""}` : "再接再厉";
+    card.querySelector(".fishing-catch-portrait > b").textContent = collectible ? "🎁" : caught ? "" : "🌊";
+    card.querySelector("h2").textContent = caught ? (result.catch_name || result.fish_name) : result.outcome === "snapped" ? "鱼线断了" : "鱼儿逃走了";
+    card.querySelector("p").textContent = caught
+      ? `已放入小胖谷仓 · 获得 ${result.xp_awarded} 经验`
+      : "鱼饵和耐久已经消耗，控制张力后再试一次。";
+    card.hidden = false;
   }
   async function finish() {
     if (finished) return; finished = true; held = false;
@@ -62,14 +83,8 @@ export function openFishingGame(root, session) {
     reel.disabled = true; reel.textContent = "结算中";
     try {
       const result = await estateRequest("estate_finish_fishing", { session_id: session.session_id, trace });
-      const caught = result.outcome === "caught";
-      const collectible = result.catch_kind === "collectible";
       layer.classList.add("is-result");
-      layer.querySelector(".minigame-title").innerHTML = caught
-        ? `<b>${collectible ? "发现稀有收藏！" : "捕获成功！"}</b><span>${result.catch_name || result.fish_name} 已放入仓库 · 经验 +${result.xp_awarded}</span>`
-        : `<b>${result.outcome === "snapped" ? "鱼线断了" : "鱼儿逃走了"}</b><span>鱼饵和耐久已经消耗，下次注意张力。</span>`;
-      reel.textContent = caught ? (collectible ? "🎁" : "🐟") : "🌊";
-      layer.querySelector(".minigame-exit").textContent = "返回庄园";
+      showCatch(result);
     } catch { layer.remove(); }
   }
   function tick(now) {
@@ -83,7 +98,15 @@ export function openFishingGame(root, session) {
   const keyUp = (event) => { if (["Space", "KeyE"].includes(event.code)) up(); };
   reel.addEventListener("pointerdown", down); window.addEventListener("pointerup", up);
   window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp);
-  layer.querySelector(".minigame-exit").addEventListener("click", () => { if (finished) layer.remove(); else void finish(); });
+  layer.querySelector(".minigame-exit").addEventListener("click", () => { if (!finished) void finish(); });
+  layer.querySelector("[data-fish-again]").addEventListener("click", async (event) => {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const next = await estateRequest("estate_start_fishing", { bait_id: session.bait_id });
+      layer.remove(); openFishingGame(root, next, options);
+    } catch { button.disabled = false; }
+  });
+  layer.querySelector("[data-fish-back]").addEventListener("click", () => { layer.remove(); options.onBack?.(); });
   resize(); window.addEventListener("resize", resize); frame = requestAnimationFrame(tick);
   const observer = new MutationObserver(() => { if (!layer.isConnected) {
     cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("resize", resize);

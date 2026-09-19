@@ -250,5 +250,6 @@ export function createEstateUI(root, activities = {}) {
       if (plot?.crop_id) renderPlot(plot);
     }
   }, 1000);
-  return { render, interact, closeSheet, destroy() { window.clearInterval(timer); close.removeEventListener("click", closeSheet); } };
+  function openFishing() { active = { kind: "fishing" }; renderFishing(); }
+  return { render, interact, openFishing, closeSheet, destroy() { window.clearInterval(timer); close.removeEventListener("click", closeSheet); } };
 }

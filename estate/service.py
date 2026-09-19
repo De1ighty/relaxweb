@@ -160,14 +160,14 @@ def estate_state(conn, username, now):
 
     fishing_session = None
     row = conn.execute(
-        "SELECT session_id,rod_level,fish_id,pattern_json,started_at,expires_at "
+        "SELECT session_id,bait_id,rod_level,fish_id,pattern_json,started_at,expires_at "
         "FROM estate_fishing_sessions WHERE username=? AND status='active' "
         "ORDER BY started_at DESC LIMIT 1", (username,),
     ).fetchone()
     if row:
-        fishing_session = {"session_id": row[0], "rod_level": row[1],
-                           "fish_name": "水下的鱼影", "pattern": json.loads(row[3]),
-                           "started_at": row[4], "expires_at": row[5],
+        fishing_session = {"session_id": row[0], "bait_id": row[1], "rod_level": row[2],
+                           "fish_name": "水下的鱼影", "pattern": json.loads(row[4]),
+                           "started_at": row[5], "expires_at": row[6],
                            "duration_limit": 36}
     mining_run = None
     row = conn.execute(

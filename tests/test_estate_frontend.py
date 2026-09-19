@@ -76,6 +76,12 @@ class EstateFrontendTests(unittest.TestCase):
         for action in ("estate_buy_tool", "estate_start_fishing", "estate_start_mining"):
             self.assertIn(action, ui)
         self.assertIn("estate_finish_fishing", self.read("assets/js/estate/fishing.js"))
+        fishing = self.read("assets/js/estate/fishing.js")
+        self.assertIn("Math.floor(trace.length / 10)", fishing)
+        self.assertNotIn("Math.floor(elapsed)", fishing)
+        self.assertIn("fishing-catch-card", fishing)
+        self.assertIn("继续钓鱼", fishing)
+        self.assertIn("返回小胖钓场", fishing)
         self.assertIn("estate_mine_cell", self.read("assets/js/estate/mining.js"))
         mining = self.read("assets/js/estate/mining.js")
         self.assertIn('bomb: "💣"', mining)

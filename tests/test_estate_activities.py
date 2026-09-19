@@ -79,6 +79,7 @@ class ActivityTests(unittest.TestCase):
         self.call(buy_tool, "alice", "buy-rod-0002", "rod", NOW, adjust_coins)
         self.call(buy, "alice", "buy-bait-001", "bait", "worm", 2, NOW, adjust_coins)
         started = self.call(start_fishing, "alice", "fish-start-01", "worm", NOW)
+        self.assertEqual(started["bait_id"], "worm")
         state = self.call(estate_state, "alice", NOW)
         self.assertEqual(next(i for i in state["inventory"] if i["id"] == bait_item("worm"))["quantity"], 1)
         self.assertEqual(state["tools"]["rod"]["durability"], 19)
@@ -86,6 +87,7 @@ class ActivityTests(unittest.TestCase):
         result = self.call(finish_fishing, "alice", "fish-done-001", started["session_id"],
                            winning_trace(started["pattern"]), NOW + 25)
         self.assertEqual(result["outcome"], "caught")
+        self.assertIn("rarity", result)
         state = self.call(estate_state, "alice", NOW + 25)
         self.assertEqual(state["profile"]["warehouse_reserved"], 0)
         self.assertTrue(any(item["kind"] == "fish" for item in state["inventory"]))

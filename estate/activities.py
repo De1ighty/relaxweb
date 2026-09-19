@@ -175,6 +175,7 @@ def start_fishing(conn, username, request_id, bait_id, now):
         conn.execute("UPDATE estate_profiles SET reserved_capacity=reserved_capacity+1 "
                      "WHERE username=?", (username,))
         return {"action": "start_fishing", "session_id": session_id,
+                "bait_id": bait_id,
                 "fish_name": "水下的鱼影", "pattern": pattern,
                 "difficulty": difficulty, "duration_limit": 36,
                 "rod_level": rod["level"]}
@@ -237,7 +238,8 @@ def finish_fishing(conn, username, request_id, session_id, trace, now):
                 payload.update({"catch_kind": "fish", "fish_id": catch_id})
             _change_inventory(conn, username, item_id, 1)
             payload.update({"fish_name": catch["name"], "catch_name": catch["name"],
-                            "quantity": 1, "xp_awarded": catch["xp"]})
+                            "quantity": 1, "xp_awarded": catch["xp"],
+                            "rarity": catch["rarity"], "difficulty": catch["difficulty"]})
             payload["level"] = _award_xp(conn, username, catch["xp"])
         conn.execute("UPDATE estate_profiles SET reserved_capacity=max(0,reserved_capacity-1) "
                      "WHERE username=?", (username,))
