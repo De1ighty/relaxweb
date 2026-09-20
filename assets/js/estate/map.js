@@ -5,7 +5,7 @@ import {
   PIXEL, drawBuilding, drawBush, drawCharacter, drawCrate, drawFence, drawGroundDetails,
   drawSignpost, drawTree, drawWater, pixelRect,
 } from "./art.js";
-import { cropAsset, cropStage, drawAsset } from "./assets.js";
+import { cropAsset, cropStage, drawAsset, drawPlayerAsset } from "./assets.js";
 import { drawSprite, stableSprite } from "./sprites.js";
 
 const WORLD = { width: 960, height: 600 };
@@ -207,7 +207,7 @@ export function createEstateMap(canvas, input, onInteract, onTarget) {
       ctx.strokeStyle = "#fff4a8"; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
       ctx.strokeRect(target.x - 24, target.y - 24, 48, 48); ctx.setLineDash([]);
     }
-    drawCharacter(ctx, player, performance.now());
+    if (!drawPlayerAsset(ctx, player, performance.now())) drawCharacter(ctx, player, performance.now());
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 

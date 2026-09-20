@@ -67,13 +67,16 @@ class EstateFrontendTests(unittest.TestCase):
         for level in (1, 2, 3):
             self.assertEqual(png_size(root / "tools" / f"rod_{level}_icon.png"), (32, 32))
             self.assertEqual(png_size(root / "tools" / f"rod_{level}_held.png"), (16, 32))
+        self.assertEqual(png_size(root / "player" / "character-sheet.png"), (889, 1769))
 
         attribution = self.read("assets/estate/ATTRIBUTION.md")
         self.assertIn("小胖庄园原创像素素材", attribution)
         assets = self.read("assets/js/estate/assets.js")
         self.assertIn('const ROOT = "assets/estate/xiaopang"', assets)
-        for function in ("cropAsset", "catchAsset", "mineralAsset", "toolAsset", "inventoryAsset"):
+        for function in ("cropAsset", "catchAsset", "mineralAsset", "toolAsset", "inventoryAsset", "drawPlayerAsset"):
             self.assertIn(f"function {function}", assets)
+        for direction in ('down:', 'up:', 'right:'):
+            self.assertIn(direction, assets)
 
     def test_cc0_pixel_atlases_are_local_and_documented(self):
         attribution = self.read("assets/estate/ATTRIBUTION.md")
@@ -110,6 +113,7 @@ class EstateFrontendTests(unittest.TestCase):
         self.assertNotIn('drawSprite(ctx, "town", 12', world)
         self.assertNotIn('drawSprite(ctx, "town", 24', world)
         self.assertIn('direction: "down"', world)
+        self.assertIn("drawPlayerAsset", world)
         self.assertIn("drawPlotFrame", world)
         self.assertNotIn('stableSprite(x, [3, 4, 5, 8, 9, 10])', world)
         for direction in ('"up"', '"down"', '"left"', '"right"'):
