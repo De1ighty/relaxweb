@@ -306,6 +306,29 @@ def public_catalog():
         "minerals": {key: {"id": key, "item_id": mineral_item(key), **value}
                      for key, value in MINERALS.items()},
         "mining_levels": MINING_LEVELS,
+        # 客户端要用它推进钓鱼进度条并预判结局；不下发就会各自硬编码一份。
+        "fishing_rules": {
+            "steps": FISHING_STEPS,
+            "steps_per_frame": FISHING_STEPS_PER_FRAME,
+            "tension_start": TENSION_START,
+            "progress_start": PROGRESS_START,
+            "hold_tension_gain": HOLD_TENSION_GAIN,
+            "hold_tension_force_base": HOLD_TENSION_FORCE_BASE,
+            "hold_progress_gain": HOLD_PROGRESS_GAIN,
+            "hold_progress_base": HOLD_PROGRESS_BASE,
+            "hold_progress_force_scale": HOLD_PROGRESS_FORCE_SCALE,
+            "release_tension_drop": RELEASE_TENSION_DROP,
+            "release_progress_drop": RELEASE_PROGRESS_DROP,
+            "release_progress_force_base": RELEASE_PROGRESS_FORCE_BASE,
+            "snapped_at": TENSION_SNAPPED_AT,
+            "caught_at": PROGRESS_CAUGHT_AT,
+        },
+        # 矿场格数与预留格：避免客户端各自写死 25 与 +2。
+        "mining_rules": {
+            "cells": MINE_CELLS,
+            "board_size": MINE_BOARD_SIZE,
+            "extra_cells": MINE_EXTRA_CELLS,
+        },
         "initial_plots": INITIAL_PLOTS,
         "max_plots": MAX_PLOTS,
     }
