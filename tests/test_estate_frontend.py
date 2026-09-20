@@ -77,7 +77,8 @@ class EstateFrontendTests(unittest.TestCase):
             self.assertIn(action, ui)
         self.assertIn("estate_finish_fishing", self.read("assets/js/estate/fishing.js"))
         fishing = self.read("assets/js/estate/fishing.js")
-        self.assertIn("Math.floor(trace.length / 10)", fishing)
+        # 分帧步长改由服务端下发的 fishing_rules 决定，不再写死 `trace.length / 10`
+        self.assertIn("rules.steps_per_frame", fishing)
         self.assertNotIn("Math.floor(elapsed)", fishing)
         self.assertIn("fishing-catch-card", fishing)
         self.assertIn("继续钓鱼", fishing)
@@ -86,6 +87,44 @@ class EstateFrontendTests(unittest.TestCase):
         mining = self.read("assets/js/estate/mining.js")
         self.assertIn('bomb: "💣"', mining)
         self.assertIn("mine-explosion", mining)
+
+    def test_client_does_not_reimplement_server_rules(self):
+        """玩法规则只能在服务端定义一处；客户端消费 catalog 下发的值。"""
+        fishing = self.read("assets/js/estate/fishing.js")
+        mining = self.read("assets/js/estate/mining.js")
+        ui = self.read("assets/js/estate/ui.js")
+        rules = self.read("assets/js/estate/rules.js")
+
+        # 钓鱼物理系数只允许出现在 rules.js 里从规则对象读取，不得内联
+        for literal in (".026", ".045", ".0035", "1.12", ".82", ".68"):
+            self.assertNotIn(literal, fishing, f"fishing.js 内联了物理常量 {literal}")
+        self.assertIn("tensionStep", fishing)
+        self.assertIn("rodFactor", fishing)
+        self.assertNotIn("{ 1: 1, 2: .82", fishing)
+
+        # 维修费与预留格由 rules.js 计算，ui.js 不再自己套公式
+        self.assertIn("repairCost", ui)
+        self.assertIn("reservedSlots", ui)
+        self.assertNotIn("repair_price *", ui)
+        self.assertNotIn("strikes + 2", ui)
+
+        # 矿壁格数来自本次矿局下发的边长，不再写死 25
+        self.assertIn("run.size * run.size", mining)
+        self.assertNotIn("index < 25", mining)
+
+        # 规则层只按传入的规则推进，且不 import 任何 estate 模块
+        self.assertNotIn("from \"./", rules)
+        for field in ("hold_tension_gain", "release_tension_drop", "snapped_at"):
+            self.assertIn(f"rules.{field}", rules)
+
+    def test_ui_has_a_single_panel_dispatch(self):
+        """面板分派只应存在一条链，避免 render 与 interact 各写一份。"""
+        ui = self.read("assets/js/estate/ui.js")
+        self.assertIn("const PANELS = {", ui)
+        self.assertEqual(ui.count("renderShop()"), 2)  # 定义 + 分派表
+        self.assertEqual(ui.count("renderMining()"), 2)
+        self.assertNotIn('active?.kind === "shop"', ui)
+        self.assertNotIn("disabled ||=", ui)
 
     def test_all_interactive_places_use_xiaopang_branding(self):
         combined = "\n".join([

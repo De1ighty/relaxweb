@@ -1,5 +1,6 @@
 "use strict";
 
+import { lootSummary } from "./rules.js";
 import { estateRequest } from "./protocol.js";
 
 const ICONS = { empty: "·", extra: "+2", bomb: "💣", stone: "🪨", coal: "◆", copper: "⬟", iron: "⬢", amethyst: "♦", star_gem: "✦" };
@@ -16,8 +17,9 @@ export function openMiningGame(root, run) {
     <button class="minigame-exit" type="button">带着收获离开</button>`;
   root.append(layer);
   const grid = layer.querySelector(".mine-grid"); let active = true; let busy = false; let loot = run.loot || {};
-  layer.querySelector("[data-loot]").textContent = Object.entries(loot).map(([id, count]) => `${ICONS[id] || "◆"}×${count}`).join("  ") || "背包还是空的";
-  for (let index = 0; index < 25; index += 1) {
+  const lootLine = layer.querySelector("[data-loot]");
+  lootLine.textContent = lootSummary(loot, ICONS, "背包还是空的");
+  for (let index = 0; index < run.size * run.size; index += 1) {
     const cell = document.createElement("button"); cell.type = "button"; cell.className = `mine-cell vein-${(index * 7 + run.mine_level) % 5}`;
     cell.setAttribute("aria-label", `矿格 ${index + 1}`); cell.dataset.cell = index; cell.innerHTML = "<i></i><i></i><i></i>";
     cell.addEventListener("click", async () => {
@@ -26,7 +28,7 @@ export function openMiningGame(root, run) {
         const result = await estateRequest("estate_mine_cell", { run_id: run.run_id, cell: index });
         loot = result.loot || {}; cell.className = `mine-cell revealed outcome-${result.outcome}`; cell.textContent = ICONS[result.outcome] || "◆";
         layer.querySelector("[data-strikes]").textContent = result.strikes_left;
-        layer.querySelector("[data-loot]").textContent = Object.entries(loot).map(([id, count]) => `${ICONS[id] || "◆"}×${count}`).join("  ") || "这块是空洞";
+        lootLine.textContent = lootSummary(loot, ICONS, "这块是空洞");
         if (result.exploded) {
           layer.classList.add("mine-explosion");
           layer.querySelector(".mine-blast").hidden = false;
@@ -47,7 +49,7 @@ export function openMiningGame(root, run) {
   function showResult(result) {
     active = false; grid.querySelectorAll("button").forEach((cell) => { cell.disabled = true; });
     layer.classList.add("is-result");
-    const summary = Object.entries(result?.loot || loot).map(([id, count]) => `${ICONS[id] || "◆"} × ${count}`).join("　") || "没有挖到矿物";
+    const summary = lootSummary(result?.loot || loot, ICONS, "没有挖到矿物", true);
     const exploded = result?.reason === "bomb";
     layer.querySelector(".minigame-title").innerHTML = `<b>${exploded ? "💥 炸弹引爆，采矿结束" : "本次采矿结束"}</b><span>${exploded ? "已找到的矿物成功带回 · " : ""}${summary} · 获得 ${result?.xp_awarded || 0} 经验</span>`;
     layer.querySelector(".minigame-exit").textContent = "返回庄园";
