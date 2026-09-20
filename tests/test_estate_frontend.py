@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """小胖庄园前端装配与双端输入的静态契约。"""
 from pathlib import Path
+import json
+import struct
 import subprocess
+import sys
 import unittest
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 
 class EstateFrontendTests(unittest.TestCase):
@@ -29,8 +33,47 @@ class EstateFrontendTests(unittest.TestCase):
         page = self.read("game.html")
         self.assertIn('import "./estate/view.js"', main)
         self.assertIn('assets/css/estate.css?v=', page)
-        for name in ("state", "protocol", "input", "art", "sprites", "map", "ui", "fishing", "mining", "view"):
+        for name in ("state", "protocol", "input", "art", "assets", "sprites", "map", "ui", "fishing", "mining", "view"):
             self.assertTrue((ROOT / f"assets/js/estate/{name}.js").is_file())
+
+    def test_user_pixel_assets_are_complete_and_game_ready(self):
+        from estate.catalog import CROPS, FISH, FISHING_TREASURES, MINERALS
+
+        root = ROOT / "assets/estate/xiaopang"
+        mapping = json.loads((root / "mapping.json").read_text(encoding="utf-8"))
+        self.assertEqual({entry["id"] for entry in mapping["crops"]}, set(CROPS))
+        self.assertEqual({entry["id"] for entry in mapping["fish"]}, set(FISH))
+        self.assertEqual({entry["id"] for entry in mapping["collectibles"]}, set(FISHING_TREASURES))
+        self.assertEqual({entry["id"] for entry in mapping["minerals"]}, set(MINERALS))
+
+        def png_size(path):
+            with path.open("rb") as image:
+                self.assertEqual(image.read(8), b"\x89PNG\r\n\x1a\n")
+                length = struct.unpack(">I", image.read(4))[0]
+                self.assertEqual(image.read(4), b"IHDR")
+                width, height = struct.unpack(">II", image.read(8))
+                self.assertEqual(length, 13)
+                return width, height
+
+        for crop_id in CROPS:
+            for stage in ("01_sprout", "02_seedling", "03_growing", "04_mature"):
+                self.assertEqual(png_size(root / "crops" / crop_id / f"{stage}.png"), (16, 16))
+        for fish_id in FISH:
+            self.assertEqual(png_size(root / "fish" / f"{fish_id}.png"), (64, 48))
+        for collectible_id in FISHING_TREASURES:
+            self.assertEqual(png_size(root / "collectibles" / f"{collectible_id}.png"), (64, 48))
+        for mineral_id in MINERALS:
+            self.assertEqual(png_size(root / "minerals" / f"{mineral_id}.png"), (16, 16))
+        for level in (1, 2, 3):
+            self.assertEqual(png_size(root / "tools" / f"rod_{level}_icon.png"), (32, 32))
+            self.assertEqual(png_size(root / "tools" / f"rod_{level}_held.png"), (16, 32))
+
+        attribution = self.read("assets/estate/ATTRIBUTION.md")
+        self.assertIn("小胖庄园原创像素素材", attribution)
+        assets = self.read("assets/js/estate/assets.js")
+        self.assertIn('const ROOT = "assets/estate/xiaopang"', assets)
+        for function in ("cropAsset", "catchAsset", "mineralAsset", "toolAsset", "inventoryAsset"):
+            self.assertIn(f"function {function}", assets)
 
     def test_cc0_pixel_atlases_are_local_and_documented(self):
         attribution = self.read("assets/estate/ATTRIBUTION.md")

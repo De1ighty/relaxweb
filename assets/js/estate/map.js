@@ -5,6 +5,7 @@ import {
   PIXEL, drawBuilding, drawBush, drawCharacter, drawCrate, drawFence, drawGroundDetails,
   drawSignpost, drawTree, drawWater, pixelRect,
 } from "./art.js";
+import { cropAsset, cropStage, drawAsset } from "./assets.js";
 import { drawSprite, stableSprite } from "./sprites.js";
 
 const WORLD = { width: 960, height: 600 };
@@ -106,13 +107,16 @@ function drawPlot(ctx, plot) {
     pixelRect(ctx, x + 61, y + 48, 5, 3, "#d7a06a");
     return;
   }
-  const mature = Number(plot.ready_at) <= estateNow();
-  const progress = mature ? 1 : Math.max(.12, (estateNow() - plot.planted_at) / (plot.ready_at - plot.planted_at));
+  const now = estateNow();
+  const mature = Number(plot.ready_at) <= now;
+  const progress = mature ? 1 : Math.max(.12, (now - plot.planted_at) / (plot.ready_at - plot.planted_at));
   const color = estateStore.snapshot?.catalog?.crops?.[plot.crop_id]?.color || "#e6cb63";
   const cropSprite = stableSprite(plot.crop_id, CROP_SPRITES);
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 4; col += 1) {
-      const px = x + 13 + col * 17; const py = y + 17 + row * 18;
+  const custom = cropAsset(plot.crop_id, cropStage(plot, now));
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      const px = x + 7 + col * 24; const py = y + 10 + row * 25;
+      if (drawAsset(ctx, custom, px, py, 24, 24)) continue;
       if (progress < .25) pixelRect(ctx, px + 4, py + 7, 4, 5, "#86b752");
       else {
         pixelRect(ctx, px + 4, py, 3, 13, "#378446");

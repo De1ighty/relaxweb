@@ -1,6 +1,7 @@
 "use strict";
 
 import { confirmDialog } from "../dialog.js";
+import { cropAsset, cropStage, inventoryAsset, toolAsset } from "./assets.js";
 import { catalogEntry, formatDuration, repairCost, reservedSlots } from "./rules.js";
 import { estateCommand, estateRequest, pendingEstateAction } from "./protocol.js";
 import { estateNow, estateStore } from "./state.js";
@@ -27,11 +28,20 @@ function itemInfo(title, meta, className = "estate-item-info") {
 }
 
 /** 卡片外壳：外壳 class + 可选图标 + 说明 + 若干控件。 */
-function itemCard({ cardClass = "estate-item-card", infoClass, icon = "",
+function itemCard({ cardClass = "estate-item-card", infoClass, icon = "", iconUrl = null,
                     iconClass = "estate-item-icon", title, meta, controls = [] }) {
   const card = document.createElement("div"); card.className = cardClass;
-  if (icon) {
-    const badge = document.createElement("span"); badge.className = iconClass; badge.textContent = icon;
+  if (icon || iconUrl) {
+    const badge = document.createElement("span"); badge.className = iconClass;
+    const fallback = document.createElement("span"); fallback.className = "estate-asset-fallback"; fallback.textContent = icon;
+    badge.append(fallback);
+    if (iconUrl) {
+      const image = document.createElement("img"); image.alt = "";
+      image.addEventListener("load", () => { badge.dataset.assetReady = "true"; });
+      image.addEventListener("error", () => image.remove());
+      image.src = iconUrl;
+      badge.append(image);
+    }
     card.append(badge);
   }
   card.append(itemInfo(title, meta, infoClass), ...controls);
@@ -41,6 +51,11 @@ function itemCard({ cardClass = "estate-item-card", infoClass, icon = "",
 function note(text) {
   const node = document.createElement("p"); node.className = "estate-sheet-note"; node.textContent = text;
   return node;
+}
+
+function inventoryFallback(item) {
+  return catalogEntry({ seed: "🌱", crop: "🌾", bait: "🪱", fish: "🐟",
+    collectible: "🎁", mineral: "◆" }, item.kind) || "◆";
 }
 
 export function createEstateUI(root, activities = {}) {
@@ -68,6 +83,7 @@ export function createEstateUI(root, activities = {}) {
   function cropCard(crop, actionLabel, action, multiplier = 1) {
     return itemCard({
       icon: crop.icon || "🌱",
+      iconUrl: cropAsset(crop.id, 4),
       title: crop.name,
       meta: `成熟 ${formatDuration(Math.ceil(crop.grow_seconds * multiplier))}`
         + ` · 售价 ${crop.sell_price}`
@@ -112,7 +128,8 @@ export function createEstateUI(root, activities = {}) {
         controls.push(keep);
       }
       sheetBody.append(itemCard({
-        cardClass: "estate-inventory-row", title: item.name,
+        cardClass: "estate-inventory-row", icon: inventoryFallback(item), iconUrl: inventoryAsset(item),
+        title: item.name,
         // 谷仓行刻意不带 estate-item-info：那套排版会改字号与配色，
         // 该行的布局由 `.estate-inventory-row > div { flex: 1 }` 单独负责。
         infoClass: "",
@@ -163,6 +180,7 @@ export function createEstateUI(root, activities = {}) {
     }
     sheetBody.append(itemCard({
       cardClass: "estate-tool-card", icon, iconClass: "estate-tool-icon",
+      iconUrl: toolAsset(toolType, owned?.level || 1),
       title: owned ? owned.name : currentRule.name,
       meta: owned ? `Lv.${owned.level} · 耐久 ${owned.durability}/${owned.max_durability}` : "尚未拥有",
       controls,
@@ -272,7 +290,14 @@ export function createEstateUI(root, activities = {}) {
       const crop = snapshot.catalog.crops[plot.crop_id];
       const ready = Number(plot.ready_at) <= estateNow();
       const hero = document.createElement("div"); hero.className = "estate-crop-hero";
-      const badge = document.createElement("span"); badge.textContent = crop.icon || "🌱";
+      const badge = document.createElement("span"); badge.className = "estate-crop-art";
+      const fallback = document.createElement("span"); fallback.textContent = crop.icon || "🌱";
+      const image = document.createElement("img");
+      image.alt = "";
+      image.addEventListener("load", () => { badge.dataset.assetReady = "true"; });
+      image.addEventListener("error", () => image.remove());
+      image.src = cropAsset(crop.id, cropStage(plot, estateNow()));
+      badge.append(fallback, image);
       const text = document.createElement("div");
       const name = document.createElement("b"); name.textContent = crop.name;
       const hint = document.createElement("small");
